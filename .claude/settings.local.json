@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openspec list *)",
+      "Bash(openspec init *)",
+      "Bash(openspec new *)",
+      "Bash(openspec status *)",
+      "Bash(openspec instructions *)",
+      "Bash(pnpm --filter @tms/db exec prisma generate)",
+      "Bash(pnpm --filter @tms/db exec prisma migrate dev --name add_users)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm --filter @tms/api exec tsc --noEmit)",
+      "Bash(pnpm --filter @tms/web exec tsc --noEmit)"
+    ]
+  }
+}

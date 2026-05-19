@@ -1,0 +1,467 @@
+// ============================================================
+// TMS Platform — Prisma Schema
+// PostgreSQL + Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// VEHICLE MANAGEMENT
+// ============================================================
+
+model Vehicle {
+  id              String          @id @default(cuid())
+  licensePlate    String          @unique @map("license_plate")   // 50E12208, 50H43224
+  vehicleType     VehicleType     @map("vehicle_type")            // SHACMAN, CHENGLONG, HOWO...
+  status          VehicleStatus   @default(ACTIVE)
+
+  // Compliance dates
+  inspectionExpiry  DateTime?     @map("inspection_expiry")       // Hạn đăng kiểm
+  insuranceExpiry   DateTime?     @map("insurance_expiry")        // Hạn bảo hiểm
+  registrationExpiry DateTime?    @map("registration_expiry")     // Hạn cà vẹt
+
+  // Relations
+  driver          Driver?
+  trailers        VehicleTrailer[]
+  tripPlans       TripPlan[]
+
+  notes           String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@map("vehicles")
+}
+
+model Trailer {
+  id              String          @id @default(cuid())
+  trailerNumber   String          @unique @map("trailer_number")  // 50RM01660, 50R04512
+  status          VehicleStatus   @default(ACTIVE)
+
+  // Compliance dates
+  inspectionExpiry  DateTime?     @map("inspection_expiry")
+  insuranceExpiry   DateTime?     @map("insurance_expiry")
+  registrationExpiry DateTime?    @map("registration_expiry")
+
+  // Relations
+  vehicles        VehicleTrailer[]
+
+  notes           String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@map("trailers")
+}
+
+// Junction: 1 vehicle can use many trailers over time
+model VehicleTrailer {
+  id          String    @id @default(cuid())
+  vehicleId   String    @map("vehicle_id")
+  trailerId   String    @map("trailer_id")
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+  releasedAt  DateTime? @map("released_at")
+
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id])
+  trailer     Trailer   @relation(fields: [trailerId], references: [id])
+
+  @@unique([vehicleId, trailerId, assignedAt])
+  @@map("vehicle_trailers")
+}
+
+// ============================================================
+// DRIVER MANAGEMENT
+// ============================================================
+
+model Driver {
+  id          String        @id @default(cuid())
+  fullName    String        @map("full_name")
+  phone       String?
+  status      DriverStatus  @default(ACTIVE)
+
+  // 1:1 with vehicle (driver "theo xe")
+  vehicleId   String?       @unique @map("vehicle_id")
+  vehicle     Vehicle?      @relation(fields: [vehicleId], references: [id])
+
+  notes       String?
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("drivers")
+}
+
+// ============================================================
+// CUSTOMER & CARRIER
+// ============================================================
+
+model Customer {
+  id          String      @id @default(cuid())
+  code        String      @unique                                // SAILUN_TAL, FUTIAN_MB
+  name        String                                             // SAILUN TAL, FUTIAN MB
+  address     String?
+  phone       String?
+  email       String?
+  taxCode     String?     @map("tax_code")
+  isActive    Boolean     @default(true) @map("is_active")
+
+  tripPlans   TripPlan[]
+
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
+model Carrier {
+  id          String      @id @default(cuid())
+  code        String      @unique                                // NHA_PHUONG, LUCKY, DTP
+  name        String                                             // NHA PHUONG, LUCKY
+  phone       String?
+  isActive    Boolean     @default(true) @map("is_active")
+
+  tripPlans   TripPlan[]
+
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("carriers")
+}
+
+// ============================================================
+// LOCATION (Depot, Port, ICD, Industrial Zone)
+// ============================================================
+
+model Location {
+  id            String        @id @default(cuid())
+  code          String        @unique                            // DEPOT_5A, CAT_LAI, KCN_QILU
+  name          String
+  locationType  LocationType  @map("location_type")
+  address       String?
+  latitude      Decimal?      @db.Decimal(10, 7)
+  longitude     Decimal?      @db.Decimal(10, 7)
+  isActive      Boolean       @default(true) @map("is_active")
+
+  // Reverse relations for trip routing
+  tripsAsPickup     TripPlan[] @relation("PickupLocation")
+  tripsAsLoadUnload TripPlan[] @relation("LoadUnloadLocation")
+  tripsAsDropoff    TripPlan[] @relation("DropoffLocation")
+  containersHere    Container[] @relation("ContainerCurrentLocation")
+  yardMoves         YardMove[]
+
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@map("locations")
+}
+
+// ============================================================
+// CONTAINER
+// ============================================================
+
+model Container {
+  id              String          @id @default(cuid())
+  containerNumber String          @unique @map("container_number") // OOLU8990993, CSNU7534097
+  sizeType        ContainerSize   @map("size_type")                // 20GP, 40HC, 45
+
+  // Status lifecycle (auto-updated by TripPlan + YardMove transitions)
+  status          ContainerStatus @default(EMPTY_AVAILABLE)
+  factoryZone     String?         @map("factory_zone")             // STAGING_DROP | LOADING_DOCK | STAGING_READY
+  currentLocationId String?       @map("current_location_id")
+  currentLocation   Location?     @relation("ContainerCurrentLocation", fields: [currentLocationId], references: [id])
+
+  tripsAsOutbound TripPlan[]      @relation("OutboundContainer")
+  tripsAsInbound  TripPlan[]      @relation("InboundContainer")
+  yardMoves       YardMove[]
+
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([currentLocationId])
+  @@map("containers")
+}
+
+// ============================================================
+// TRIP PLAN — Core dispatch entity
+// ============================================================
+
+model TripPlan {
+  id              String          @id @default(cuid())
+  tripDate        DateTime        @map("trip_date") @db.Date
+  tripNumber      Int?            @map("trip_number")              // STT
+
+  // Service classification
+  serviceType     ServiceType     @map("service_type")             // SEA_EX, SEA_IM, NEO_EX, NEO_IM
+  tripMode        TripMode        @default(STANDARD) @map("trip_mode")
+  status          TripStatus      @default(PLANNED)
+
+  // FK references
+  vehicleId       String          @map("vehicle_id")
+  vehicle         Vehicle         @relation(fields: [vehicleId], references: [id])
+
+  customerId      String          @map("customer_id")
+  customer        Customer        @relation(fields: [customerId], references: [id])
+
+  carrierId       String?         @map("carrier_id")
+  carrier         Carrier?        @relation(fields: [carrierId], references: [id])
+
+  // Container tracking (outbound = CONT ĐI, inbound = CONT VỀ)
+  outboundContainerId   String?   @map("outbound_container_id")
+  outboundContainer     Container? @relation("OutboundContainer", fields: [outboundContainerId], references: [id])
+
+  inboundContainerId    String?   @map("inbound_container_id")
+  inboundContainer      Container? @relation("InboundContainer", fields: [inboundContainerId], references: [id])
+
+  // 3-point route
+  pickupLocationId      String?   @map("pickup_location_id")       // Điểm Lấy (R/H)
+  pickupLocation        Location? @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+
+  loadUnloadLocationId  String?   @map("load_unload_location_id")  // Điểm Đóng/Rút
+  loadUnloadLocation    Location? @relation("LoadUnloadLocation", fields: [loadUnloadLocationId], references: [id])
+
+  dropoffLocationId     String?   @map("dropoff_location_id")      // Điểm hạ (R/H)
+  dropoffLocation       Location? @relation("DropoffLocation", fields: [dropoffLocationId], references: [id])
+
+  // Cost breakdown (1:N)
+  costs           TripCost[]
+
+  // Document tracking
+  documentSentDate DateTime?     @map("document_sent_date") @db.Date  // Ngày gửi CT
+  notes           String?
+
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([tripDate])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([status])
+  @@map("trip_plans")
+}
+
+// ============================================================
+// TRIP COSTS — Chi phí phát sinh mỗi chuyến
+// ============================================================
+
+model TripCost {
+  id              String      @id @default(cuid())
+  tripPlanId      String      @map("trip_plan_id")
+  tripPlan        TripPlan    @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+
+  costType        CostType    @map("cost_type")
+  amount          Decimal     @db.Decimal(15, 2)
+  invoiceNumber   String?     @map("invoice_number")              // SHĐ (số hóa đơn)
+  description     String?
+
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  @@index([tripPlanId])
+  @@map("trip_costs")
+}
+
+// ============================================================
+// YARD MOVE — Internal factory yard shuttle operations
+// ============================================================
+
+model YardMove {
+  id          String          @id @default(cuid())
+  date        DateTime        @db.Date
+  containerId String          @map("container_id")
+  container   Container       @relation(fields: [containerId], references: [id])
+  fromZone    String          @map("from_zone")                    // STAGING_DROP | LOADING_DOCK | STAGING_READY
+  toZone      String          @map("to_zone")
+  locationId  String          @map("location_id")                  // Factory where the move occurs
+  location    Location        @relation(fields: [locationId], references: [id])
+  status      YardMoveStatus  @default(PENDING)
+  notes       String?
+  costs       YardMoveCost[]
+
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([locationId])
+  @@index([status])
+  @@index([containerId])
+  @@map("yard_moves")
+}
+
+model YardMoveCost {
+  id          String        @id @default(cuid())
+  yardMoveId  String        @map("yard_move_id")
+  yardMove    YardMove      @relation(fields: [yardMoveId], references: [id], onDelete: Cascade)
+  type        YardCostType  @map("type")
+  amount      Decimal       @db.Decimal(15, 2)
+  note        String?
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([yardMoveId])
+  @@map("yard_move_costs")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum VehicleType {
+  SHACMAN
+  CHENGLONG
+  HOWO
+  FREIGHTLINER
+  FAW
+  OTHER
+}
+
+enum VehicleStatus {
+  ACTIVE
+  MAINTENANCE
+  DECOMMISSIONED
+  WAITING_DRIVER    // "Xe Chờ Tài"
+}
+
+enum DriverStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum LocationType {
+  PORT              // Cảng: Cát Lái, HBCX TCTT, HBCX SSIT
+  DEPOT             // Depot: DEPOT 5A, GREEN LT, SOTRANS
+  ICD               // ICD: ICD Sóng Thần
+  INDUSTRIAL_ZONE   // KCN: KCN Qilu, CVT
+  WAREHOUSE
+  OTHER
+}
+
+enum ContainerSize {
+  GP20    // 20'
+  HC40    // 40' High Cube
+  GP40    // 40' General Purpose
+  HC45    // 45' High Cube
+}
+
+enum ServiceType {
+  SEA_EXPORT        // SEA - EX
+  SEA_IMPORT        // SEA - IM
+  NEO_EXPORT        // NEO - EX (nội địa xuất?)
+  NEO_IMPORT        // NEO - IM
+}
+
+enum TripStatus {
+  PLANNED
+  DISPATCHED
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum CostType {
+  LIFTING           // Phí nâng
+  DROPPING          // Phí hạ
+  CLEANING          // Phí vệ sinh
+  DEPOSIT           // Phí cược
+  GATE_FEE          // Vé cổng
+  SEAL_BREAK        // Phí đứt tem
+  OFF_ROUTE         // Chi phí trái tuyến / chỉ định / BP cam
+  TOLL              // Cầu đường
+  LIQUIDATION       // Thanh lý
+  ADVANCE_PAYMENT   // Chi hộ
+  OTHER             // Chi phí phát sinh khác
+}
+
+enum TripMode {
+  STANDARD          // Xe chờ đóng hàng (regular trip)
+  DROP_AND_HOOK     // Cắt kéo (CONT ĐI ≠ CONT VỀ)
+}
+
+enum ContainerStatus {
+  EMPTY_AVAILABLE   // Rỗng tại depot, sẵn sàng điều động
+  EMPTY_IN_TRANSIT  // Rỗng đang trên đường đến nhà máy
+  EMPTY_AT_YARD     // Rỗng tại bãi cắt kéo nhà máy
+  BEING_LOADED      // Đang đóng hàng tại máng kho
+  LOADED_READY      // Hàng xong, tại bãi chờ kéo
+  LOADED_IN_TRANSIT // Hàng đang trên đường về cảng
+  DELIVERED         // Đã giao
+}
+
+enum YardMoveStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum YardCostType {
+  YARD_HANDLING     // Phí dọn bãi
+  FORKLIFT          // Phí xe nâng
+  OVERTIME          // Phí tăng ca
+  OTHER
+}
+
+// ============================================================
+// AUDIT LOG — Append-only audit trail
+// ============================================================
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  actorUserId    String?     @map("actor_user_id")
+  actorUsername  String?     @map("actor_username")
+  actorRole      String?     @map("actor_role")
+  action         AuditAction
+  entityType     String      @map("entity_type")
+  entityId       String?     @map("entity_id")
+  summary        String
+  beforeSnapshot Json?       @map("before_snapshot")
+  afterSnapshot  Json?       @map("after_snapshot")
+  metadata       Json?
+  ipAddress      String?     @map("ip_address")
+  userAgent      String?     @map("user_agent")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// USER & AUTH
+// ============================================================
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(OPERATOR)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  COST_ADDED
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  REGISTER
+}

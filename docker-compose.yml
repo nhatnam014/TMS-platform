@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tms-postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: tms
+      POSTGRES_PASSWORD: tms_secret
+      POSTGRES_DB: tms_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tms -d tms_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis for session/cache (optional, uncomment when needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: tms-redis
+  #   ports:
+  #     - "6379:6379"
+
+volumes:
+  pgdata:
