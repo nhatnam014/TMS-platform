@@ -25,6 +25,7 @@ export class TripPlanController {
   @ApiQuery({ name: "customerId", required: false })
   @ApiQuery({ name: "serviceType", required: false })
   @ApiQuery({ name: "status", required: false })
+  @ApiQuery({ name: "search", required: false })
   findAll(@Query() filters: TripPlanFilters, @Query() pagination: PaginationQuery) {
     return this.tripPlanService.findAll(filters, pagination);
   }

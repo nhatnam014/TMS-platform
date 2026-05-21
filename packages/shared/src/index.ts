@@ -35,6 +35,7 @@ export interface TripPlanFilters {
   vehicleId?: string;
   serviceType?: ServiceType;
   status?: TripStatus;
+  search?: string;
 }
 
 // ---------- Pagination ----------
