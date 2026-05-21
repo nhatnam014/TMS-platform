@@ -1,9 +1,10 @@
-import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
-import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { NestFactory } from "@nestjs/core";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 
+console.log("DATABASE_URL =", process.env.DATABASE_URL);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
