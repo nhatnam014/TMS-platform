@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trip-plans", label: "Kế hoạch chuyến" },
   { href: "/vehicles", label: "Phương tiện" },
@@ -13,6 +14,12 @@ const NAV_ITEMS = [
 export function NavSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { role } = useAuth();
+
+  const navItems = [
+    ...BASE_NAV_ITEMS,
+    ...(role === "ADMIN" ? [{ href: "/audit-logs", label: "Nhật ký kiểm tra" }] : []),
+  ];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -37,7 +44,7 @@ export function NavSidebar() {
       </div>
 
       <nav style={{ flex: 1 }}>
-        {NAV_ITEMS.map(({ href, label }) => {
+        {navItems.map(({ href, label }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link

@@ -6,14 +6,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
+    "dev": "dotenv -e .env -- turbo dev",
+    "build": "dotenv -e .env -- turbo build",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
-    "test": "turbo test",
-    "db:generate": "turbo db:generate",
-    "db:migrate": "turbo db:migrate",
-    "db:seed": "turbo db:seed",
+    "test": "dotenv -e .env -- turbo test",
+    "db:generate": "dotenv -e .env -- turbo db:generate",
+    "db:migrate": "dotenv -e .env -- turbo db:migrate",
+    "db:seed": "dotenv -e .env -- turbo db:seed",
     "db:studio": "pnpm --filter @tms/db studio",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "prepare": "husky"

@@ -22,7 +22,10 @@ export class TripPlanService {
     filters: TripPlanFilters,
     pagination: PaginationQuery,
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 20, sortBy = "tripDate", sortOrder = "desc" } = pagination;
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 20;
+    const sortBy = pagination.sortBy ?? "tripDate";
+    const sortOrder = pagination.sortOrder ?? "desc";
     const skip = (page - 1) * limit;
 
     const where: Prisma.TripPlanWhereInput = {};
