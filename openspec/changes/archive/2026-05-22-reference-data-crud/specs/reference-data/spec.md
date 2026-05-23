@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: List customers endpoint
 The API SHALL expose `GET /customers` returning all **active** customers (`isActive: true`) ordered by `name`. Each item includes `id`, `code`, and `name`. The endpoint requires JWT authentication.

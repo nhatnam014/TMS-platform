@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n 'auditService\\\\|prisma.$transaction' /Users/admin/Downloads/tms-platform/apps/api/src/modules/trip-plan/trip-plan.service.ts)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['instruction']\\)\")"
+    ]
+  }
+}

@@ -5,6 +5,7 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CarrierModule } from "./modules/carrier/carrier.module";
 import { ContainerModule } from "./modules/container/container.module";
+import { DriverModule } from "./modules/driver/driver.module";
 import { CustomerModule } from "./modules/customer/customer.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { LocationModule } from "./modules/location/location.module";
@@ -28,6 +29,7 @@ import { YardMoveModule } from "./modules/yard-move/yard-move.module";
     ContainerModule,
     CustomerModule,
     DashboardModule,
+    DriverModule,
     LocationModule,
     TripPlanModule,
     VehicleModule,

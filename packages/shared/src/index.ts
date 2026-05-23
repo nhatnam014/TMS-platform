@@ -2,6 +2,92 @@
 // @tms/shared — Types, DTOs, Constants
 // ============================================================
 
+// ---------- Vehicle & Driver DTOs ----------
+export interface CreateVehicleDto {
+  licensePlate: string;
+  vehicleType: VehicleType;
+  inspectionExpiry?: string;
+  insuranceExpiry?: string;
+  registrationExpiry?: string;
+  notes?: string;
+}
+
+export interface UpdateVehicleDto {
+  licensePlate?: string;
+  vehicleType?: VehicleType;
+  status?: VehicleStatus;
+  inspectionExpiry?: string;
+  insuranceExpiry?: string;
+  registrationExpiry?: string;
+  notes?: string;
+}
+
+export interface CreateDriverDto {
+  fullName: string;
+  phone?: string;
+  notes?: string;
+}
+
+export interface UpdateDriverDto {
+  fullName?: string;
+  phone?: string;
+  status?: DriverStatus;
+  notes?: string;
+  vehicleId?: string | null;
+}
+
+// ---------- Reference Data DTOs ----------
+export interface CreateCustomerDto {
+  code: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  taxCode?: string;
+}
+
+export interface UpdateCustomerDto {
+  code?: string;
+  name?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  taxCode?: string;
+  isActive?: boolean;
+}
+
+export interface CreateCarrierDto {
+  code: string;
+  name: string;
+  phone?: string;
+}
+
+export interface UpdateCarrierDto {
+  code?: string;
+  name?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+export interface CreateLocationDto {
+  code: string;
+  name: string;
+  locationType: LocationType;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface UpdateLocationDto {
+  code?: string;
+  name?: string;
+  locationType?: LocationType;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  isActive?: boolean;
+}
+
 // ---------- Trip Plan ----------
 export interface CreateTripPlanDto {
   tripDate: string;
@@ -77,6 +163,8 @@ export type CostType =
   | "GATE_FEE" | "SEAL_BREAK" | "OFF_ROUTE" | "TOLL"
   | "LIQUIDATION" | "ADVANCE_PAYMENT" | "OTHER";
 export type VehicleType = "SHACMAN" | "CHENGLONG" | "HOWO" | "FREIGHTLINER" | "FAW" | "OTHER";
+export type VehicleStatus = "ACTIVE" | "MAINTENANCE" | "DECOMMISSIONED" | "WAITING_DRIVER";
+export type DriverStatus = "ACTIVE" | "ON_LEAVE" | "TERMINATED";
 export type LocationType = "PORT" | "DEPOT" | "ICD" | "INDUSTRIAL_ZONE" | "WAREHOUSE" | "OTHER";
 export type ContainerSize = "GP20" | "HC40" | "GP40" | "HC45";
 export type ContainerStatus =
@@ -108,7 +196,11 @@ export const ENTITY_TYPES = {
   YARD_MOVE_COST: "YardMoveCost",
   USER: "User",
   VEHICLE: "Vehicle",
+  DRIVER: "Driver",
   CONTAINER: "Container",
+  CUSTOMER: "Customer",
+  CARRIER: "Carrier",
+  LOCATION: "Location",
 } as const;
 export type EntityTypeValue = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
 
