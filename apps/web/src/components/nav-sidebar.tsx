@@ -9,8 +9,12 @@ const BASE_NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trip-plans", label: "Kế hoạch chuyến" },
   { href: "/vehicles", label: "Phương tiện" },
+  { href: "/drivers", label: "Tài xế" },
   { href: "/containers", label: "Container" },
   { href: "/yard-moves", label: "Lệnh bãi" },
+  { href: "/customers", label: "Khách hàng" },
+  { href: "/carriers", label: "Hãng xe" },
+  { href: "/locations", label: "Địa điểm" },
 ];
 
 export function NavSidebar() {

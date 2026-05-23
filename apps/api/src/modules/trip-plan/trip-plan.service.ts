@@ -41,6 +41,19 @@ export class TripPlanService {
     if (filters.serviceType) where.serviceType = filters.serviceType as any;
     if (filters.status) where.status = filters.status as any;
 
+    if (filters.search) {
+      const s = filters.search.trim();
+      const num = parseInt(s, 10);
+      where.OR = [
+        ...(isNaN(num) ? [] : [{ tripNumber: num }]),
+        { vehicle: { licensePlate: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { customer: { name: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { outboundContainer: { containerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { inboundContainer: { containerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { notes: { contains: s, mode: Prisma.QueryMode.insensitive } },
+      ];
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.tripPlan.findMany({
         where,
