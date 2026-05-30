@@ -99,6 +99,7 @@ export default function LocationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [typeFilter, setTypeFilter] = useState<LocationType | "">("");
+  const [search, setSearch] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<FormState>(EMPTY_FORM);
@@ -124,7 +125,12 @@ export default function LocationsPage() {
     return () => { cancelled = true; };
   }, [refresh]);
 
-  const displayed = typeFilter ? locations.filter((l) => l.locationType === typeFilter) : locations;
+  const displayed = locations.filter((l) => {
+    const q = search.toLowerCase();
+    const matchType = !typeFilter || l.locationType === typeFilter;
+    const matchSearch = !q || l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q);
+    return matchType && matchSearch;
+  });
 
   async function handleCreate() {
     setCreateError(null);
@@ -207,7 +213,13 @@ export default function LocationsPage() {
         </button>
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <input
+          placeholder="Tìm theo mã, tên địa điểm..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}
+        />
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as LocationType | "")}

@@ -2,6 +2,20 @@
 // @tms/shared — Types, DTOs, Constants
 // ============================================================
 
+// ---------- User Management DTOs ----------
+export type UserRole = "ADMIN" | "OPERATOR" | "VIEWER";
+
+export interface CreateUserDto {
+  username: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateUserDto {
+  role?: UserRole;
+  isActive?: boolean;
+}
+
 // ---------- Vehicle & Driver DTOs ----------
 export interface CreateVehicleDto {
   licensePlate: string;
@@ -234,6 +248,13 @@ export interface CreateYardMoveDto {
 export interface YardMoveFilters {
   locationId?: string;
   status?: YardMoveStatus;
+}
+
+// ---------- Excel Import/Export ----------
+export interface ImportResult {
+  imported: number;
+  warnings: string[];
+  errors: string[];
 }
 
 // ---------- Display helpers ----------

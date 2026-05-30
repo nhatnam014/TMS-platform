@@ -24,7 +24,11 @@ export function NavSidebar() {
 
   const navItems = [
     ...BASE_NAV_ITEMS,
-    ...(role === "ADMIN" ? [{ href: "/audit-logs", label: "Nhật ký kiểm tra" }] : []),
+    ...(role === "ADMIN" ? [
+      { href: "/audit-logs", label: "Nhật ký kiểm tra" },
+      { href: "/users", label: "Người dùng" },
+      { href: "/import-export", label: "Nhập / Xuất Excel" },
+    ] : []),
   ];
 
   async function handleLogout() {

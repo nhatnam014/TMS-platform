@@ -65,6 +65,7 @@ export default function ContainersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ContainerStatus | "">("");
+  const [search, setSearch] = useState("");
 
   function fetchContainers(status: ContainerStatus | "") {
     setLoading(true);
@@ -92,15 +93,26 @@ export default function ContainersPage() {
     fetchContainers(val);
   }
 
+  const displayed = containers.filter((c) => {
+    const q = search.toLowerCase();
+    return !q || c.containerNumber.toLowerCase().includes(q);
+  });
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Container</h1>
-        <span style={{ fontSize: 13, color: "#64748b" }}>{total} container</span>
+        <span style={{ fontSize: 13, color: "#64748b" }}>{displayed.length} container</span>
       </div>
 
       {/* Filter bar */}
       <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
+        <input
+          placeholder="Tìm theo số container..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}
+        />
         <label style={{ fontSize: 13, color: "#64748b" }}>Trạng thái:</label>
         <select
           value={statusFilter}
@@ -132,10 +144,10 @@ export default function ContainersPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Đang tải...</td></tr>
-            ) : containers.length === 0 ? (
+            ) : displayed.length === 0 ? (
               <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Không có dữ liệu</td></tr>
             ) : (
-              containers.map((c, i) => (
+              displayed.map((c, i) => (
                 <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                   <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600, fontFamily: "monospace" }}>{c.containerNumber}</td>
                   <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b" }}>{c.sizeType}</td>

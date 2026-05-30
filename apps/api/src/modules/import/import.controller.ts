@@ -1,0 +1,39 @@
+import {
+  Controller,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+  BadRequestException,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RolesGuard } from "../audit/roles.guard";
+import { ImportService } from "./import.service";
+
+@ApiTags("Import")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller("import")
+export class ImportController {
+  constructor(private readonly importService: ImportService) {}
+
+  @Post("vehicles")
+  @ApiOperation({ summary: "Import vehicles, drivers, trailers from quản lý xe sheet (ADMIN only)" })
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  importVehicles(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException("No file uploaded");
+    return this.importService.importVehicles(file.buffer);
+  }
+
+  @Post("trip-plans")
+  @ApiOperation({ summary: "Import trip plans from kế hoạch xe sheet (ADMIN only)" })
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  importTripPlans(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException("No file uploaded");
+    return this.importService.importTripPlans(file.buffer);
+  }
+}
