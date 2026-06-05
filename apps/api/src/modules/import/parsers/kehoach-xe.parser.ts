@@ -1,7 +1,12 @@
 import * as ExcelJS from "exceljs";
-import type { ContainerSize, ServiceType } from "@tms/shared";
+import type { ServiceType } from "@tms/shared";
 import { parseExcelDate } from "../utils/excel-date";
-import { normalizeContainerSize } from "../utils/container-size";
+
+export interface ParsedCostItem {
+  costName: string;
+  amount: number;
+  invoiceNumber?: string;
+}
 
 export interface ParsedTripPlanRow {
   rowNum: number;
@@ -13,139 +18,170 @@ export interface ParsedTripPlanRow {
   customerName?: string;
   carrierName?: string;
   serviceType?: ServiceType;
+  containerSize?: string;
   outboundContainerNumber?: string;
-  outboundContainerSize?: ContainerSize;
   inboundContainerNumber?: string;
-  inboundContainerSize?: ContainerSize;
   pickupLocation?: string;
   loadUnloadLocation?: string;
   dropoffLocation?: string;
-  totalCost?: number;
+  documentSentDate?: Date;
+  description?: string;
   notes?: string;
+  costs: ParsedCostItem[];
 }
 
 function cellText(row: ExcelJS.Row, colIdx: number): string {
-  if (colIdx < 0) return "";
+  if (colIdx < 1) return "";
   const v = row.getCell(colIdx).value;
   if (v === null || v === undefined) return "";
   return String(v).trim();
 }
 
 function cellNum(row: ExcelJS.Row, colIdx: number): number | undefined {
-  if (colIdx < 0) return undefined;
+  if (colIdx < 1) return undefined;
   const v = row.getCell(colIdx).value;
   if (v === null || v === undefined) return undefined;
   const n = typeof v === "number" ? v : parseFloat(String(v).replace(/,/g, ""));
-  return isNaN(n) ? undefined : n;
+  return isNaN(n) || n === 0 ? undefined : n;
 }
 
-function findSheetByPartialName(workbook: ExcelJS.Workbook, partial: string): ExcelJS.Worksheet | undefined {
+function findSheetByPartialName(
+  workbook: ExcelJS.Workbook,
+  partial: string,
+): ExcelJS.Worksheet | undefined {
   const lower = partial.toLowerCase();
   return workbook.worksheets.find((ws) => ws.name.toLowerCase().includes(lower));
 }
 
-function buildHeaderMap(headerRow: ExcelJS.Row): Record<string, number> {
-  const map: Record<string, number> = {};
-  headerRow.eachCell({ includeEmpty: false }, (cell, colIdx) => {
-    const key = String(cell.value ?? "").trim().toLowerCase();
-    if (key) map[key] = colIdx;
-  });
-  return map;
+function parseServiceType(raw: string, warnings: string[]): ServiceType {
+  const norm = raw.replace(/\s+/g, " ").toUpperCase().trim();
+  if (norm === "SEA - EX" || norm === "SEA-EX") return "SEA_EXPORT";
+  if (norm === "SEA - IM" || norm === "SEA-IM") return "SEA_IMPORT";
+  if (norm === "NEO - EX" || norm === "NEO-EX") return "NEO_EXPORT";
+  if (norm === "NEO - IM" || norm === "NEO-IM") return "NEO_IMPORT";
+  warnings.push(`Loại hình không nhận dạng được: "${raw}", mặc định SEA_EXPORT`);
+  return "SEA_EXPORT";
 }
 
-function col(hmap: Record<string, number>, ...candidates: string[]): number {
-  for (const c of candidates) {
-    const idx = hmap[c.toLowerCase()];
-    if (idx !== undefined) return idx;
-  }
-  return -1;
-}
+// Column indices matching the actual "kế hoạch xe" template (1-based)
+const COL = {
+  STT: 1,
+  NGAY: 2,
+  SO_XE: 3,
+  KHACH_HANG: 4,
+  LOAI_HINH: 5,
+  DON_VI: 6,
+  SIZE_CONT: 7,
+  CONT_DI: 8,
+  CONT_VE: 9,
+  // 10: 20', 11: 40', 12: 45' — derived tick cols, not parsed
+  DIEM_LAY: 13,
+  DIEM_DONG_RUT: 14,
+  DIEM_HA: 15,
+  PHI_NANG: 16,
+  SHD_NANG: 17,
+  PHI_HA: 18,
+  SHD_HA: 19,
+  PHI_VE_SINH: 20,
+  SHD_VE_SINH: 21,
+  PHI_CUOC: 22,
+  VE_CONG: 23,
+  SHD_CONG: 24,
+  CHI_PHI_DUT_TEM: 25,
+  CHI_PHI_TRAI_TUYEN: 26,
+  CAU_DUONG: 27,
+  NGAY_GUI_CT: 28,
+  CHI_PHI_PHAT_SINH: 29,
+  NOI_DUNG: 30,
+  GHI_CHU: 31,
+} as const;
 
-export function parseKeHoachXe(workbook: ExcelJS.Workbook): ParsedTripPlanRow[] {
-  const ws = findSheetByPartialName(workbook, "kế hoạch xe") ?? findSheetByPartialName(workbook, "ke hoach xe") ?? workbook.worksheets[0];
+const COST_COLUMNS: Array<{ nameCol: string; amountCol: number; shdCol?: number }> = [
+  { nameCol: "PHÍ NÂNG", amountCol: COL.PHI_NANG, shdCol: COL.SHD_NANG },
+  { nameCol: "PHÍ HẠ", amountCol: COL.PHI_HA, shdCol: COL.SHD_HA },
+  { nameCol: "PHÍ VỆ SINH", amountCol: COL.PHI_VE_SINH, shdCol: COL.SHD_VE_SINH },
+  { nameCol: "PHÍ CƯỢC", amountCol: COL.PHI_CUOC },
+  { nameCol: "VÉ CỔNG", amountCol: COL.VE_CONG, shdCol: COL.SHD_CONG },
+  { nameCol: "PHÍ ĐỨT TEM", amountCol: COL.CHI_PHI_DUT_TEM },
+  { nameCol: "CHI PHÍ TRÁI TUYẾN", amountCol: COL.CHI_PHI_TRAI_TUYEN },
+  { nameCol: "CẦU ĐƯỜNG", amountCol: COL.CAU_DUONG },
+  { nameCol: "CHI PHÍ PHÁT SINH KHÁC", amountCol: COL.CHI_PHI_PHAT_SINH },
+];
+
+export function parseKeHoachXe(
+  workbook: ExcelJS.Workbook,
+  warnings: string[] = [],
+): ParsedTripPlanRow[] {
+  const ws =
+    findSheetByPartialName(workbook, "kế hoạch xe") ??
+    findSheetByPartialName(workbook, "ke hoach xe") ??
+    workbook.worksheets[0];
   if (!ws) return [];
 
-  // Find header row (contains "stt" in first column)
+  // Find header row: look for a row whose first non-empty cell contains "stt"
   let headerRowNum = 1;
   ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
-    if (rowNum <= 5) {
-      const text = String(row.getCell(1).value ?? "").toLowerCase();
-      if (text === "stt" || text.includes("stt")) headerRowNum = rowNum;
+    if (rowNum > 15) return;
+    for (let c = 1; c <= 5; c++) {
+      const val = String(row.getCell(c).value ?? "")
+        .toLowerCase()
+        .trim();
+      if (val === "stt") {
+        headerRowNum = rowNum;
+        return;
+      }
     }
   });
-
-  const headerRow = ws.getRow(headerRowNum);
-  const hmap = buildHeaderMap(headerRow);
-
-  const STT = col(hmap, "stt");
-  const NGAY = col(hmap, "ngày", "ngay", "ngày tháng");
-  const SO_XE = col(hmap, "số xe", "so xe", "biển số xe");
-  const RO_MOOC = col(hmap, "rơ moóc", "ro mooc", "số moóc");
-  const KHACH_HANG = col(hmap, "khách hàng", "khach hang");
-  const NHA_VAN_CHUYEN = col(hmap, "nhà vận chuyển", "nha van chuyen", "hãng xe");
-  const SO_CONT_1 = col(hmap, "số cont", "số cont 1", "so cont 1", "cont 1");
-  const LOAI_CONT_1 = col(hmap, "loại cont", "loại cont 1", "loai cont 1");
-  const FLAG_20_1 = col(hmap, "20'", "20ft");
-  const FLAG_40_1 = col(hmap, "40'", "40ft");
-  const FLAG_45_1 = col(hmap, "45'", "45ft");
-  const NOI_LAY_CONT = col(hmap, "nơi lấy cont", "noi lay cont", "lấy rỗng");
-  const NOI_DONG_HANG = col(hmap, "nơi đóng hàng", "noi dong hang", "đóng hàng");
-  const NOI_HA_CONT = col(hmap, "nơi hạ cont", "noi ha cont", "hạ rỗng");
-  const SO_CONT_2 = col(hmap, "số cont 2", "so cont 2");
-  const LOAI_CONT_2 = col(hmap, "loại cont 2", "loai cont 2");
-  const TONG_CUOC = col(hmap, "tổng cước", "tong cuoc", "tổng tiền", "tổng chi phí");
-  const GHI_CHU = col(hmap, "ghi chú", "ghi chu", "notes");
 
   const results: ParsedTripPlanRow[] = [];
 
   ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
     if (rowNum <= headerRowNum) return;
 
-    const sttRaw = STT > 0 ? cellText(row, STT) : "";
-    if (!sttRaw) return; // skip continuation/empty rows
+    const sttRaw = cellText(row, COL.STT);
+    // Skip rows without a date (continuation rows, totals, etc.)
+    const tripDate = parseExcelDate(row.getCell(COL.NGAY).value) ?? undefined;
+    if (!tripDate) return;
 
-    const tripDate = NGAY > 0 ? parseExcelDate(row.getCell(NGAY).value) ?? undefined : undefined;
-    const vehiclePlate = cellText(row, SO_XE) || undefined;
-    const customerName = cellText(row, KHACH_HANG) || undefined;
-    const carrierName = cellText(row, NHA_VAN_CHUYEN) || undefined;
+    const vehiclePlate = cellText(row, COL.SO_XE) || undefined;
+    if (!vehiclePlate) {
+      results.push({ rowNum, type: "skip", reason: `Hàng ${rowNum}: thiếu số xe`, costs: [] });
+      return;
+    }
 
-    const contNum1 = cellText(row, SO_CONT_1) || undefined;
-    const contSize1Raw = cellText(row, LOAI_CONT_1);
-    const flag20_1 = cellText(row, FLAG_20_1);
-    const flag40_1 = cellText(row, FLAG_40_1);
-    const flag45_1 = cellText(row, FLAG_45_1);
-    const contSize1 = contNum1 ? normalizeContainerSize(contSize1Raw, flag20_1, flag40_1, flag45_1) ?? undefined : undefined;
+    const loaiHinh = cellText(row, COL.LOAI_HINH);
+    const serviceType = loaiHinh ? parseServiceType(loaiHinh, warnings) : "SEA_EXPORT";
 
-    const contNum2 = SO_CONT_2 > 0 ? (cellText(row, SO_CONT_2) || undefined) : undefined;
-    const contSize2Raw = LOAI_CONT_2 > 0 ? cellText(row, LOAI_CONT_2) : "";
-    const contSize2 = contNum2 ? normalizeContainerSize(contSize2Raw, "", "", "") ?? undefined : undefined;
+    const costs: ParsedCostItem[] = [];
+    for (const cc of COST_COLUMNS) {
+      const amount = cellNum(row, cc.amountCol);
+      if (amount !== undefined && amount > 0) {
+        const invoiceNumber = cc.shdCol ? cellText(row, cc.shdCol) || undefined : undefined;
+        costs.push({ costName: cc.nameCol, amount, invoiceNumber });
+      }
+    }
 
-    const pickupLocation = cellText(row, NOI_LAY_CONT) || undefined;
-    const loadUnloadLocation = cellText(row, NOI_DONG_HANG) || undefined;
-    const dropoffLocation = cellText(row, NOI_HA_CONT) || undefined;
-    const totalCost = cellNum(row, TONG_CUOC);
-    const notes = cellText(row, GHI_CHU) || undefined;
-
-    const tripNum = parseInt(sttRaw, 10);
+    const tripNum = sttRaw ? parseInt(sttRaw, 10) : undefined;
 
     results.push({
       rowNum,
       type: "data",
-      tripNumber: isNaN(tripNum) ? undefined : tripNum,
+      tripNumber: tripNum && !isNaN(tripNum) ? tripNum : undefined,
       tripDate,
       vehiclePlate,
-      customerName,
-      carrierName,
-      serviceType: "SEA_EXPORT",
-      outboundContainerNumber: contNum1,
-      outboundContainerSize: contSize1,
-      inboundContainerNumber: contNum2,
-      inboundContainerSize: contSize2,
-      pickupLocation,
-      loadUnloadLocation,
-      dropoffLocation,
-      totalCost,
-      notes,
+      customerName: cellText(row, COL.KHACH_HANG) || undefined,
+      carrierName: cellText(row, COL.DON_VI) || undefined,
+      serviceType,
+      containerSize: cellText(row, COL.SIZE_CONT) || undefined,
+      outboundContainerNumber: cellText(row, COL.CONT_DI) || undefined,
+      inboundContainerNumber: cellText(row, COL.CONT_VE) || undefined,
+      pickupLocation: cellText(row, COL.DIEM_LAY) || undefined,
+      loadUnloadLocation: cellText(row, COL.DIEM_DONG_RUT) || undefined,
+      dropoffLocation: cellText(row, COL.DIEM_HA) || undefined,
+      documentSentDate: parseExcelDate(row.getCell(COL.NGAY_GUI_CT).value) ?? undefined,
+      description: cellText(row, COL.NOI_DUNG) || undefined,
+      notes: cellText(row, COL.GHI_CHU) || undefined,
+      costs,
     });
   });
 

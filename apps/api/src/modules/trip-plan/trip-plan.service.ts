@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { ContainerStatus, Prisma, TripMode, TripStatus } from "@tms/db";
+import { Prisma, TripMode } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import type {
   CreateTripPlanDto,
-  AddTripCostDto,
+  AddTripPlanCostDto,
   TripPlanFilters,
   PaginationQuery,
   PaginatedResponse,
@@ -48,8 +48,8 @@ export class TripPlanService {
         ...(isNaN(num) ? [] : [{ tripNumber: num }]),
         { vehicle: { licensePlate: { contains: s, mode: Prisma.QueryMode.insensitive } } },
         { customer: { name: { contains: s, mode: Prisma.QueryMode.insensitive } } },
-        { outboundContainer: { containerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } } },
-        { inboundContainer: { containerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { outboundContainerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { inboundContainerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
         { notes: { contains: s, mode: Prisma.QueryMode.insensitive } },
       ];
     }
@@ -64,19 +64,36 @@ export class TripPlanService {
           vehicle: { select: { id: true, licensePlate: true, vehicleType: true } },
           customer: { select: { id: true, code: true, name: true } },
           carrier: { select: { id: true, code: true, name: true } },
-          outboundContainer: { select: { id: true, containerNumber: true, sizeType: true } },
-          inboundContainer: { select: { id: true, containerNumber: true, sizeType: true } },
           pickupLocation: { select: { id: true, code: true, name: true } },
           loadUnloadLocation: { select: { id: true, code: true, name: true } },
           dropoffLocation: { select: { id: true, code: true, name: true } },
-          costs: true,
+          costs: {
+            select: {
+              id: true,
+              tripCostId: true,
+              costName: true,
+              amount: true,
+              invoiceNumber: true,
+            },
+          },
         },
       }),
       this.prisma.tripPlan.count({ where }),
     ]);
 
+    const mapped = data.map((tp: any) => ({
+      ...tp,
+      costs: tp.costs.map((c: any) => ({
+        id: c.id,
+        tripCostId: c.tripCostId ?? null,
+        costName: c.costName ?? null,
+        amount: Number(c.amount),
+        invoiceNumber: c.invoiceNumber ?? null,
+      })),
+    }));
+
     return {
-      data,
+      data: mapped,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -88,52 +105,46 @@ export class TripPlanService {
         vehicle: true,
         customer: true,
         carrier: true,
-        outboundContainer: true,
-        inboundContainer: true,
         pickupLocation: true,
         loadUnloadLocation: true,
         dropoffLocation: true,
-        costs: true,
+        costs: {
+          select: {
+            id: true,
+            tripCostId: true,
+            costName: true,
+            amount: true,
+            invoiceNumber: true,
+          },
+        },
       },
     });
 
     if (!trip) throw new NotFoundException(`Trip plan ${id} not found`);
-    return trip;
+
+    return {
+      ...trip,
+      costs: trip.costs.map((c: any) => ({
+        id: c.id,
+        tripCostId: c.tripCostId ?? null,
+        costName: c.costName ?? null,
+        amount: Number(c.amount),
+        invoiceNumber: c.invoiceNumber ?? null,
+      })),
+    };
   }
 
   async create(dto: CreateTripPlanDto) {
     const tripMode = (dto.tripMode as TripMode | undefined) ?? TripMode.STANDARD;
 
-    let outboundContainerId = dto.outboundContainerId;
-    let inboundContainerId = dto.inboundContainerId;
-
-    // Upsert containers by number if IDs not provided (legacy path)
-    if (!outboundContainerId && dto.outboundContainerNumber) {
-      const container = await this.prisma.container.upsert({
-        where: { containerNumber: dto.outboundContainerNumber },
-        update: {},
-        create: { containerNumber: dto.outboundContainerNumber, sizeType: "HC40" },
-      });
-      outboundContainerId = container.id;
-    }
-
-    if (!inboundContainerId && dto.inboundContainerNumber) {
-      const container = await this.prisma.container.upsert({
-        where: { containerNumber: dto.inboundContainerNumber },
-        update: {},
-        create: { containerNumber: dto.inboundContainerNumber, sizeType: "HC40" },
-      });
-      inboundContainerId = container.id;
-    }
-
-    // DROP_AND_HOOK validation
     if (tripMode === TripMode.DROP_AND_HOOK) {
-      if (!outboundContainerId) {
-        throw new BadRequestException(
-          "DROP_AND_HOOK trips require outboundContainerId (or outboundContainerNumber)",
-        );
+      if (!dto.outboundContainerNumber) {
+        throw new BadRequestException("DROP_AND_HOOK trips require outboundContainerNumber");
       }
-      if (inboundContainerId && outboundContainerId === inboundContainerId) {
+      if (
+        dto.inboundContainerNumber &&
+        dto.outboundContainerNumber === dto.inboundContainerNumber
+      ) {
         throw new BadRequestException(
           "DROP_AND_HOOK trips require outbound and inbound containers to be different",
         );
@@ -149,12 +160,38 @@ export class TripPlanService {
           vehicleId: dto.vehicleId,
           customerId: dto.customerId,
           carrierId: dto.carrierId,
-          outboundContainerId,
-          inboundContainerId,
+          containerSize: dto.containerSize ?? null,
+          outboundContainerNumber: dto.outboundContainerNumber ?? null,
+          inboundContainerNumber: dto.inboundContainerNumber ?? null,
           pickupLocationId: dto.pickupLocationId,
           loadUnloadLocationId: dto.loadUnloadLocationId,
           dropoffLocationId: dto.dropoffLocationId,
+          documentSentDate: dto.documentSentDate ? new Date(dto.documentSentDate) : null,
+          description: dto.description ?? null,
           notes: dto.notes,
+          // Fixed cost slots
+          phiNangName: dto.phiNangName ?? null,
+          phiNangAmount: dto.phiNangAmount ?? null,
+          shdNang: dto.shdNang ?? null,
+          phiHaName: dto.phiHaName ?? null,
+          phiHaAmount: dto.phiHaAmount ?? null,
+          shdHa: dto.shdHa ?? null,
+          phiVeSinhName: dto.phiVeSinhName ?? null,
+          phiVeSinhAmount: dto.phiVeSinhAmount ?? null,
+          shdVeSinh: dto.shdVeSinh ?? null,
+          phiCuocName: dto.phiCuocName ?? null,
+          phiCuocAmount: dto.phiCuocAmount ?? null,
+          veCongName: dto.veCongName ?? null,
+          veCongAmount: dto.veCongAmount ?? null,
+          shdVeCong: dto.shdVeCong ?? null,
+          chiPhiKhacName: dto.chiPhiKhacName ?? null,
+          chiPhiKhacAmount: dto.chiPhiKhacAmount ?? null,
+          chiPhiTraiTuyenName: dto.chiPhiTraiTuyenName ?? null,
+          chiPhiTraiTuyenAmount: dto.chiPhiTraiTuyenAmount ?? null,
+          cauDuongName: dto.cauDuongName ?? null,
+          cauDuongAmount: dto.cauDuongAmount ?? null,
+          chiPhiPhatSinhName: dto.chiPhiPhatSinhName ?? null,
+          chiPhiPhatSinhAmount: dto.chiPhiPhatSinhAmount ?? null,
         },
         include: {
           vehicle: true,
@@ -181,53 +218,6 @@ export class TripPlanService {
   async updateStatus(id: string, status: string) {
     const trip = await this.findOne(id);
 
-    if (trip.tripMode === TripMode.DROP_AND_HOOK) {
-      return this.prisma.$transaction(async (tx) => {
-        const updated = await tx.tripPlan.update({
-          where: { id },
-          data: { status: status as any },
-        });
-
-        const newStatus = status as TripStatus;
-
-        if (newStatus === TripStatus.DISPATCHED && trip.outboundContainerId) {
-          await tx.container.update({
-            where: { id: trip.outboundContainerId },
-            data: { status: ContainerStatus.EMPTY_IN_TRANSIT },
-          });
-        } else if (newStatus === TripStatus.IN_TRANSIT && trip.outboundContainerId) {
-          await tx.container.update({
-            where: { id: trip.outboundContainerId },
-            data: { status: ContainerStatus.EMPTY_AT_YARD },
-          });
-        } else if (newStatus === TripStatus.COMPLETED && trip.inboundContainerId) {
-          await tx.container.update({
-            where: { id: trip.inboundContainerId },
-            data: { status: ContainerStatus.DELIVERED },
-          });
-        } else if (newStatus === TripStatus.CANCELLED && trip.outboundContainerId) {
-          await tx.container.update({
-            where: { id: trip.outboundContainerId },
-            data: { status: ContainerStatus.EMPTY_AVAILABLE },
-          });
-        }
-
-        await this.auditService.log(
-          {
-            action: "STATUS_CHANGE",
-            entityType: ENTITY_TYPES.TRIP_PLAN,
-            entityId: id,
-            summary: `Trip plan status changed from ${trip.status} to ${status}`,
-            beforeSnapshot: { status: trip.status },
-            afterSnapshot: { status },
-          },
-          tx,
-        );
-
-        return updated;
-      });
-    }
-
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.tripPlan.update({
         where: { id },
@@ -250,26 +240,32 @@ export class TripPlanService {
     });
   }
 
-  findLoadedReady(locationId: string) {
-    return this.prisma.container.findMany({
-      where: {
-        status: ContainerStatus.LOADED_READY,
-        currentLocationId: locationId,
-      },
-      include: { currentLocation: { select: { id: true, code: true, name: true } } },
-    });
-  }
+  async addCost(tripId: string, dto: AddTripPlanCostDto) {
+    const tripCost = await this.prisma.tripCost.findUnique({ where: { id: dto.tripCostId } });
+    if (!tripCost) throw new NotFoundException(`TripCost ${dto.tripCostId} not found`);
 
-  async addCost(tripId: string, dto: AddTripCostDto) {
+    if (!dto.amount || dto.amount <= 0) {
+      throw new BadRequestException("Amount must be greater than 0");
+    }
+
     await this.findOne(tripId);
+
     return this.prisma.$transaction(async (tx) => {
-      const cost = await tx.tripCost.create({
+      const cost = await tx.tripPlanCost.create({
         data: {
           tripPlanId: tripId,
-          costType: dto.costType as any,
+          tripCostId: dto.tripCostId,
+          costName: tripCost.name,
           amount: dto.amount,
-          invoiceNumber: dto.invoiceNumber,
-          description: dto.description,
+          invoiceNumber: dto.invoiceNumber ?? null,
+        },
+      });
+
+      await tx.tripPlan.update({
+        where: { id: tripId },
+        data: {
+          tripCostName: tripCost.name,
+          tripCostAmount: dto.amount,
         },
       });
 
@@ -278,14 +274,20 @@ export class TripPlanService {
           action: "COST_ADDED",
           entityType: ENTITY_TYPES.TRIP_COST,
           entityId: cost.id,
-          summary: `Cost added to trip plan: ${dto.costType} ${dto.amount}`,
+          summary: `Cost added to trip plan: ${tripCost.name} ${dto.amount}`,
           afterSnapshot: cost as object,
           metadata: { tripPlanId: tripId },
         },
         tx,
       );
 
-      return cost;
+      return {
+        id: cost.id,
+        tripCostId: cost.tripCostId,
+        costName: tripCost.name,
+        amount: Number(cost.amount),
+        invoiceNumber: cost.invoiceNumber ?? null,
+      };
     });
   }
 

@@ -24,15 +24,12 @@ export class YardMoveController {
   @ApiOperation({ summary: "List yard moves with optional filters" })
   @ApiQuery({ name: "locationId", required: false })
   @ApiQuery({ name: "status", required: false, enum: YardMoveStatus })
-  findAll(
-    @Query("locationId") locationId?: string,
-    @Query("status") status?: YardMoveStatus,
-  ) {
+  findAll(@Query("locationId") locationId?: string, @Query("status") status?: YardMoveStatus) {
     return this.yardMoveService.findAll({ locationId, status });
   }
 
   @Patch(":id/status")
-  @ApiOperation({ summary: "Update yard move status; COMPLETED triggers container status update" })
+  @ApiOperation({ summary: "Update yard move status (PENDING → IN_PROGRESS → COMPLETED)" })
   updateStatus(@Param("id") id: string, @Body() dto: UpdateYardMoveStatusDto) {
     return this.yardMoveService.updateStatus(id, dto.status);
   }

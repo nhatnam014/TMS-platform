@@ -9,80 +9,140 @@ function formatDate(d: Date | string | null | undefined): string {
   return `${dd}/${mm}/${date.getFullYear()}`;
 }
 
+function sizeToTick(containerSize: string | null | undefined, prefix: string): string {
+  if (!containerSize) return "";
+  return containerSize.startsWith(prefix) ? "X" : "";
+}
+
+function findCost(
+  costs: any[],
+  name: string,
+): { amount: number | null; invoiceNumber: string | null } {
+  const match = costs?.find((c: any) => c.costName === name);
+  return {
+    amount: match ? Number(match.amount) || null : null,
+    invoiceNumber: match?.invoiceNumber ?? null,
+  };
+}
+
+const COST_NAMES = [
+  "PHÍ NÂNG",
+  "PHÍ HẠ",
+  "PHÍ VỆ SINH",
+  "PHÍ CƯỢC",
+  "VÉ CỔNG",
+  "PHÍ ĐỨT TEM",
+  "CHI PHÍ TRÁI TUYẾN",
+  "CẦU ĐƯỜNG",
+  "CHI PHÍ PHÁT SINH KHÁC",
+] as const;
+
+const HEADERS = [
+  "STT",
+  "NGÀY",
+  "SỐ XE",
+  "KHÁCH HÀNG",
+  "LOẠI HÌNH",
+  "ĐƠN VỊ",
+  "SIZE CONT",
+  "CONT ĐI",
+  "CONT VỀ",
+  "20'",
+  "40'",
+  "45'",
+  "Điểm Lấy (R/H)",
+  "Điểm (Đóng/Rút)",
+  "Điểm hạ (R/H)",
+  "PHÍ NÂNG",
+  "SHĐ NÂNG",
+  "PHÍ HẠ",
+  "SHĐ HẠ",
+  "PHÍ VỆ SINH",
+  "SHĐ",
+  "PHÍ CƯỢC",
+  "VÉ CỔNG",
+  "SHĐ",
+  "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM",
+  "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM",
+  "CẦU ĐƯỜNG",
+  "NGÀY GỬI CT",
+  "CHI PHÍ PHÁT SINH KHÁC",
+  "NỘI DUNG",
+  "GHI CHÚ",
+] as const;
+
+const COL_WIDTHS = [
+  6, 12, 14, 22, 12, 18, 10, 16, 16, 5, 5, 5, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20,
+  30, 14, 14, 24, 24, 24,
+];
+
+const SERVICE_TYPE_MAP: Record<string, string> = {
+  SEA_EXPORT: "SEA - EX",
+  SEA_IMPORT: "SEA - IM",
+  NEO_EXPORT: "NEO - EX",
+  NEO_IMPORT: "NEO - IM",
+};
+
 export async function buildKeHoachXe(tripPlans: any[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("kế hoạch xe");
 
-  const headers = [
-    "STT",
-    "NGÀY",
-    "SỐ XE",
-    "RƠ MOÓC",
-    "KHÁCH HÀNG",
-    "NHÀ VẬN CHUYỂN",
-    // CONT 1
-    "SỐ CONT 1",
-    "LOẠI CONT 1",
-    "ĐÓNG/RÚT",
-    "NƠI LẤY CONT",
-    "NƠI ĐÓNG HÀNG",
-    "NƠI ĐỂ CONT",
-    "NƠI HẠ CONT",
-    // CONT 2
-    "SỐ CONT 2",
-    "LOẠI CONT 2",
-    "ĐÓNG/RÚT 2",
-    "NƠI LẤY CONT 2",
-    "NƠI ĐÓNG HÀNG 2",
-    "NƠI ĐỂ CONT 2",
-    "NƠI HẠ CONT 2",
-    // Summary
-    "TỔNG CƯỚC",
-    "GHI CHÚ",
-  ];
-
-  const colWidths = [6, 12, 14, 14, 24, 24, 18, 12, 10, 22, 22, 22, 22, 18, 12, 10, 22, 22, 22, 22, 14, 24];
-
-  ws.addRow(headers);
+  ws.addRow(HEADERS as unknown as any[]);
   const headerRow = ws.getRow(1);
   headerRow.font = { bold: true };
   headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
+  headerRow.alignment = { horizontal: "center", wrapText: true };
 
-  headers.forEach((_, i) => {
-    ws.getColumn(i + 1).width = colWidths[i];
+  HEADERS.forEach((_, i) => {
+    ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
   tripPlans.forEach((tp, idx) => {
-    const outbound = tp.outboundContainer;
-    const inbound = tp.inboundContainer;
-    const totalCost = (tp.costs ?? []).reduce((sum: number, c: any) => sum + Number(c.amount), 0);
-    const dongRut = tp.serviceType === "SEA_EXPORT" || tp.serviceType === "NEO_EXPORT" ? "ĐÓNG" : "RÚT";
+    const costs: any[] = tp.costs ?? [];
+    const cs = tp.containerSize ?? "";
+
+    const nang = findCost(costs, "PHÍ NÂNG");
+    const ha = findCost(costs, "PHÍ HẠ");
+    const veSinh = findCost(costs, "PHÍ VỆ SINH");
+    const cuoc = findCost(costs, "PHÍ CƯỢC");
+    const veCong = findCost(costs, "VÉ CỔNG");
+    const dutTem = findCost(costs, "PHÍ ĐỨT TEM");
+    const traiTuyen = findCost(costs, "CHI PHÍ TRÁI TUYẾN");
+    const cauDuong = findCost(costs, "CẦU ĐƯỜNG");
+    const phatSinh = findCost(costs, "CHI PHÍ PHÁT SINH KHÁC");
 
     ws.addRow([
-      idx + 1,
-      formatDate(tp.tripDate),
-      tp.vehicle?.licensePlate ?? "",
-      "",                             // RƠ MOÓC — not in TripPlan schema
-      tp.customer?.name ?? "",
-      tp.carrier?.name ?? "",
-      // CONT 1
-      outbound?.containerNumber ?? "",
-      outbound?.sizeType ?? "",
-      dongRut,
-      tp.pickupLocation?.name ?? "",
-      tp.loadUnloadLocation?.name ?? "",
-      "",                             // NƠI ĐỂ CONT — no dedicated field
-      tp.dropoffLocation?.name ?? "",
-      // CONT 2
-      inbound?.containerNumber ?? "",
-      inbound?.sizeType ?? "",
-      "",                             // ĐÓNG/RÚT 2 — no dedicated field
-      "",                             // NƠI LẤY CONT 2 — no dedicated field
-      "",                             // NƠI ĐÓNG HÀNG 2 — no dedicated field
-      "",                             // NƠI ĐỂ CONT 2 — no dedicated field
-      "",                             // NƠI HẠ CONT 2 — no dedicated field
-      totalCost || "",
-      tp.notes ?? "",
+      idx + 1, // STT
+      formatDate(tp.tripDate), // NGÀY
+      tp.vehicle?.licensePlate ?? "", // SỐ XE
+      tp.customer?.name ?? "", // KHÁCH HÀNG
+      SERVICE_TYPE_MAP[tp.serviceType] ?? tp.serviceType ?? "", // LOẠI HÌNH
+      tp.carrier?.name ?? "", // ĐƠN VỊ
+      cs, // SIZE CONT
+      tp.outboundContainerNumber ?? "", // CONT ĐI
+      tp.inboundContainerNumber ?? "", // CONT VỀ
+      sizeToTick(cs, "20"), // 20'
+      sizeToTick(cs, "40"), // 40'
+      sizeToTick(cs, "45"), // 45'
+      tp.pickupLocation?.name ?? "", // Điểm Lấy
+      tp.loadUnloadLocation?.name ?? "", // Điểm Đóng/Rút
+      tp.dropoffLocation?.name ?? "", // Điểm Hạ
+      nang.amount ?? "", // PHÍ NÂNG
+      nang.invoiceNumber ?? "", // SHĐ NÂNG
+      ha.amount ?? "", // PHÍ HẠ
+      ha.invoiceNumber ?? "", // SHĐ HẠ
+      veSinh.amount ?? "", // PHÍ VỆ SINH
+      veSinh.invoiceNumber ?? "", // SHĐ
+      cuoc.amount ?? "", // PHÍ CƯỢC
+      veCong.amount ?? "", // VÉ CỔNG
+      veCong.invoiceNumber ?? "", // SHĐ
+      dutTem.amount ?? "", // CHI PHÍ ĐỨT TEM
+      traiTuyen.amount ?? "", // CHI PHÍ TRÁI TUYẾN
+      cauDuong.amount ?? "", // CẦU ĐƯỜNG
+      formatDate(tp.documentSentDate), // NGÀY GỬI CT
+      phatSinh.amount ?? "", // CHI PHÍ PHÁT SINH KHÁC
+      tp.description ?? "", // NỘI DUNG
+      tp.notes ?? "", // GHI CHÚ
     ]);
   });
 

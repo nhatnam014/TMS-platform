@@ -69,7 +69,10 @@ export class ImportService {
             });
             await this.prisma.driver.upsert({
               where: { vehicleId: vehicle.id },
-              update: { fullName: row.driverName, ...(row.driverPhone && { phone: row.driverPhone }) },
+              update: {
+                fullName: row.driverName,
+                ...(row.driverPhone && { phone: row.driverPhone }),
+              },
               create: {
                 fullName: row.driverName,
                 phone: row.driverPhone ?? null,
@@ -82,11 +85,19 @@ export class ImportService {
           }
 
           if (row.trailerNumber) {
-            await this.upsertTrailerAndLink(row.trailerNumber, vehicle.id, row.trailerInspectionExpiry, row.trailerInsuranceExpiry, warnings);
+            await this.upsertTrailerAndLink(
+              row.trailerNumber,
+              vehicle.id,
+              row.trailerInspectionExpiry,
+              row.trailerInsuranceExpiry,
+              warnings,
+            );
           }
         } else if (row.type === "trailer_orphan") {
           if (!row.trailerNumber) continue;
-          const existingTrailer = await this.prisma.trailer.findUnique({ where: { trailerNumber: row.trailerNumber } });
+          const existingTrailer = await this.prisma.trailer.findUnique({
+            where: { trailerNumber: row.trailerNumber },
+          });
           await this.prisma.trailer.upsert({
             where: { trailerNumber: row.trailerNumber },
             update: {},
@@ -99,7 +110,13 @@ export class ImportService {
           if (!existingTrailer) warnings.push(`Rơ moóc mới (không có xe): ${row.trailerNumber}`);
         } else if (row.type === "trailer_continuation") {
           if (!row.trailerNumber) continue;
-          await this.upsertTrailerAndLink(row.trailerNumber, currentVehicleId, row.trailerInspectionExpiry, row.trailerInsuranceExpiry, warnings);
+          await this.upsertTrailerAndLink(
+            row.trailerNumber,
+            currentVehicleId,
+            row.trailerInspectionExpiry,
+            row.trailerInsuranceExpiry,
+            warnings,
+          );
         }
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
@@ -148,8 +165,8 @@ export class ImportService {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
 
-    const rows = parseKeHoachXe(workbook);
     const warnings: string[] = [];
+    const rows = parseKeHoachXe(workbook, warnings);
     const errors: string[] = [];
     let imported = 0;
 
@@ -178,18 +195,6 @@ export class ImportService {
           carrierId = carrier.id;
         }
 
-        let outboundContainerId: string | undefined;
-        if (row.outboundContainerNumber && row.outboundContainerSize) {
-          const c = await this.findOrCreateContainer(row.outboundContainerNumber, row.outboundContainerSize);
-          outboundContainerId = c.id;
-        }
-
-        let inboundContainerId: string | undefined;
-        if (row.inboundContainerNumber && row.inboundContainerSize) {
-          const c = await this.findOrCreateContainer(row.inboundContainerNumber, row.inboundContainerSize);
-          inboundContainerId = c.id;
-        }
-
         let pickupLocationId: string | undefined;
         if (row.pickupLocation) {
           const loc = await this.findOrCreateLocation(row.pickupLocation, warnings);
@@ -208,33 +213,53 @@ export class ImportService {
           dropoffLocationId = loc.id;
         }
 
-        const tripPlan = await this.prisma.tripPlan.create({
-          data: {
-            tripDate: row.tripDate,
-            tripNumber: row.tripNumber ?? null,
-            serviceType: row.serviceType ?? "SEA_EXPORT",
-            vehicleId: vehicle.id,
-            customerId: customer.id,
-            carrierId: carrierId ?? null,
-            outboundContainerId: outboundContainerId ?? null,
-            inboundContainerId: inboundContainerId ?? null,
-            pickupLocationId: pickupLocationId ?? null,
-            loadUnloadLocationId: loadUnloadLocationId ?? null,
-            dropoffLocationId: dropoffLocationId ?? null,
-            notes: row.notes ?? null,
-          },
-        });
-
-        if (row.totalCost && row.totalCost > 0) {
-          await this.prisma.tripCost.create({
+        await this.prisma.$transaction(async (tx) => {
+          const tripPlan = await tx.tripPlan.create({
             data: {
-              tripPlanId: tripPlan.id,
-              costType: "OTHER",
-              amount: row.totalCost,
-              description: "Tổng cước (nhập từ Excel)",
+              tripDate: row.tripDate!,
+              tripNumber: row.tripNumber ?? null,
+              serviceType: row.serviceType ?? "SEA_EXPORT",
+              vehicleId: vehicle.id,
+              customerId: customer.id,
+              carrierId: carrierId ?? null,
+              containerSize: row.containerSize ?? null,
+              outboundContainerNumber: row.outboundContainerNumber ?? null,
+              inboundContainerNumber: row.inboundContainerNumber ?? null,
+              pickupLocationId: pickupLocationId ?? null,
+              loadUnloadLocationId: loadUnloadLocationId ?? null,
+              dropoffLocationId: dropoffLocationId ?? null,
+              description: row.description ?? null,
+              notes: row.notes ?? null,
             },
           });
-        }
+
+          for (const costItem of row.costs ?? []) {
+            let tripCost = await tx.tripCost.findFirst({
+              where: { name: { equals: costItem.costName, mode: "insensitive" } },
+            });
+            if (!tripCost) {
+              warnings.push(`Chi phí mới tự tạo: ${costItem.costName}`);
+              tripCost = await tx.tripCost.create({ data: { name: costItem.costName } });
+            }
+            await tx.tripPlanCost.create({
+              data: {
+                tripPlanId: tripPlan.id,
+                tripCostId: tripCost.id,
+                amount: costItem.amount,
+                invoiceNumber: costItem.invoiceNumber ?? null,
+              },
+            });
+          }
+
+          const lastCost =
+            row.costs && row.costs.length > 0 ? row.costs[row.costs.length - 1] : null;
+          if (lastCost) {
+            await tx.tripPlan.update({
+              where: { id: tripPlan.id },
+              data: { tripCostName: lastCost.costName, tripCostAmount: lastCost.amount },
+            });
+          }
+        });
 
         imported++;
       } catch (err) {
@@ -260,9 +285,12 @@ export class ImportService {
 
   private async findOrCreateCustomer(name: string | undefined, warnings: string[]) {
     if (!name) {
-      return this.prisma.customer.findFirst({ where: { code: "UNKNOWN" } }).then((c) =>
-        c ?? this.prisma.customer.create({ data: { code: "UNKNOWN", name: "Không xác định" } })
-      );
+      return this.prisma.customer
+        .findFirst({ where: { code: "UNKNOWN" } })
+        .then(
+          (c) =>
+            c ?? this.prisma.customer.create({ data: { code: "UNKNOWN", name: "Không xác định" } }),
+        );
     }
     const existing = await this.prisma.customer.findFirst({
       where: { name: { equals: name, mode: "insensitive" } },
@@ -281,14 +309,6 @@ export class ImportService {
     warnings.push(`Hãng xe mới tự tạo: ${name}`);
     const code = name.toUpperCase().replace(/\s+/g, "_").slice(0, 50);
     return this.prisma.carrier.create({ data: { code: `${code}_${Date.now()}`, name } });
-  }
-
-  private async findOrCreateContainer(containerNumber: string, sizeType: string) {
-    return this.prisma.container.upsert({
-      where: { containerNumber },
-      update: {},
-      create: { containerNumber, sizeType: sizeType as any },
-    });
   }
 
   private async findOrCreateLocation(name: string, warnings: string[]) {

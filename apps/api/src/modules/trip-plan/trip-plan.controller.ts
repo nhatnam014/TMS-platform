@@ -1,11 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiOperation, ApiQuery, ApiTags, ApiBearerAuth } from "@nestjs/swagger";
-import type {
-  AddTripCostDto,
-  PaginationQuery,
-  TripPlanFilters,
-} from "@tms/shared";
+import type { PaginationQuery, TripPlanFilters } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { AddTripPlanCostDto } from "./dto/add-trip-plan-cost.dto";
 import { CreateTripPlanDto } from "./dto/create-trip-plan.dto";
 import { TripPlanService } from "./trip-plan.service";
 
@@ -30,13 +37,6 @@ export class TripPlanController {
     return this.tripPlanService.findAll(filters, pagination);
   }
 
-  @Get("loaded-ready")
-  @ApiOperation({ summary: "Get LOADED_READY containers at a factory (for DROP_AND_HOOK dispatch)" })
-  @ApiQuery({ name: "locationId", required: true })
-  findLoadedReady(@Query("locationId") locationId: string) {
-    return this.tripPlanService.findLoadedReady(locationId);
-  }
-
   @Get(":id")
   @ApiOperation({ summary: "Get trip plan detail by ID" })
   findOne(@Param("id") id: string): Promise<any> {
@@ -57,7 +57,7 @@ export class TripPlanController {
 
   @Post(":id/costs")
   @ApiOperation({ summary: "Add a cost entry to a trip" })
-  addCost(@Param("id") id: string, @Body() dto: AddTripCostDto): Promise<any> {
+  addCost(@Param("id") id: string, @Body() dto: AddTripPlanCostDto): Promise<any> {
     return this.tripPlanService.addCost(id, dto);
   }
 

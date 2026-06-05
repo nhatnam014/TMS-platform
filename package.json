@@ -6,8 +6,9 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "dotenv -e .env -- turbo start",
     "dev": "dotenv -e .env -- turbo dev",
-    "build": "dotenv -e .env -- turbo build",
+    "build": "NODE_ENV=production dotenv -e .env -- turbo build",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "test": "dotenv -e .env -- turbo test",
@@ -28,11 +29,7 @@
     "turbo": "^2.3.4"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,md,yml,yaml}": [
+    "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
       "prettier --write"
     ]
   },
