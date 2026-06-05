@@ -19,7 +19,7 @@ async function proxyRequest(request: NextRequest, path: string[]): Promise<NextR
   const contentType = request.headers.get("content-type");
   if (contentType) headers["Content-Type"] = contentType;
 
-  const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.text();
+  const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
 
   const apiRes = await fetch(url, {
     method: request.method,
@@ -27,12 +27,17 @@ async function proxyRequest(request: NextRequest, path: string[]): Promise<NextR
     body,
   });
 
-  const responseBody = await apiRes.text();
-  const responseContentType = apiRes.headers.get("content-type") ?? "application/json";
+  const responseBuffer = await apiRes.arrayBuffer();
 
-  return new NextResponse(responseBody, {
+  const responseHeaders = new Headers();
+  const HOP_BY_HOP = ["transfer-encoding", "connection", "keep-alive"];
+  apiRes.headers.forEach((value, key) => {
+    if (!HOP_BY_HOP.includes(key.toLowerCase())) responseHeaders.set(key, value);
+  });
+
+  return new NextResponse(responseBuffer, {
     status: apiRes.status,
-    headers: { "Content-Type": responseContentType },
+    headers: responseHeaders,
   });
 }
 

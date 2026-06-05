@@ -95,6 +95,7 @@ export default function DriversPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [search, setSearch] = useState("");
 
   // Available WAITING_DRIVER vehicles for assignment
   const [waitingVehicles, setWaitingVehicles] = useState<VehicleOption[]>([]);
@@ -221,6 +222,11 @@ export default function DriversPage() {
     if (res.ok) setRefresh((r) => r + 1);
   }
 
+  const displayed = drivers.filter((d) => {
+    const q = search.toLowerCase();
+    return !q || d.fullName.toLowerCase().includes(q) || (d.phone?.toLowerCase().includes(q) ?? false);
+  });
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -239,6 +245,15 @@ export default function DriversPage() {
         </p>
       )}
 
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <input
+          placeholder="Tìm theo tên, số điện thoại..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}
+        />
+      </div>
+
       <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -253,10 +268,10 @@ export default function DriversPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Đang tải...</td></tr>
-            ) : drivers.length === 0 ? (
+            ) : displayed.length === 0 ? (
               <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Không có dữ liệu</td></tr>
             ) : (
-              drivers.map((d, i) => (
+              displayed.map((d, i) => (
                 <tr key={d.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                   <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 500 }}>{d.fullName}</td>
                   <td style={{ padding: "10px 16px", fontSize: 13 }}>{d.phone ?? "—"}</td>

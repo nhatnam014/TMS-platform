@@ -1,17 +1,11 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { ContainerStatus, YardMoveStatus } from "@tms/db";
+import { YardMoveStatus } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { ENTITY_TYPES } from "@tms/shared";
 import type { YardMoveFilters } from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
 import { CreateYardMoveCostDto } from "./dto/create-yard-move-cost.dto";
-
-const ZONE_TO_CONTAINER_STATUS: Record<string, ContainerStatus> = {
-  STAGING_DROP: ContainerStatus.EMPTY_AT_YARD,
-  LOADING_DOCK: ContainerStatus.BEING_LOADED,
-  STAGING_READY: ContainerStatus.LOADED_READY,
-};
 
 @Injectable()
 export class YardMoveService {
@@ -25,14 +19,14 @@ export class YardMoveService {
       const move = await tx.yardMove.create({
         data: {
           date: new Date(dto.date),
-          containerId: dto.containerId,
+          containerNumber: dto.containerNumber,
           fromZone: dto.fromZone,
           toZone: dto.toZone,
           locationId: dto.locationId,
           status: YardMoveStatus.PENDING,
           notes: dto.notes,
         },
-        include: { container: true, location: true, costs: true },
+        include: { location: true, costs: true },
       });
 
       await this.auditService.log(
@@ -57,7 +51,6 @@ export class YardMoveService {
         ...(filters.status ? { status: filters.status as YardMoveStatus } : {}),
       },
       include: {
-        container: { select: { id: true, containerNumber: true, sizeType: true, status: true } },
         location: { select: { id: true, code: true, name: true } },
         costs: true,
       },
@@ -68,7 +61,7 @@ export class YardMoveService {
   async findOne(id: string) {
     const move = await this.prisma.yardMove.findUnique({
       where: { id },
-      include: { container: true, location: true, costs: true },
+      include: { location: true, costs: true },
     });
     if (!move) throw new NotFoundException(`YardMove ${id} not found`);
     return move;
@@ -77,42 +70,11 @@ export class YardMoveService {
   async updateStatus(id: string, status: YardMoveStatus) {
     const move = await this.findOne(id);
 
-    if (status === YardMoveStatus.COMPLETED) {
-      const containerStatus = ZONE_TO_CONTAINER_STATUS[move.toZone];
-      return this.prisma.$transaction(async (tx) => {
-        const updated = await tx.yardMove.update({
-          where: { id },
-          data: { status },
-          include: { container: true, location: true, costs: true },
-        });
-        if (containerStatus) {
-          await tx.container.update({
-            where: { id: move.containerId },
-            data: { status: containerStatus, factoryZone: move.toZone },
-          });
-        }
-
-        await this.auditService.log(
-          {
-            action: "STATUS_CHANGE",
-            entityType: ENTITY_TYPES.YARD_MOVE,
-            entityId: id,
-            summary: `Yard move status changed from ${move.status} to ${status}`,
-            beforeSnapshot: { status: move.status },
-            afterSnapshot: { status },
-          },
-          tx,
-        );
-
-        return updated;
-      });
-    }
-
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.yardMove.update({
         where: { id },
         data: { status },
-        include: { container: true, location: true, costs: true },
+        include: { location: true, costs: true },
       });
 
       await this.auditService.log(

@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(grep -n 'auditService\\\\|prisma.$transaction' /Users/admin/Downloads/tms-platform/apps/api/src/modules/trip-plan/trip-plan.service.ts)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['instruction']\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['instruction']\\)\")",
+      "Bash(pnpm --filter @tms/web type-check)",
+      "Bash(node -e ' *)",
+      "Bash(npm list *)",
+      "Bash(npx --yes xlsx-to-json \"TMS template - VIET CODE.xlsx\")",
+      "Read(//private/tmp/**)",
+      "Bash(npm install *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['instruction'][:200]\\); print\\('---'\\); print\\(d['template']\\)\")",
+      "Bash(pnpm add *)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

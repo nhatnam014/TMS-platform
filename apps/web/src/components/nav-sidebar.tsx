@@ -9,12 +9,13 @@ const BASE_NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trip-plans", label: "Kế hoạch chuyến" },
   { href: "/vehicles", label: "Phương tiện" },
+  { href: "/vehicle-records", label: "Quản lý xe" },
   { href: "/drivers", label: "Tài xế" },
-  { href: "/containers", label: "Container" },
   { href: "/yard-moves", label: "Lệnh bãi" },
   { href: "/customers", label: "Khách hàng" },
   { href: "/carriers", label: "Hãng xe" },
   { href: "/locations", label: "Địa điểm" },
+  { href: "/trip-costs", label: "Danh mục chi phí" },
 ];
 
 export function NavSidebar() {
@@ -24,7 +25,13 @@ export function NavSidebar() {
 
   const navItems = [
     ...BASE_NAV_ITEMS,
-    ...(role === "ADMIN" ? [{ href: "/audit-logs", label: "Nhật ký kiểm tra" }] : []),
+    ...(role === "ADMIN"
+      ? [
+          { href: "/audit-logs", label: "Nhật ký kiểm tra" },
+          { href: "/users", label: "Người dùng" },
+          { href: "/import-export", label: "Nhập / Xuất Excel" },
+        ]
+      : []),
   ];
 
   async function handleLogout() {

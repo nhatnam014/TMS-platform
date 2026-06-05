@@ -150,40 +150,12 @@ model Location {
   tripsAsPickup     TripPlan[] @relation("PickupLocation")
   tripsAsLoadUnload TripPlan[] @relation("LoadUnloadLocation")
   tripsAsDropoff    TripPlan[] @relation("DropoffLocation")
-  containersHere    Container[] @relation("ContainerCurrentLocation")
   yardMoves         YardMove[]
 
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
   @@map("locations")
-}
-
-// ============================================================
-// CONTAINER
-// ============================================================
-
-model Container {
-  id              String          @id @default(cuid())
-  containerNumber String          @unique @map("container_number") // OOLU8990993, CSNU7534097
-  sizeType        ContainerSize   @map("size_type")                // 20GP, 40HC, 45
-
-  // Status lifecycle (auto-updated by TripPlan + YardMove transitions)
-  status          ContainerStatus @default(EMPTY_AVAILABLE)
-  factoryZone     String?         @map("factory_zone")             // STAGING_DROP | LOADING_DOCK | STAGING_READY
-  currentLocationId String?       @map("current_location_id")
-  currentLocation   Location?     @relation("ContainerCurrentLocation", fields: [currentLocationId], references: [id])
-
-  tripsAsOutbound TripPlan[]      @relation("OutboundContainer")
-  tripsAsInbound  TripPlan[]      @relation("InboundContainer")
-  yardMoves       YardMove[]
-
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-
-  @@index([status])
-  @@index([currentLocationId])
-  @@map("containers")
 }
 
 // ============================================================
@@ -210,12 +182,10 @@ model TripPlan {
   carrierId       String?         @map("carrier_id")
   carrier         Carrier?        @relation(fields: [carrierId], references: [id])
 
-  // Container tracking (outbound = CONT ĐI, inbound = CONT VỀ)
-  outboundContainerId   String?   @map("outbound_container_id")
-  outboundContainer     Container? @relation("OutboundContainer", fields: [outboundContainerId], references: [id])
-
-  inboundContainerId    String?   @map("inbound_container_id")
-  inboundContainer      Container? @relation("InboundContainer", fields: [inboundContainerId], references: [id])
+  // Container tracking (outbound = CONT ĐI, inbound = CONT VỀ) — plain strings, no FK
+  containerSize           String?  @map("container_size")           // SIZE CONT: "20GP", "40HC", "45HC"
+  outboundContainerNumber String?  @map("outbound_container_number")
+  inboundContainerNumber  String?  @map("inbound_container_number")
 
   // 3-point route
   pickupLocationId      String?   @map("pickup_location_id")       // Điểm Lấy (R/H)
@@ -227,11 +197,48 @@ model TripPlan {
   dropoffLocationId     String?   @map("dropoff_location_id")      // Điểm hạ (R/H)
   dropoffLocation       Location? @relation("DropoffLocation", fields: [dropoffLocationId], references: [id])
 
-  // Cost breakdown (1:N)
-  costs           TripCost[]
+  // Cost breakdown (M:N via TripPlanCost)
+  costs           TripPlanCost[]
+
+  // Denormalized last-added cost (customer requirement)
+  tripCostName    String?         @map("trip_cost_name")
+  tripCostAmount  Decimal?        @db.Decimal(15, 2) @map("trip_cost_amount")
+
+  // Fixed cost slots — name+amount snapshot (survives TripCost catalog deletions)
+  phiNangName           String?   @map("phi_nang_name")
+  phiNangAmount         Decimal?  @db.Decimal(15, 2) @map("phi_nang_amount")
+  shdNang               String?   @map("shd_nang")
+
+  phiHaName             String?   @map("phi_ha_name")
+  phiHaAmount           Decimal?  @db.Decimal(15, 2) @map("phi_ha_amount")
+  shdHa                 String?   @map("shd_ha")
+
+  phiVeSinhName         String?   @map("phi_ve_sinh_name")
+  phiVeSinhAmount       Decimal?  @db.Decimal(15, 2) @map("phi_ve_sinh_amount")
+  shdVeSinh             String?   @map("shd_ve_sinh")
+
+  phiCuocName           String?   @map("phi_cuoc_name")
+  phiCuocAmount         Decimal?  @db.Decimal(15, 2) @map("phi_cuoc_amount")
+
+  veCongName            String?   @map("ve_cong_name")
+  veCongAmount          Decimal?  @db.Decimal(15, 2) @map("ve_cong_amount")
+  shdVeCong             String?   @map("shd_ve_cong")
+
+  chiPhiKhacName        String?   @map("chi_phi_khac_name")
+  chiPhiKhacAmount      Decimal?  @db.Decimal(15, 2) @map("chi_phi_khac_amount")
+
+  chiPhiTraiTuyenName   String?   @map("chi_phi_trai_tuyen_name")
+  chiPhiTraiTuyenAmount Decimal?  @db.Decimal(15, 2) @map("chi_phi_trai_tuyen_amount")
+
+  cauDuongName          String?   @map("cau_duong_name")
+  cauDuongAmount        Decimal?  @db.Decimal(15, 2) @map("cau_duong_amount")
+
+  chiPhiPhatSinhName    String?   @map("chi_phi_phat_sinh_name")
+  chiPhiPhatSinhAmount  Decimal?  @db.Decimal(15, 2) @map("chi_phi_phat_sinh_amount")
 
   // Document tracking
   documentSentDate DateTime?     @map("document_sent_date") @db.Date  // Ngày gửi CT
+  description     String?                                              // NỘI DUNG
   notes           String?
 
   createdAt       DateTime        @default(now()) @map("created_at")
@@ -245,23 +252,44 @@ model TripPlan {
 }
 
 // ============================================================
-// TRIP COSTS — Chi phí phát sinh mỗi chuyến
+// TRIP COST CATALOG — Danh mục loại chi phí (CRUD by admin)
 // ============================================================
 
 model TripCost {
-  id              String      @id @default(cuid())
-  tripPlanId      String      @map("trip_plan_id")
-  tripPlan        TripPlan    @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  id        String         @id @default(cuid())
+  name      String         @unique
+  amount    Decimal?       @db.Decimal(15, 2)
+  isActive  Boolean        @default(true) @map("is_active")
 
-  costType        CostType    @map("cost_type")
-  amount          Decimal     @db.Decimal(15, 2)
-  invoiceNumber   String?     @map("invoice_number")              // SHĐ (số hóa đơn)
-  description     String?
+  plans     TripPlanCost[]
 
-  createdAt       DateTime    @default(now()) @map("created_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@map("trip_costs")
+}
+
+// ============================================================
+// TRIP PLAN COSTS — Junction: TripPlan <-> TripCost (M:N)
+// ============================================================
+
+model TripPlanCost {
+  id            String    @id @default(cuid())
+  tripPlanId    String    @map("trip_plan_id")
+  tripPlan      TripPlan  @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+
+  tripCostId    String?   @map("trip_cost_id")                    // nullable — SetNull when TripCost deleted
+  tripCost      TripCost? @relation(fields: [tripCostId], references: [id], onDelete: SetNull)
+
+  costName      String?   @map("cost_name")                       // snapshot — preserved when TripCost deleted
+  amount        Decimal   @db.Decimal(15, 2)
+  invoiceNumber String?   @map("invoice_number")                  // SHĐ (số hóa đơn)
+
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   @@index([tripPlanId])
-  @@map("trip_costs")
+  @@index([tripCostId])
+  @@map("trip_plan_costs")
 }
 
 // ============================================================
@@ -269,24 +297,23 @@ model TripCost {
 // ============================================================
 
 model YardMove {
-  id          String          @id @default(cuid())
-  date        DateTime        @db.Date
-  containerId String          @map("container_id")
-  container   Container       @relation(fields: [containerId], references: [id])
-  fromZone    String          @map("from_zone")                    // STAGING_DROP | LOADING_DOCK | STAGING_READY
-  toZone      String          @map("to_zone")
-  locationId  String          @map("location_id")                  // Factory where the move occurs
-  location    Location        @relation(fields: [locationId], references: [id])
-  status      YardMoveStatus  @default(PENDING)
-  notes       String?
-  costs       YardMoveCost[]
+  id              String          @id @default(cuid())
+  date            DateTime        @db.Date
+  containerNumber String          @map("container_number")         // ISO 6346: 4 letters + 7 digits
+  fromZone        String          @map("from_zone")                // STAGING_DROP | LOADING_DOCK | STAGING_READY
+  toZone          String          @map("to_zone")
+  locationId      String          @map("location_id")              // Factory where the move occurs
+  location        Location        @relation(fields: [locationId], references: [id])
+  status          YardMoveStatus  @default(PENDING)
+  notes           String?
+  costs           YardMoveCost[]
 
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   @@index([locationId])
   @@index([status])
-  @@index([containerId])
+  @@index([containerNumber])
   @@map("yard_moves")
 }
 
@@ -340,13 +367,6 @@ enum LocationType {
   OTHER
 }
 
-enum ContainerSize {
-  GP20    // 20'
-  HC40    // 40' High Cube
-  GP40    // 40' General Purpose
-  HC45    // 45' High Cube
-}
-
 enum ServiceType {
   SEA_EXPORT        // SEA - EX
   SEA_IMPORT        // SEA - IM
@@ -362,33 +382,9 @@ enum TripStatus {
   CANCELLED
 }
 
-enum CostType {
-  LIFTING           // Phí nâng
-  DROPPING          // Phí hạ
-  CLEANING          // Phí vệ sinh
-  DEPOSIT           // Phí cược
-  GATE_FEE          // Vé cổng
-  SEAL_BREAK        // Phí đứt tem
-  OFF_ROUTE         // Chi phí trái tuyến / chỉ định / BP cam
-  TOLL              // Cầu đường
-  LIQUIDATION       // Thanh lý
-  ADVANCE_PAYMENT   // Chi hộ
-  OTHER             // Chi phí phát sinh khác
-}
-
 enum TripMode {
   STANDARD          // Xe chờ đóng hàng (regular trip)
   DROP_AND_HOOK     // Cắt kéo (CONT ĐI ≠ CONT VỀ)
-}
-
-enum ContainerStatus {
-  EMPTY_AVAILABLE   // Rỗng tại depot, sẵn sàng điều động
-  EMPTY_IN_TRANSIT  // Rỗng đang trên đường đến nhà máy
-  EMPTY_AT_YARD     // Rỗng tại bãi cắt kéo nhà máy
-  BEING_LOADED      // Đang đóng hàng tại máng kho
-  LOADED_READY      // Hàng xong, tại bãi chờ kéo
-  LOADED_IN_TRANSIT // Hàng đang trên đường về cảng
-  DELIVERED         // Đã giao
 }
 
 enum YardMoveStatus {
@@ -464,4 +460,37 @@ enum AuditAction {
   LOGIN_FAILED
   LOGOUT
   REGISTER
+}
+
+// ============================================================
+// VEHICLE RECORD MANAGEMENT (standalone, no FK to vehicles/drivers)
+// ============================================================
+
+model VehicleRecord {
+  id           String               @id @default(cuid())
+  tenTaiXe     String?              @map("ten_tai_xe")       // Tên tài xế
+  sdt          String?                                        // Số điện thoại
+  loaiXe       String?              @map("loai_xe")          // Loại xe
+  bienSo       String?              @map("bien_so")          // Biển số / Theo xe
+  hanDangKiem  DateTime?            @map("han_dang_kiem")    // Hạn đăng kiểm xe
+  hanBaoHiem   DateTime?            @map("han_bao_hiem")     // Hạn bảo hiểm xe
+  hanCaVet     DateTime?            @map("han_ca_vet")       // Hạn cà vẹt xe
+  ghiChu       String?              @map("ghi_chu")
+  moocs        VehicleRecordMooc[]
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  @@map("vehicle_records")
+}
+
+model VehicleRecordMooc {
+  id              String        @id @default(cuid())
+  vehicleRecordId String        @map("vehicle_record_id")
+  vehicleRecord   VehicleRecord @relation(fields: [vehicleRecordId], references: [id], onDelete: Cascade)
+  soMooc          String        @map("so_mooc")
+  hanDangKiem     DateTime?     @map("han_dang_kiem")
+  hanBaoHiem      DateTime?     @map("han_bao_hiem")
+  hanCaVet        DateTime?     @map("han_ca_vet")
+
+  @@map("vehicle_record_moocs")
 }

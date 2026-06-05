@@ -2,6 +2,20 @@
 // @tms/shared — Types, DTOs, Constants
 // ============================================================
 
+// ---------- User Management DTOs ----------
+export type UserRole = "ADMIN" | "OPERATOR" | "VIEWER";
+
+export interface CreateUserDto {
+  username: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateUserDto {
+  role?: UserRole;
+  isActive?: boolean;
+}
+
 // ---------- Vehicle & Driver DTOs ----------
 export interface CreateVehicleDto {
   licensePlate: string;
@@ -88,7 +102,34 @@ export interface UpdateLocationDto {
   isActive?: boolean;
 }
 
+// ---------- TripCost Catalog ----------
+export interface TripCostDto {
+  id: string;
+  name: string;
+  amount: number | null;
+  isActive: boolean;
+}
+
+export interface CreateTripCostDto {
+  name: string;
+  amount?: number;
+}
+
+export interface UpdateTripCostDto {
+  name?: string;
+  isActive?: boolean;
+  amount?: number | null;
+}
+
 // ---------- Trip Plan ----------
+export interface TripPlanCostItem {
+  id: string;
+  tripCostId: string | null;
+  costName: string | null;
+  amount: number;
+  invoiceNumber?: string | null;
+}
+
 export interface CreateTripPlanDto {
   tripDate: string;
   serviceType: ServiceType;
@@ -96,21 +137,44 @@ export interface CreateTripPlanDto {
   vehicleId: string;
   customerId: string;
   carrierId?: string;
+  containerSize?: string;
   outboundContainerNumber?: string;
   inboundContainerNumber?: string;
-  outboundContainerId?: string;
-  inboundContainerId?: string;
   pickupLocationId?: string;
   loadUnloadLocationId?: string;
   dropoffLocationId?: string;
+  documentSentDate?: string;
+  description?: string;
   notes?: string;
+  // Fixed cost slots
+  phiNangName?: string;
+  phiNangAmount?: number;
+  shdNang?: string;
+  phiHaName?: string;
+  phiHaAmount?: number;
+  shdHa?: string;
+  phiVeSinhName?: string;
+  phiVeSinhAmount?: number;
+  shdVeSinh?: string;
+  phiCuocName?: string;
+  phiCuocAmount?: number;
+  veCongName?: string;
+  veCongAmount?: number;
+  shdVeCong?: string;
+  chiPhiKhacName?: string;
+  chiPhiKhacAmount?: number;
+  chiPhiTraiTuyenName?: string;
+  chiPhiTraiTuyenAmount?: number;
+  cauDuongName?: string;
+  cauDuongAmount?: number;
+  chiPhiPhatSinhName?: string;
+  chiPhiPhatSinhAmount?: number;
 }
 
-export interface AddTripCostDto {
-  costType: CostType;
+export interface AddTripPlanCostDto {
+  tripCostId: string;
   amount: number;
   invoiceNumber?: string;
-  description?: string;
 }
 
 export interface TripPlanFilters {
@@ -158,23 +222,10 @@ export interface DashboardStats {
 export type ServiceType = "SEA_EXPORT" | "SEA_IMPORT" | "NEO_EXPORT" | "NEO_IMPORT";
 export type TripStatus = "PLANNED" | "DISPATCHED" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
 export type TripMode = "STANDARD" | "DROP_AND_HOOK";
-export type CostType =
-  | "LIFTING" | "DROPPING" | "CLEANING" | "DEPOSIT"
-  | "GATE_FEE" | "SEAL_BREAK" | "OFF_ROUTE" | "TOLL"
-  | "LIQUIDATION" | "ADVANCE_PAYMENT" | "OTHER";
 export type VehicleType = "SHACMAN" | "CHENGLONG" | "HOWO" | "FREIGHTLINER" | "FAW" | "OTHER";
 export type VehicleStatus = "ACTIVE" | "MAINTENANCE" | "DECOMMISSIONED" | "WAITING_DRIVER";
 export type DriverStatus = "ACTIVE" | "ON_LEAVE" | "TERMINATED";
 export type LocationType = "PORT" | "DEPOT" | "ICD" | "INDUSTRIAL_ZONE" | "WAREHOUSE" | "OTHER";
-export type ContainerSize = "GP20" | "HC40" | "GP40" | "HC45";
-export type ContainerStatus =
-  | "EMPTY_AVAILABLE"
-  | "EMPTY_IN_TRANSIT"
-  | "EMPTY_AT_YARD"
-  | "BEING_LOADED"
-  | "LOADED_READY"
-  | "LOADED_IN_TRANSIT"
-  | "DELIVERED";
 export type YardMoveStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type YardCostType = "YARD_HANDLING" | "FORKLIFT" | "OVERTIME" | "OTHER";
 export type AuditAction =
@@ -197,10 +248,10 @@ export const ENTITY_TYPES = {
   USER: "User",
   VEHICLE: "Vehicle",
   DRIVER: "Driver",
-  CONTAINER: "Container",
   CUSTOMER: "Customer",
   CARRIER: "Carrier",
   LOCATION: "Location",
+  VEHICLE_RECORD: "VehicleRecord",
 } as const;
 export type EntityTypeValue = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];
 
@@ -224,7 +275,7 @@ export type FactoryZoneValue = (typeof FactoryZone)[keyof typeof FactoryZone];
 // ---------- YardMove DTOs ----------
 export interface CreateYardMoveDto {
   date: string;
-  containerId: string;
+  containerNumber: string;
   fromZone: FactoryZoneValue;
   toZone: FactoryZoneValue;
   locationId: string;
@@ -236,24 +287,50 @@ export interface YardMoveFilters {
   status?: YardMoveStatus;
 }
 
+// ---------- Excel Import/Export ----------
+export interface ImportResult {
+  imported: number;
+  warnings: string[];
+  errors: string[];
+}
+
+// ---------- Display helpers ----------
+// ---------- Vehicle Record Management (standalone, no FK) ----------
+export interface VehicleRecordMoocDto {
+  soMooc: string;
+  hanDangKiem?: string;
+  hanBaoHiem?: string;
+  hanCaVet?: string;
+}
+
+export interface CreateVehicleRecordDto {
+  tenTaiXe?: string;
+  sdt?: string;
+  loaiXe?: string;
+  bienSo?: string;
+  hanDangKiem?: string;
+  hanBaoHiem?: string;
+  hanCaVet?: string;
+  ghiChu?: string;
+  moocs?: VehicleRecordMoocDto[];
+}
+
+export interface UpdateVehicleRecordDto {
+  tenTaiXe?: string;
+  sdt?: string;
+  loaiXe?: string;
+  bienSo?: string;
+  hanDangKiem?: string | null;
+  hanBaoHiem?: string | null;
+  hanCaVet?: string | null;
+  ghiChu?: string | null;
+  moocs?: VehicleRecordMoocDto[];
+}
+
 // ---------- Display helpers ----------
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   SEA_EXPORT: "SEA - EX (Xuất khẩu đường biển)",
   SEA_IMPORT: "SEA - IM (Nhập khẩu đường biển)",
   NEO_EXPORT: "NEO - EX (Nội địa xuất)",
   NEO_IMPORT: "NEO - IM (Nội địa nhập)",
-};
-
-export const COST_TYPE_LABELS: Record<CostType, string> = {
-  LIFTING: "Phí nâng",
-  DROPPING: "Phí hạ",
-  CLEANING: "Phí vệ sinh",
-  DEPOSIT: "Phí cược",
-  GATE_FEE: "Vé cổng",
-  SEAL_BREAK: "Phí đứt tem",
-  OFF_ROUTE: "Trái tuyến / Chỉ định / BP cam",
-  TOLL: "Cầu đường",
-  LIQUIDATION: "Thanh lý",
-  ADVANCE_PAYMENT: "Chi hộ",
-  OTHER: "Chi phí khác",
 };

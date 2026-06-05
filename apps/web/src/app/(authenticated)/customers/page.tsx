@@ -74,6 +74,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [search, setSearch] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
@@ -165,6 +166,11 @@ export default function CustomersPage() {
     if (res.ok) setRefresh((r) => r + 1);
   }
 
+  const displayed = customers.filter((c) => {
+    const q = search.toLowerCase();
+    return !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
+  });
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -181,44 +187,54 @@ export default function CustomersPage() {
       {error && <p style={{ color: "#dc2626", background: "#fef2f2", padding: "12px 16px", borderRadius: 8 }}>{error}</p>}
 
       {!loading && !error && (
-        <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                {["Mã", "Tên", "SĐT", "Email", "Mã số thuế", ""].map((h) => (
-                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#374151", fontSize: 13 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {customers.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: "24px 14px", textAlign: "center", color: "#94a3b8" }}>Chưa có khách hàng</td></tr>
-              )}
-              {customers.map((c) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                  <td style={{ padding: "10px 14px", fontWeight: 600 }}>{c.code}</td>
-                  <td style={{ padding: "10px 14px" }}>{c.name}</td>
-                  <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.phone ?? "—"}</td>
-                  <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.email ?? "—"}</td>
-                  <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.taxCode ?? "—"}</td>
-                  <td style={{ padding: "10px 14px" }}>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => openEdit(c)} style={{ padding: "5px 12px", border: "1px solid #d1d5db", borderRadius: 5, background: "#fff", fontSize: 13, cursor: "pointer" }}>Sửa</button>
-                      <button
-                        onClick={() => handleDeactivate(c.id)}
-                        disabled={deactivating === c.id}
-                        style={{ padding: "5px 12px", border: "1px solid #fca5a5", borderRadius: 5, background: "#fff", color: "#dc2626", fontSize: 13, cursor: "pointer", opacity: deactivating === c.id ? 0.6 : 1 }}
-                      >
-                        Vô hiệu hóa
-                      </button>
-                    </div>
-                  </td>
+        <>
+          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <input
+              placeholder="Tìm theo mã, tên khách hàng..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ flex: 1, padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}
+            />
+          </div>
+          <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  {["Mã", "Tên", "SĐT", "Email", "Mã số thuế", ""].map((h) => (
+                    <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#374151", fontSize: 13 }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ padding: "10px 14px", color: "#94a3b8", fontSize: 13 }}>{customers.length} khách hàng</div>
-        </div>
+              </thead>
+              <tbody>
+                {displayed.length === 0 && (
+                  <tr><td colSpan={6} style={{ padding: "24px 14px", textAlign: "center", color: "#94a3b8" }}>Chưa có khách hàng</td></tr>
+                )}
+                {displayed.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                    <td style={{ padding: "10px 14px", fontWeight: 600 }}>{c.code}</td>
+                    <td style={{ padding: "10px 14px" }}>{c.name}</td>
+                    <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.phone ?? "—"}</td>
+                    <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.email ?? "—"}</td>
+                    <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.taxCode ?? "—"}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => openEdit(c)} style={{ padding: "5px 12px", border: "1px solid #d1d5db", borderRadius: 5, background: "#fff", fontSize: 13, cursor: "pointer" }}>Sửa</button>
+                        <button
+                          onClick={() => handleDeactivate(c.id)}
+                          disabled={deactivating === c.id}
+                          style={{ padding: "5px 12px", border: "1px solid #fca5a5", borderRadius: 5, background: "#fff", color: "#dc2626", fontSize: 13, cursor: "pointer", opacity: deactivating === c.id ? 0.6 : 1 }}
+                        >
+                          Vô hiệu hóa
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ padding: "10px 14px", color: "#94a3b8", fontSize: 13 }}>{displayed.length} khách hàng</div>
+          </div>
+        </>
       )}
 
       {showCreate && (
