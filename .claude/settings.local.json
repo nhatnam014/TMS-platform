@@ -13,7 +13,15 @@
       "Bash(pnpm --filter @tms/web exec tsc --noEmit)",
       "Bash(pnpm db:migrate)",
       "Bash(dotenv -e .env -- bash -c 'echo \"FRONTEND_PORT=$FRONTEND_PORT\"')",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(pnpm db:generate)",
+      "Bash(pnpm --filter @tms/db build)",
+      "Bash(pnpm type-check *)",
+      "Bash(pnpm --filter @tms/api build)",
+      "Bash(pnpm --filter @tms/api start)",
+      "Bash(curl -s http://localhost:4001/docs)",
+      "Bash(xargs kill -9)",
+      "Bash(chmod +x /Users/macbook/TMS-platform/start-pm2.sh)"
     ]
   }
 }
