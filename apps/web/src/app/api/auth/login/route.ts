@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: process.env.NODE_ENV === "production",
+    secure: false, // Set to false for HTTP, or use HTTPS in production
   });
 
   return response;
