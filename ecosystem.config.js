@@ -1,4 +1,19 @@
-require("dotenv").config({ path: ".env" });
+const fs = require("fs");
+const path = require("path");
+
+// Load .env manually without dotenv dependency
+const envPath = path.resolve(__dirname, ".env");
+if (fs.existsSync(envPath)) {
+  const envConfig = fs.readFileSync(envPath, "utf8");
+  envConfig.split("\n").forEach((line) => {
+    const match = line.match(/^([^=:#]+)=(.*)$/);
+    if (match) {
+      const key = match[1].trim();
+      const value = match[2].trim().replace(/^["']|["']$/g, "");
+      process.env[key] = value;
+    }
+  });
+}
 
 module.exports = {
   apps: [
