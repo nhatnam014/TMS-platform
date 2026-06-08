@@ -2,7 +2,18 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "globalDependencies": ["**/.env.*local"],
-  "globalEnv": ["NODE_ENV", "DATABASE_URL"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "PORT",
+    "FRONTEND_PORT",
+    "CORS_ORIGINS",
+    "JWT_SECRET",
+    "ACCESS_TOKEN_EXPIRY",
+    "SEED_ADMIN_PASSWORD",
+    "API_BASE_URL",
+    "NEXT_PUBLIC_API_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
