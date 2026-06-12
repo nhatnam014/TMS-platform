@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "@/lib/toast-context";
+import { formatDate } from "@/lib/date-utils";
 
 type YardMoveStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 type YardCostType = "YARD_HANDLING" | "FORKLIFT" | "OVERTIME" | "OTHER";
@@ -138,6 +140,7 @@ function CreateYardMoveModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const toast = useToast();
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -184,9 +187,12 @@ function CreateYardMoveModal({
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
+      toast.success("Tạo lệnh bãi thành công");
       onCreated();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Lỗi không xác định");
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -329,6 +335,7 @@ function CostModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const toast = useToast();
   const [type, setType] = useState<YardCostType>("YARD_HANDLING");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -354,9 +361,12 @@ function CostModal({
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
+      toast.success("Thêm chi phí bãi thành công");
       onAdded();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Lỗi không xác định");
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -438,9 +448,208 @@ function CostModal({
   );
 }
 
+// ─── EDIT MODAL ───────────────────────────────────────────────────────────────
+
+function EditYardMoveModal({
+  move,
+  onClose,
+  onSaved,
+}: {
+  move: YardMoveRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [date, setDate] = useState(move.date.slice(0, 10));
+  const [containerNumber, setContainerNumber] = useState(move.containerNumber);
+  const [fromZone, setFromZone] = useState<FactoryZone>(move.fromZone);
+  const [toZone, setToZone] = useState<FactoryZone>(move.toZone);
+  const [locationId, setLocationId] = useState(move.location?.id ?? "");
+  const [notes, setNotes] = useState(move.notes ?? "");
+
+  useEffect(() => {
+    fetch("/api/locations")
+      .then((r) => r.json())
+      .then((locs) => setLocations(locs))
+      .catch(() => {});
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/yard-moves/${move.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date,
+          containerNumber,
+          fromZone,
+          toZone,
+          locationId,
+          notes: notes || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message ?? `Lỗi ${res.status}`);
+      }
+      toast.success("Cập nhật lệnh bãi thành công");
+      onSaved();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      setFormError(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 6,
+    border: "1px solid #e2e8f0",
+    fontSize: 13,
+    boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#475569",
+    marginBottom: 4,
+  };
+
+  return (
+    <Modal title="Sửa lệnh bãi" onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <label style={labelStyle}>Ngày *</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            style={inputStyle}
+            required
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Số Container * (VD: ABCD1234567)</label>
+          <input
+            type="text"
+            value={containerNumber}
+            onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
+            pattern="[A-Z]{4}[0-9]{7}"
+            placeholder="ABCD1234567"
+            style={inputStyle}
+            required
+          />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Từ khu vực *</label>
+            <select
+              value={fromZone}
+              onChange={(e) => setFromZone(e.target.value as FactoryZone)}
+              style={inputStyle}
+              required
+            >
+              {FACTORY_ZONES.map((z) => (
+                <option key={z} value={z}>
+                  {ZONE_LABELS[z]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Đến khu vực *</label>
+            <select
+              value={toZone}
+              onChange={(e) => setToZone(e.target.value as FactoryZone)}
+              style={inputStyle}
+              required
+            >
+              {FACTORY_ZONES.map((z) => (
+                <option key={z} value={z}>
+                  {ZONE_LABELS[z]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style={labelStyle}>Địa điểm *</label>
+          <select
+            value={locationId}
+            onChange={(e) => setLocationId(e.target.value)}
+            style={inputStyle}
+            required
+          >
+            <option value="">-- Chọn địa điểm --</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.code})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Ghi chú</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            style={{ ...inputStyle, resize: "vertical" }}
+          />
+        </div>
+        {formError && <p style={{ color: "#dc2626", fontSize: 13 }}>{formError}</p>}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              background: "#fff",
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            Hủy
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: "8px 16px",
+              background: "#3b82f6",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 14,
+              cursor: "pointer",
+              opacity: submitting ? 0.7 : 1,
+            }}
+          >
+            {submitting ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function YardMovesPage() {
+  const toast = useToast();
   const [moves, setMoves] = useState<YardMoveRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -448,6 +657,8 @@ export default function YardMovesPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [costMoveId, setCostMoveId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editMove, setEditMove] = useState<YardMoveRow | null>(null);
 
   function fetchMoves() {
     fetch("/api/yard-moves?limit=100")
@@ -466,6 +677,25 @@ export default function YardMovesPage() {
     fetchMoves();
   }, []);
 
+  async function handleSoftDelete(id: string) {
+    setConfirmDeleteId(null);
+    try {
+      const res = await fetch(`/api/yard-moves/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: false }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message ?? `Lỗi ${res.status}`);
+      }
+      toast.success("Đã xoá lệnh bãi");
+      fetchMoves();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Lỗi xoá lệnh bãi");
+    }
+  }
+
   async function handleStatusChange(id: string, status: YardMoveStatus) {
     setActionError(null);
     try {
@@ -478,9 +708,12 @@ export default function YardMovesPage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
+      toast.success("Cập nhật trạng thái lệnh bãi thành công");
       fetchMoves();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Lỗi không xác định");
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      setActionError(msg);
+      toast.error(msg);
     }
   }
 
@@ -557,10 +790,10 @@ export default function YardMovesPage() {
           background: "#fff",
           borderRadius: 10,
           boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-          overflow: "hidden",
+          overflowX: "auto",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
               {[
@@ -625,7 +858,7 @@ export default function YardMovesPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {new Date(m.date).toLocaleDateString("vi-VN")}
+                      {formatDate(m.date)}
                     </td>
                     <td style={{ padding: "10px 14px", fontSize: 13 }}>
                       <span style={{ fontWeight: 600, fontFamily: "monospace" }}>
@@ -658,15 +891,37 @@ export default function YardMovesPage() {
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {!isTerminal && next && (
+                        <button
+                          onClick={() => setEditMove(m)}
+                          style={{
+                            ...btnBase,
+                            border: "1px solid #d1d5db",
+                            background: "#fff",
+                            color: "#374151",
+                          }}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(m.id)}
+                          style={{
+                            ...btnBase,
+                            border: "1px solid #ef4444",
+                            background: "#fff",
+                            color: "#ef4444",
+                          }}
+                        >
+                          Xoá
+                        </button>
+                        {false && !isTerminal && next && (
                           <button
-                            onClick={() => handleStatusChange(m.id, next.status)}
+                            onClick={() => handleStatusChange(m.id, next!.status)}
                             style={{ ...btnBase, background: "#3b82f6", color: "#fff" }}
                           >
-                            {next.label}
+                            {next!.label}
                           </button>
                         )}
-                        {!isTerminal && (
+                        {false && !isTerminal && (
                           <button
                             onClick={() => handleStatusChange(m.id, "CANCELLED")}
                             style={{ ...btnBase, background: "#fee2e2", color: "#b91c1c" }}
@@ -674,7 +929,7 @@ export default function YardMovesPage() {
                             Hủy
                           </button>
                         )}
-                        {showCost && (
+                        {false && showCost && (
                           <button
                             onClick={() => setCostMoveId(m.id)}
                             style={{
@@ -715,6 +970,67 @@ export default function YardMovesPage() {
             fetchMoves();
           }}
         />
+      )}
+
+      {editMove && (
+        <EditYardMoveModal
+          move={editMove}
+          onClose={() => setEditMove(null)}
+          onSaved={() => {
+            setEditMove(null);
+            fetchMoves();
+          }}
+        />
+      )}
+
+      {confirmDeleteId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+        >
+          <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 360 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Xác nhận xoá</h2>
+            <p style={{ fontSize: 14, color: "#374151", marginBottom: 20 }}>
+              Bạn có chắc muốn xoá lệnh bãi này?
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: 6,
+                  background: "#fff",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => handleSoftDelete(confirmDeleteId)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Xoá
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

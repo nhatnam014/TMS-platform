@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DriverStatus, VehicleType } from "@tms/shared";
+import { useToast } from "@/lib/toast-context";
 
 interface VehicleOption {
   id: string;
@@ -35,15 +36,31 @@ const DRIVER_STATUSES: DriverStatus[] = ["ACTIVE", "ON_LEAVE", "TERMINATED"];
 function FIELD(label: string, value: string, onChange: (v: string) => void, required?: boolean) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#374151" }}>
-        {label}{required && <span style={{ color: "#dc2626" }}> *</span>}
+      <label
+        style={{
+          display: "block",
+          fontSize: 13,
+          fontWeight: 500,
+          marginBottom: 4,
+          color: "#374151",
+        }}
+      >
+        {label}
+        {required && <span style={{ color: "#dc2626" }}> *</span>}
       </label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, boxSizing: "border-box" }}
+        style={{
+          width: "100%",
+          padding: "8px 10px",
+          border: "1px solid #d1d5db",
+          borderRadius: 6,
+          fontSize: 14,
+          boxSizing: "border-box",
+        }}
       />
     </div>
   );
@@ -66,18 +83,94 @@ function Modal({ title, onClose, onSubmit, error, children }: ModalProps) {
     setLoading(false);
   }
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-      <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 10,
+          padding: 28,
+          width: 480,
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{title}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280" }}>×</button>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: 20,
+              cursor: "pointer",
+              color: "#6b7280",
+            }}
+          >
+            ×
+          </button>
         </div>
-        {error && <p style={{ color: "#dc2626", background: "#fef2f2", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14 }}>{error}</p>}
+        {error && (
+          <p
+            style={{
+              color: "#dc2626",
+              background: "#fef2f2",
+              padding: "8px 12px",
+              borderRadius: 6,
+              fontSize: 13,
+              marginBottom: 14,
+            }}
+          >
+            {error}
+          </p>
+        )}
         <form onSubmit={handleSubmit}>
           {children}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-            <button type="button" onClick={onClose} style={{ padding: "8px 16px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", fontSize: 14, cursor: "pointer" }}>Hủy</button>
-            <button type="submit" disabled={loading} style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                background: "#fff",
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: "8px 16px",
+                background: "#3b82f6",
+                color: "#fff",
+                border: "none",
+                borderRadius: 6,
+                fontSize: 14,
+                cursor: "pointer",
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
               {loading ? "Đang lưu..." : "Lưu"}
             </button>
           </div>
@@ -91,6 +184,7 @@ const EMPTY_CREATE = { fullName: "", phone: "", notes: "" };
 const EMPTY_EDIT = { fullName: "", phone: "", notes: "", status: "" as DriverStatus | "" };
 
 export default function DriversPage() {
+  const toast = useToast();
   const [drivers, setDrivers] = useState<DriverRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -113,6 +207,8 @@ export default function DriversPage() {
   const [assignVehicleId, setAssignVehicleId] = useState("");
   const [assignError, setAssignError] = useState<string | null>(null);
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -128,9 +224,15 @@ export default function DriversPage() {
           setFetchError(null);
         }
       })
-      .catch((e) => { if (!cancelled) setFetchError(e.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .catch((e) => {
+        if (!cancelled) setFetchError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   function openCreate() {
@@ -140,7 +242,12 @@ export default function DriversPage() {
   }
 
   function openEdit(d: DriverRow) {
-    setEditForm({ fullName: d.fullName, phone: d.phone ?? "", notes: d.notes ?? "", status: d.status });
+    setEditForm({
+      fullName: d.fullName,
+      phone: d.phone ?? "",
+      notes: d.notes ?? "",
+      status: d.status,
+    });
     setEditError(null);
     setEditTarget(d);
   }
@@ -153,7 +260,10 @@ export default function DriversPage() {
 
   async function handleCreate() {
     setCreateError(null);
-    if (!createForm.fullName.trim()) { setCreateError("Họ tên là bắt buộc"); return; }
+    if (!createForm.fullName.trim()) {
+      setCreateError("Họ tên là bắt buộc");
+      return;
+    }
     const res = await fetch("/api/drivers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -165,11 +275,14 @@ export default function DriversPage() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setCreateError(body.message ?? "Lỗi tạo tài xế");
+      const msg = body.message ?? "Lỗi tạo tài xế";
+      setCreateError(msg);
+      toast.error(msg);
       return;
     }
     setShowCreate(false);
     setRefresh((r) => r + 1);
+    toast.success("Thêm tài xế thành công");
   }
 
   async function handleEdit() {
@@ -187,17 +300,23 @@ export default function DriversPage() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setEditError(body.message ?? "Lỗi cập nhật tài xế");
+      const msg = body.message ?? "Lỗi cập nhật tài xế";
+      setEditError(msg);
+      toast.error(msg);
       return;
     }
     setEditTarget(null);
     setRefresh((r) => r + 1);
+    toast.success("Cập nhật tài xế thành công");
   }
 
   async function handleAssign() {
     if (!assignTarget) return;
     setAssignError(null);
-    if (!assignVehicleId) { setAssignError("Chọn một xe để phân công"); return; }
+    if (!assignVehicleId) {
+      setAssignError("Chọn một xe để phân công");
+      return;
+    }
     const res = await fetch(`/api/drivers/${assignTarget.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -205,42 +324,99 @@ export default function DriversPage() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setAssignError(body.message ?? "Lỗi phân công");
+      const msg = body.message ?? "Lỗi phân công xe";
+      setAssignError(msg);
+      toast.error(msg);
       return;
     }
     setAssignTarget(null);
     setRefresh((r) => r + 1);
+    toast.success("Phân công xe thành công");
+  }
+
+  async function handleSoftDelete(id: string) {
+    setConfirmDeleteId(null);
+    try {
+      const res = await fetch(`/api/drivers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "TERMINATED" }),
+      });
+      if (res.ok) {
+        toast.success("Đã xoá tài xế");
+        setRefresh((r) => r + 1);
+      } else {
+        toast.error("Lỗi xoá tài xế");
+      }
+    } catch {
+      toast.error("Lỗi xoá tài xế");
+    }
   }
 
   async function handleUnassign(d: DriverRow) {
     if (!confirm(`Hủy phân công xe khỏi tài xế "${d.fullName}"?`)) return;
-    const res = await fetch(`/api/drivers/${d.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vehicleId: null }),
-    });
-    if (res.ok) setRefresh((r) => r + 1);
+    try {
+      const res = await fetch(`/api/drivers/${d.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vehicleId: null }),
+      });
+      if (res.ok) {
+        toast.success("Đã hủy phân công xe");
+        setRefresh((r) => r + 1);
+      } else {
+        toast.error("Lỗi hủy phân công xe");
+      }
+    } catch {
+      toast.error("Lỗi hủy phân công xe");
+    }
   }
 
   const displayed = drivers.filter((d) => {
     const q = search.toLowerCase();
-    return !q || d.fullName.toLowerCase().includes(q) || (d.phone?.toLowerCase().includes(q) ?? false);
+    return (
+      !q || d.fullName.toLowerCase().includes(q) || (d.phone?.toLowerCase().includes(q) ?? false)
+    );
   });
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
+        }}
+      >
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Tài xế</h1>
         <button
           onClick={openCreate}
-          style={{ padding: "8px 16px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: "pointer" }}
+          style={{
+            padding: "8px 16px",
+            background: "#3b82f6",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            fontSize: 14,
+            cursor: "pointer",
+          }}
         >
           + Thêm tài xế
         </button>
       </div>
 
       {fetchError && (
-        <p style={{ color: "#dc2626", background: "#fef2f2", padding: "10px 14px", borderRadius: 6, marginBottom: 16, fontSize: 13 }}>
+        <p
+          style={{
+            color: "#dc2626",
+            background: "#fef2f2",
+            padding: "10px 14px",
+            borderRadius: 6,
+            marginBottom: 16,
+            fontSize: 13,
+          }}
+        >
           {fetchError}
         </p>
       )}
@@ -250,16 +426,40 @@ export default function DriversPage() {
           placeholder="Tìm theo tên, số điện thoại..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14 }}
+          style={{
+            flex: 1,
+            padding: "8px 12px",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            fontSize: 14,
+          }}
         />
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 10,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+          overflowX: "auto",
+        }}
+      >
+        <table style={{ width: "100%", minWidth: 680, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
               {["Họ tên", "Điện thoại", "Trạng thái", "Xe phân công", ""].map((h, i) => (
-                <th key={i} style={{ padding: "10px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                <th
+                  key={i}
+                  style={{
+                    padding: "10px 16px",
+                    textAlign: "left",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                  }}
+                >
                   {h}
                 </th>
               ))}
@@ -267,43 +467,115 @@ export default function DriversPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Đang tải...</td></tr>
+              <tr>
+                <td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                  Đang tải...
+                </td>
+              </tr>
             ) : displayed.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>Không có dữ liệu</td></tr>
+              <tr>
+                <td colSpan={5} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                  Không có dữ liệu
+                </td>
+              </tr>
             ) : (
               displayed.map((d, i) => (
-                <tr key={d.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                  <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 500 }}>{d.fullName}</td>
+                <tr
+                  key={d.id}
+                  style={{
+                    borderBottom: "1px solid #f1f5f9",
+                    background: i % 2 === 0 ? "#fff" : "#fafafa",
+                  }}
+                >
+                  <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 500 }}>
+                    {d.fullName}
+                  </td>
                   <td style={{ padding: "10px 16px", fontSize: 13 }}>{d.phone ?? "—"}</td>
                   <td style={{ padding: "10px 16px" }}>
-                    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 12, fontSize: 12, fontWeight: 500, background: `${STATUS_COLORS[d.status]}18`, color: STATUS_COLORS[d.status] }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 10px",
+                        borderRadius: 12,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        background: `${STATUS_COLORS[d.status]}18`,
+                        color: STATUS_COLORS[d.status],
+                      }}
+                    >
                       {STATUS_LABELS[d.status]}
                     </span>
                   </td>
                   <td style={{ padding: "10px 16px", fontSize: 13 }}>
-                    {d.vehicle
-                      ? <span>{d.vehicle.licensePlate} <span style={{ color: "#94a3b8", fontSize: 12 }}>({d.vehicle.vehicleType})</span></span>
-                      : <span style={{ color: "#94a3b8" }}>Chưa phân công</span>
-                    }
+                    {d.vehicle ? (
+                      <span>
+                        {d.vehicle.licensePlate}{" "}
+                        <span style={{ color: "#94a3b8", fontSize: 12 }}>
+                          ({d.vehicle.vehicleType})
+                        </span>
+                      </span>
+                    ) : (
+                      <span style={{ color: "#94a3b8" }}>Chưa phân công</span>
+                    )}
                   </td>
                   <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
-                    <button
-                      onClick={() => openEdit(d)}
-                      style={{ fontSize: 12, padding: "4px 10px", border: "1px solid #d1d5db", borderRadius: 4, background: "#fff", cursor: "pointer", marginRight: 6 }}
-                    >
-                      Sửa
-                    </button>
-                    {d.vehicle ? (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => openEdit(d)}
+                        style={{
+                          fontSize: 12,
+                          padding: "4px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: 4,
+                          background: "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Sửa
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(d.id)}
+                        style={{
+                          fontSize: 12,
+                          padding: "4px 10px",
+                          border: "1px solid #ef4444",
+                          borderRadius: 4,
+                          background: "#fff",
+                          color: "#ef4444",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Xoá
+                      </button>
+                    </div>
+                    {false && d.vehicle && (
                       <button
                         onClick={() => handleUnassign(d)}
-                        style={{ fontSize: 12, padding: "4px 10px", border: "1px solid #f87171", borderRadius: 4, background: "#fef2f2", color: "#b91c1c", cursor: "pointer" }}
+                        style={{
+                          fontSize: 12,
+                          padding: "4px 10px",
+                          border: "1px solid #f87171",
+                          borderRadius: 4,
+                          background: "#fef2f2",
+                          color: "#b91c1c",
+                          cursor: "pointer",
+                        }}
                       >
                         Hủy phân công
                       </button>
-                    ) : (
+                    )}
+                    {false && !d.vehicle && (
                       <button
                         onClick={() => openAssign(d)}
-                        style={{ fontSize: 12, padding: "4px 10px", border: "1px solid #6366f1", borderRadius: 4, background: "#eef2ff", color: "#4338ca", cursor: "pointer" }}
+                        style={{
+                          fontSize: 12,
+                          padding: "4px 10px",
+                          border: "1px solid #6366f1",
+                          borderRadius: 4,
+                          background: "#eef2ff",
+                          color: "#4338ca",
+                          cursor: "pointer",
+                        }}
                       >
                         Phân công xe
                       </button>
@@ -318,8 +590,18 @@ export default function DriversPage() {
 
       {/* Create Modal */}
       {showCreate && (
-        <Modal title="Thêm tài xế" onClose={() => setShowCreate(false)} onSubmit={handleCreate} error={createError}>
-          {FIELD("Họ tên *", createForm.fullName, (v) => setCreateForm((f) => ({ ...f, fullName: v })), true)}
+        <Modal
+          title="Thêm tài xế"
+          onClose={() => setShowCreate(false)}
+          onSubmit={handleCreate}
+          error={createError}
+        >
+          {FIELD(
+            "Họ tên *",
+            createForm.fullName,
+            (v) => setCreateForm((f) => ({ ...f, fullName: v })),
+            true,
+          )}
           {FIELD("Điện thoại", createForm.phone, (v) => setCreateForm((f) => ({ ...f, phone: v })))}
           {FIELD("Ghi chú", createForm.notes, (v) => setCreateForm((f) => ({ ...f, notes: v })))}
         </Modal>
@@ -327,18 +609,50 @@ export default function DriversPage() {
 
       {/* Edit Modal */}
       {editTarget && (
-        <Modal title={`Sửa tài xế — ${editTarget.fullName}`} onClose={() => setEditTarget(null)} onSubmit={handleEdit} error={editError}>
-          {FIELD("Họ tên", editForm.fullName, (v) => setEditForm((f) => ({ ...f, fullName: v })), true)}
+        <Modal
+          title={`Sửa tài xế — ${editTarget.fullName}`}
+          onClose={() => setEditTarget(null)}
+          onSubmit={handleEdit}
+          error={editError}
+        >
+          {FIELD(
+            "Họ tên",
+            editForm.fullName,
+            (v) => setEditForm((f) => ({ ...f, fullName: v })),
+            true,
+          )}
           {FIELD("Điện thoại", editForm.phone, (v) => setEditForm((f) => ({ ...f, phone: v })))}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#374151" }}>Trạng thái</label>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 4,
+                color: "#374151",
+              }}
+            >
+              Trạng thái
+            </label>
             <select
               value={editForm.status}
-              onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value as DriverStatus }))}
-              style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, boxSizing: "border-box", background: "#fff" }}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, status: e.target.value as DriverStatus }))
+              }
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 14,
+                boxSizing: "border-box",
+                background: "#fff",
+              }}
             >
               {DRIVER_STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
               ))}
             </select>
           </div>
@@ -346,26 +660,101 @@ export default function DriversPage() {
         </Modal>
       )}
 
+      {confirmDeleteId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+        >
+          <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 360 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Xác nhận xoá</h2>
+            <p style={{ fontSize: 14, color: "#374151", marginBottom: 20 }}>
+              Bạn có chắc muốn xoá tài xế này?
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: 6,
+                  background: "#fff",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => handleSoftDelete(confirmDeleteId)}
+                style={{
+                  padding: "8px 16px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Xoá
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Assign Vehicle Modal */}
       {assignTarget && (
-        <Modal title={`Phân công xe cho ${assignTarget.fullName}`} onClose={() => setAssignTarget(null)} onSubmit={handleAssign} error={assignError}>
+        <Modal
+          title={`Phân công xe cho ${assignTarget.fullName}`}
+          onClose={() => setAssignTarget(null)}
+          onSubmit={handleAssign}
+          error={assignError}
+        >
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 4, color: "#374151" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 4,
+                color: "#374151",
+              }}
+            >
               Chọn xe <span style={{ color: "#dc2626" }}>*</span>
             </label>
             <select
               value={assignVehicleId}
               onChange={(e) => setAssignVehicleId(e.target.value)}
               required
-              style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, boxSizing: "border-box", background: "#fff" }}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 14,
+                boxSizing: "border-box",
+                background: "#fff",
+              }}
             >
               <option value="">-- Chọn xe --</option>
               {waitingVehicles.map((v) => (
-                <option key={v.id} value={v.id}>{v.licensePlate} ({v.vehicleType})</option>
+                <option key={v.id} value={v.id}>
+                  {v.licensePlate} ({v.vehicleType})
+                </option>
               ))}
             </select>
             {waitingVehicles.length === 0 && (
-              <p style={{ marginTop: 8, fontSize: 12, color: "#94a3b8" }}>Không có xe nào đang chờ tài xế</p>
+              <p style={{ marginTop: 8, fontSize: 12, color: "#94a3b8" }}>
+                Không có xe nào đang chờ tài xế
+              </p>
             )}
           </div>
         </Modal>

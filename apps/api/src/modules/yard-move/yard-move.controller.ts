@@ -4,6 +4,7 @@ import { YardMoveStatus } from "@tms/db";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreateYardMoveCostDto } from "./dto/create-yard-move-cost.dto";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
+import { UpdateYardMoveDto } from "./dto/update-yard-move.dto";
 import { UpdateYardMoveStatusDto } from "./dto/update-yard-move-status.dto";
 import { YardMoveService } from "./yard-move.service";
 
@@ -26,6 +27,12 @@ export class YardMoveController {
   @ApiQuery({ name: "status", required: false, enum: YardMoveStatus })
   findAll(@Query("locationId") locationId?: string, @Query("status") status?: YardMoveStatus) {
     return this.yardMoveService.findAll({ locationId, status });
+  }
+
+  @Patch(":id")
+  @ApiOperation({ summary: "Update yard move fields or soft-delete with { isActive: false }" })
+  update(@Param("id") id: string, @Body() dto: UpdateYardMoveDto) {
+    return this.yardMoveService.update(id, dto);
   }
 
   @Patch(":id/status")

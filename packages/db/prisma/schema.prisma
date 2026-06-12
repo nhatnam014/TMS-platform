@@ -204,7 +204,7 @@ model TripPlan {
   tripCostName    String?         @map("trip_cost_name")
   tripCostAmount  Decimal?        @db.Decimal(15, 2) @map("trip_cost_amount")
 
-  // Fixed cost slots — name+amount snapshot (survives TripCost catalog deletions)
+  // Fixed cost slots — name+amount snapshot
   phiNangName           String?   @map("phi_nang_name")
   phiNangAmount         Decimal?  @db.Decimal(15, 2) @map("phi_nang_amount")
   shdNang               String?   @map("shd_nang")
@@ -252,25 +252,7 @@ model TripPlan {
 }
 
 // ============================================================
-// TRIP COST CATALOG — Danh mục loại chi phí (CRUD by admin)
-// ============================================================
-
-model TripCost {
-  id        String         @id @default(cuid())
-  name      String         @unique
-  amount    Decimal?       @db.Decimal(15, 2)
-  isActive  Boolean        @default(true) @map("is_active")
-
-  plans     TripPlanCost[]
-
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
-
-  @@map("trip_costs")
-}
-
-// ============================================================
-// TRIP PLAN COSTS — Junction: TripPlan <-> TripCost (M:N)
+// TRIP PLAN COSTS — Chi phí chuyến hàng
 // ============================================================
 
 model TripPlanCost {
@@ -278,17 +260,13 @@ model TripPlanCost {
   tripPlanId    String    @map("trip_plan_id")
   tripPlan      TripPlan  @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
 
-  tripCostId    String?   @map("trip_cost_id")                    // nullable — SetNull when TripCost deleted
-  tripCost      TripCost? @relation(fields: [tripCostId], references: [id], onDelete: SetNull)
-
-  costName      String?   @map("cost_name")                       // snapshot — preserved when TripCost deleted
+  costName      String?   @map("cost_name")
   amount        Decimal   @db.Decimal(15, 2)
   invoiceNumber String?   @map("invoice_number")                  // SHĐ (số hóa đơn)
 
   createdAt     DateTime  @default(now()) @map("created_at")
 
   @@index([tripPlanId])
-  @@index([tripCostId])
   @@map("trip_plan_costs")
 }
 
@@ -305,6 +283,7 @@ model YardMove {
   locationId      String          @map("location_id")              // Factory where the move occurs
   location        Location        @relation(fields: [locationId], references: [id])
   status          YardMoveStatus  @default(PENDING)
+  isActive        Boolean         @default(true) @map("is_active")
   notes           String?
   costs           YardMoveCost[]
 
