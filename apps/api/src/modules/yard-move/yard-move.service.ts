@@ -6,6 +6,7 @@ import type { YardMoveFilters } from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
 import { CreateYardMoveCostDto } from "./dto/create-yard-move-cost.dto";
+import { UpdateYardMoveDto } from "./dto/update-yard-move.dto";
 
 @Injectable()
 export class YardMoveService {
@@ -47,6 +48,7 @@ export class YardMoveService {
   findAll(filters: YardMoveFilters = {}) {
     return this.prisma.yardMove.findMany({
       where: {
+        isActive: true,
         ...(filters.locationId ? { locationId: filters.locationId } : {}),
         ...(filters.status ? { status: filters.status as YardMoveStatus } : {}),
       },
@@ -85,6 +87,39 @@ export class YardMoveService {
           summary: `Yard move status changed from ${move.status} to ${status}`,
           beforeSnapshot: { status: move.status },
           afterSnapshot: { status },
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  async update(id: string, dto: UpdateYardMoveDto) {
+    await this.findOne(id);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.yardMove.update({
+        where: { id },
+        data: {
+          ...(dto.date !== undefined ? { date: new Date(dto.date) } : {}),
+          ...(dto.containerNumber !== undefined ? { containerNumber: dto.containerNumber } : {}),
+          ...(dto.fromZone !== undefined ? { fromZone: dto.fromZone } : {}),
+          ...(dto.toZone !== undefined ? { toZone: dto.toZone } : {}),
+          ...(dto.locationId !== undefined ? { locationId: dto.locationId } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+        },
+        include: { location: true, costs: true },
+      });
+
+      await this.auditService.log(
+        {
+          action: dto.isActive === false ? "DELETE" : "UPDATE",
+          entityType: ENTITY_TYPES.YARD_MOVE,
+          entityId: id,
+          summary: dto.isActive === false ? "Yard move soft-deleted" : "Yard move updated",
+          afterSnapshot: updated as object,
         },
         tx,
       );
