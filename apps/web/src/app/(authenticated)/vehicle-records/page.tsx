@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "@/lib/toast-context";
+import { formatDate } from "@/lib/date-utils";
 
 interface MoocRow {
   id?: string;
@@ -23,6 +25,21 @@ interface VehicleRecord {
   moocs: MoocRow[];
 }
 
+interface DriverOption {
+  id: string;
+  fullName: string;
+  phone: string | null;
+}
+
+interface VehicleOption {
+  id: string;
+  licensePlate: string;
+  vehicleType: string;
+  inspectionExpiry: string | null;
+  insuranceExpiry: string | null;
+  registrationExpiry: string | null;
+}
+
 const EMPTY_MOOC: Omit<MoocRow, "id"> = {
   soMooc: "",
   hanDangKiem: "",
@@ -42,11 +59,6 @@ const EMPTY_FORM = {
   moocs: [] as Omit<MoocRow, "id">[],
 };
 type RecordForm = typeof EMPTY_FORM;
-
-function formatDate(d: string | null) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("vi-VN");
-}
 
 function isExpiring(d: string | null, days = 30) {
   if (!d) return false;
@@ -200,11 +212,13 @@ function TextField({
   value,
   onChange,
   type = "text",
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  disabled?: boolean;
 }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -223,6 +237,7 @@ function TextField({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
         style={{
           width: "100%",
           padding: "7px 10px",
@@ -230,8 +245,59 @@ function TextField({
           borderRadius: 6,
           fontSize: 13,
           boxSizing: "border-box",
+          background: disabled ? "#f3f4f6" : "#fff",
+          color: disabled ? "#6b7280" : "#111827",
         }}
       />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label
+        style={{
+          display: "block",
+          fontSize: 12,
+          fontWeight: 500,
+          marginBottom: 3,
+          color: "#6b7280",
+        }}
+      >
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          padding: "7px 10px",
+          border: "1px solid #d1d5db",
+          borderRadius: 6,
+          fontSize: 13,
+          boxSizing: "border-box",
+          background: "#fff",
+          cursor: "pointer",
+        }}
+      >
+        <option value="">— Chọn hoặc để trống —</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -259,9 +325,21 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 function RecordFormFields({
   form,
   setForm,
+  drivers,
+  vehicles,
+  selectedDriverId,
+  setSelectedDriverId,
+  selectedVehicleId,
+  setSelectedVehicleId,
 }: {
   form: RecordForm;
   setForm: (f: RecordForm) => void;
+  drivers: DriverOption[];
+  vehicles: VehicleOption[];
+  selectedDriverId: string;
+  setSelectedDriverId: (id: string) => void;
+  selectedVehicleId: string;
+  setSelectedVehicleId: (id: string) => void;
 }) {
   function updateField(key: keyof Omit<RecordForm, "moocs">, val: string) {
     setForm({ ...form, [key]: val });
@@ -281,9 +359,36 @@ function RecordFormFields({
     setForm({ ...form, moocs: form.moocs.filter((_, i) => i !== idx) });
   }
 
+  function handleDriverSelect(id: string) {
+    setSelectedDriverId(id);
+    if (!id) return;
+    const driver = drivers.find((d) => d.id === id);
+    if (driver) {
+      setForm({ ...form, tenTaiXe: driver.fullName, sdt: driver.phone ?? "" });
+    }
+  }
+
+  function handleVehicleSelect(id: string) {
+    setSelectedVehicleId(id);
+    if (!id) return;
+    const vehicle = vehicles.find((v) => v.id === id);
+    if (vehicle) {
+      setForm({
+        ...form,
+        loaiXe: vehicle.vehicleType,
+        bienSo: vehicle.licensePlate,
+        hanDangKiem: vehicle.inspectionExpiry ? vehicle.inspectionExpiry.slice(0, 10) : "",
+        hanBaoHiem: vehicle.insuranceExpiry ? vehicle.insuranceExpiry.slice(0, 10) : "",
+        hanCaVet: vehicle.registrationExpiry ? vehicle.registrationExpiry.slice(0, 10) : "",
+      });
+    }
+  }
+
+  const driverLocked = !!selectedDriverId;
+  const vehicleLocked = !!selectedVehicleId;
+
   return (
     <>
-      {/* Top: 2-column section — Tài xế (left) · Thông tin xe (right) */}
       <div
         style={{
           display: "grid",
@@ -293,6 +398,7 @@ function RecordFormFields({
           alignItems: "start",
         }}
       >
+        {/* Driver section */}
         <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
           <div
             style={{
@@ -308,13 +414,30 @@ function RecordFormFields({
           >
             Tài xế
           </div>
+          <SelectField
+            label="Chọn tài xế"
+            value={selectedDriverId}
+            onChange={handleDriverSelect}
+            options={drivers.map((d) => ({
+              value: d.id,
+              label: `${d.fullName}${d.phone ? ` — ${d.phone}` : ""}`,
+            }))}
+          />
           <TextField
             label="Tên tài xế"
             value={form.tenTaiXe}
             onChange={(v) => updateField("tenTaiXe", v)}
+            disabled={driverLocked}
           />
-          <TextField label="SĐT" value={form.sdt} onChange={(v) => updateField("sdt", v)} />
+          <TextField
+            label="SĐT"
+            value={form.sdt}
+            onChange={(v) => updateField("sdt", v)}
+            disabled={driverLocked}
+          />
         </div>
+
+        {/* Vehicle section */}
         <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
           <div
             style={{
@@ -330,33 +453,47 @@ function RecordFormFields({
           >
             Thông tin xe
           </div>
+          <SelectField
+            label="Chọn xe"
+            value={selectedVehicleId}
+            onChange={handleVehicleSelect}
+            options={vehicles.map((v) => ({
+              value: v.id,
+              label: `${v.licensePlate} — ${v.vehicleType}`,
+            }))}
+          />
           <TextField
             label="Loại xe"
             value={form.loaiXe}
             onChange={(v) => updateField("loaiXe", v)}
+            disabled={vehicleLocked}
           />
           <TextField
             label="Biển số"
             value={form.bienSo}
             onChange={(v) => updateField("bienSo", v)}
+            disabled={vehicleLocked}
           />
           <TextField
             label="Hạn đăng kiểm"
             value={form.hanDangKiem}
             onChange={(v) => updateField("hanDangKiem", v)}
             type="date"
+            disabled={vehicleLocked}
           />
           <TextField
             label="Hạn bảo hiểm"
             value={form.hanBaoHiem}
             onChange={(v) => updateField("hanBaoHiem", v)}
             type="date"
+            disabled={vehicleLocked}
           />
           <TextField
             label="Hạn cà vẹt"
             value={form.hanCaVet}
             onChange={(v) => updateField("hanCaVet", v)}
             type="date"
+            disabled={vehicleLocked}
           />
         </div>
       </div>
@@ -539,18 +676,27 @@ const TD = ({
 );
 
 export default function VehicleRecordsPage() {
+  const toast = useToast();
   const [records, setRecords] = useState<VehicleRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
 
+  // Dropdown data
+  const [drivers, setDrivers] = useState<DriverOption[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
+
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<RecordForm>(EMPTY_FORM);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createSelectedDriverId, setCreateSelectedDriverId] = useState("");
+  const [createSelectedVehicleId, setCreateSelectedVehicleId] = useState("");
 
   const [editTarget, setEditTarget] = useState<VehicleRecord | null>(null);
   const [editForm, setEditForm] = useState<RecordForm>(EMPTY_FORM);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editSelectedDriverId, setEditSelectedDriverId] = useState("");
+  const [editSelectedVehicleId, setEditSelectedVehicleId] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -574,16 +720,45 @@ export default function VehicleRecordsPage() {
     };
   }, [refresh]);
 
-  function openCreate() {
-    setCreateForm(EMPTY_FORM);
-    setCreateError(null);
-    setShowCreate(true);
+  async function fetchDropdownData(): Promise<{
+    driversArr: DriverOption[];
+    vehiclesArr: VehicleOption[];
+  }> {
+    const [driversRes, vehiclesRes] = await Promise.all([
+      fetch("/api/drivers")
+        .then((r) => r.json())
+        .catch(() => []),
+      fetch("/api/vehicles")
+        .then((r) => r.json())
+        .catch(() => []),
+    ]);
+    const driversArr: DriverOption[] = Array.isArray(driversRes) ? driversRes : [];
+    const vehiclesArr: VehicleOption[] = Array.isArray(vehiclesRes) ? vehiclesRes : [];
+    setDrivers(driversArr);
+    setVehicles(vehiclesArr);
+    return { driversArr, vehiclesArr };
   }
 
-  function openEdit(r: VehicleRecord) {
+  async function openCreate() {
+    setCreateForm(EMPTY_FORM);
+    setCreateError(null);
+    setCreateSelectedDriverId("");
+    setCreateSelectedVehicleId("");
+    setShowCreate(true);
+    await fetchDropdownData();
+  }
+
+  async function openEdit(r: VehicleRecord) {
     setEditForm(recordToForm(r));
     setEditError(null);
     setEditTarget(r);
+    const { driversArr, vehiclesArr } = await fetchDropdownData();
+    const matchedDriver = driversArr.find(
+      (d) => d.fullName === r.tenTaiXe && (d.phone ?? "") === (r.sdt ?? ""),
+    );
+    setEditSelectedDriverId(matchedDriver ? matchedDriver.id : "");
+    const matchedVehicle = vehiclesArr.find((v) => v.licensePlate === r.bienSo);
+    setEditSelectedVehicleId(matchedVehicle ? matchedVehicle.id : "");
   }
 
   async function handleCreate() {
@@ -595,11 +770,14 @@ export default function VehicleRecordsPage() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setCreateError(body.message ?? "Lỗi tạo record");
+      const msg = body.message ?? "Lỗi tạo biên bản";
+      setCreateError(msg);
+      toast.error(msg);
       return;
     }
     setShowCreate(false);
     setRefresh((r) => r + 1);
+    toast.success("Thêm biên bản thành công");
   }
 
   async function handleEdit() {
@@ -612,17 +790,25 @@ export default function VehicleRecordsPage() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      setEditError(body.message ?? "Lỗi cập nhật record");
+      const msg = body.message ?? "Lỗi cập nhật biên bản";
+      setEditError(msg);
+      toast.error(msg);
       return;
     }
     setEditTarget(null);
     setRefresh((r) => r + 1);
+    toast.success("Cập nhật biên bản thành công");
   }
 
   async function handleDelete(r: VehicleRecord) {
-    const label = r.bienSo ?? r.tenTaiXe ?? "record này";
+    const label = r.bienSo ?? r.tenTaiXe ?? "biên bản này";
     if (!confirm(`Xóa "${label}"? Thao tác không thể hoàn tác.`)) return;
-    await fetch(`/api/vehicle-records/${r.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/vehicle-records/${r.id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Đã xóa biên bản");
+    } else {
+      toast.error("Lỗi xóa biên bản");
+    }
     setRefresh((n) => n + 1);
   }
 
@@ -918,7 +1104,16 @@ export default function VehicleRecordsPage() {
           onSubmit={handleCreate}
           error={createError}
         >
-          <RecordFormFields form={createForm} setForm={setCreateForm} />
+          <RecordFormFields
+            form={createForm}
+            setForm={setCreateForm}
+            drivers={drivers}
+            vehicles={vehicles}
+            selectedDriverId={createSelectedDriverId}
+            setSelectedDriverId={setCreateSelectedDriverId}
+            selectedVehicleId={createSelectedVehicleId}
+            setSelectedVehicleId={setCreateSelectedVehicleId}
+          />
         </Modal>
       )}
 
@@ -929,7 +1124,16 @@ export default function VehicleRecordsPage() {
           onSubmit={handleEdit}
           error={editError}
         >
-          <RecordFormFields form={editForm} setForm={setEditForm} />
+          <RecordFormFields
+            form={editForm}
+            setForm={setEditForm}
+            drivers={drivers}
+            vehicles={vehicles}
+            selectedDriverId={editSelectedDriverId}
+            setSelectedDriverId={setEditSelectedDriverId}
+            selectedVehicleId={editSelectedVehicleId}
+            setSelectedVehicleId={setEditSelectedVehicleId}
+          />
         </Modal>
       )}
     </div>

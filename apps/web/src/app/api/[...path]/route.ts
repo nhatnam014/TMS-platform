@@ -8,55 +8,72 @@ async function proxyRequest(request: NextRequest, path: string[]): Promise<NextR
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const targetPath = path.join("/");
-  const search = request.nextUrl.search;
-  const url = `${API_BASE}/${targetPath}${search}`;
+  try {
+    const targetPath = path.join("/");
+    const search = request.nextUrl.search;
+    const url = `${API_BASE}/${targetPath}${search}`;
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-  };
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
 
-  const contentType = request.headers.get("content-type");
-  if (contentType) headers["Content-Type"] = contentType;
+    const contentType = request.headers.get("content-type");
+    if (contentType) headers["Content-Type"] = contentType;
 
-  const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
+    const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
 
-  const apiRes = await fetch(url, {
-    method: request.method,
-    headers,
-    body,
-  });
+    const apiRes = await fetch(url, {
+      method: request.method,
+      headers,
+      body,
+    });
 
-  const responseBuffer = await apiRes.arrayBuffer();
+    const responseBuffer = await apiRes.arrayBuffer();
 
-  const responseHeaders = new Headers();
-  const HOP_BY_HOP = ["transfer-encoding", "connection", "keep-alive"];
-  apiRes.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.includes(key.toLowerCase())) responseHeaders.set(key, value);
-  });
+    const responseHeaders = new Headers();
+    const HOP_BY_HOP = ["transfer-encoding", "connection", "keep-alive"];
+    apiRes.headers.forEach((value, key) => {
+      if (!HOP_BY_HOP.includes(key.toLowerCase())) responseHeaders.set(key, value);
+    });
 
-  return new NextResponse(responseBuffer, {
-    status: apiRes.status,
-    headers: responseHeaders,
-  });
+    return new NextResponse(responseBuffer, {
+      status: apiRes.status,
+      headers: responseHeaders,
+    });
+  } catch (err) {
+    console.error("[BFF proxy] upstream fetch failed:", err);
+    return NextResponse.json({ message: "Service unavailable" }, { status: 502 });
+  }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   const { path } = await params;
   return proxyRequest(request, path);
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   const { path } = await params;
   return proxyRequest(request, path);
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   const { path } = await params;
   return proxyRequest(request, path);
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
   const { path } = await params;
   return proxyRequest(request, path);
 }

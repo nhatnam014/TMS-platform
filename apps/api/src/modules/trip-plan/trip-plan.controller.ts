@@ -12,8 +12,8 @@ import {
 import { ApiOperation, ApiQuery, ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import type { PaginationQuery, TripPlanFilters } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { AddTripPlanCostDto } from "./dto/add-trip-plan-cost.dto";
 import { CreateTripPlanDto } from "./dto/create-trip-plan.dto";
+import { UpdateTripPlanDto } from "./dto/update-trip-plan.dto";
 import { TripPlanService } from "./trip-plan.service";
 
 @ApiTags("Trip Plans")
@@ -49,16 +49,16 @@ export class TripPlanController {
     return this.tripPlanService.create(dto);
   }
 
+  @Patch(":id")
+  @ApiOperation({ summary: "Update a trip plan (all fields + optional status)" })
+  update(@Param("id") id: string, @Body() dto: UpdateTripPlanDto) {
+    return this.tripPlanService.update(id, dto);
+  }
+
   @Patch(":id/status")
   @ApiOperation({ summary: "Update trip status (PLANNED → DISPATCHED → IN_TRANSIT → COMPLETED)" })
   updateStatus(@Param("id") id: string, @Body("status") status: string) {
     return this.tripPlanService.updateStatus(id, status);
-  }
-
-  @Post(":id/costs")
-  @ApiOperation({ summary: "Add a cost entry to a trip" })
-  addCost(@Param("id") id: string, @Body() dto: AddTripPlanCostDto): Promise<any> {
-    return this.tripPlanService.addCost(id, dto);
   }
 
   @Delete(":id")

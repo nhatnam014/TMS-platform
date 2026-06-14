@@ -28,11 +28,6 @@ The 9 slots and their columns:
 - **WHEN** a trip plan is created without any cost slot fields
 - **THEN** all 20 cost-slot columns on the row are NULL
 
-#### Scenario: Deleting a TripCost catalog item does not affect stored slot data
-
-- **WHEN** a TripCost catalog item is deleted after a trip plan was saved referencing its name
-- **THEN** the TripPlan row's cost columns retain their snapshot values unchanged
-
 ---
 
 ### Requirement: CreateTripPlanDto accepts optional cost slot fields
@@ -58,33 +53,49 @@ The 9 slots and their columns:
 
 ### Requirement: Trip plan create form includes a structured cost entry section
 
-The `CreateTripModal` in the trip plans web page SHALL include a cost entry section below the existing route/location fields. The section SHALL render one row per cost slot, each containing:
+The `CreateTripModal` in the trip plans web page SHALL include a cost entry section below the existing route/location fields. The section SHALL render one row per cost slot (8 fixed + 1 free-form). Each fixed slot cell SHALL contain: the cost slot label (display only), a formatted amount text input, and optionally an SHĐ text input. There SHALL be NO dropdown or select input in any cost slot. The free-form slot (CHI PHÍ PHÁT SINH KHÁC) SHALL additionally have a name text input. All fields are optional. Unset slots are not submitted.
 
-- A dropdown (`<select>`) populated from `GET /api/trip-costs` (active items only), with a blank/empty option.
-- An amount number input. When a TripCost item is selected and that item has a non-null `amount`, the amount input SHALL auto-fill with the catalog value (editable by user).
-- An SHĐ text input (for slots that have one).
+#### Scenario: No dropdowns in cost section
 
-All fields are optional. Unselected slots are not submitted.
+- **WHEN** the user opens the CreateTripModal
+- **THEN** the cost section contains no `<select>` elements — only text inputs (amount, SHĐ, and free-form name for the last slot)
 
-#### Scenario: Dropdowns are populated from TripCost catalog
+#### Scenario: Entering amount in a fixed slot submits hardcoded name
 
-- **WHEN** the CreateTripModal opens
-- **THEN** each cost slot dropdown contains one option per active TripCost item returned by `GET /api/trip-costs`, plus a blank/empty first option
+- **WHEN** the user enters 500000 in the PHÍ HẠ slot and submits
+- **THEN** the POST body includes `phiHaName: "PHÍ HẠ"` and `phiHaAmount: 500000`
 
-#### Scenario: Selecting a TripCost item auto-fills the amount
+#### Scenario: Empty slot is not submitted
 
-- **WHEN** the user selects a TripCost item that has `amount: 1200000`
-- **THEN** the amount input for that slot is set to `1200000` (user can still override)
-
-#### Scenario: Selecting the blank option clears the slot
-
-- **WHEN** the user selects the blank option in a cost slot dropdown
-- **THEN** the name and amount fields for that slot are cleared and not submitted
+- **WHEN** the user leaves a cost slot amount empty
+- **THEN** the corresponding name and amount fields are omitted from the POST body
 
 #### Scenario: Cost data is submitted inline with the trip plan create request
 
 - **WHEN** the user fills in two cost slots and submits the form
-- **THEN** the form POST includes both slots' name, amount, and SHĐ (where applicable) alongside the other trip plan fields
+- **THEN** the form POST includes both slots' hardcoded name, amount, and SHĐ (where applicable) alongside the other trip plan fields
+
+---
+
+### Requirement: TripPlanCost schema — tripCostId removed
+
+The `TripPlanCost` entity SHALL have `costName String?`, `amount Decimal`, and `invoiceNumber String?` fields. The `tripCostId` FK field and the `TripCost` relation SHALL be removed from the model. The `trip_plan_costs` table SHALL NOT contain a `trip_cost_id` column.
+
+#### Scenario: TripPlanCost row created with only costName, amount, invoiceNumber
+
+- **WHEN** a TripPlanCost row is created by the import service
+- **THEN** the row has `costName`, `amount`, and optionally `invoiceNumber` — no `tripCostId`
+
+---
+
+### Requirement: Trip plan response cost breakdown excludes tripCostId
+
+The `costs` array in `GET /api/v1/trip-plans` responses SHALL contain items with shape `{ id, costName, amount, invoiceNumber }`. The `tripCostId` field SHALL NOT appear in the response.
+
+#### Scenario: TripPlan with costs returns cost array without tripCostId
+
+- **WHEN** a trip plan has two TripPlanCost rows
+- **THEN** the response `costs` array items have `{ id, costName, amount, invoiceNumber }` — no `tripCostId` field
 
 ---
 

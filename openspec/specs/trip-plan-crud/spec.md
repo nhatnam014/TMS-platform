@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## Requirements
 
 ### Requirement: Create trip plan via modal form
 
@@ -13,7 +13,7 @@ The modal SHALL be ~980px wide (capped at 95vw) and organized into four horizont
 - **Địa điểm** (right): Pickup location (optional), Load/unload location (optional), Drop-off location (optional)
 
 **Section row 2 — Chi phí (2×4 grid, full width):**
-Eight cost slots arranged in 2 columns × 4 rows. Each cell contains the cost slot label, a select input (cost type), an amount input, and optionally an SHĐ input. Left-to-right pairing:
+Eight fixed cost slots arranged in 2 columns × 4 rows. Each cell contains the cost slot label (display only) and a formatted amount text input; slots that support SHĐ additionally have an SHĐ text input. There are NO dropdown select inputs. Left-to-right pairing:
 
 - Row 1: PHÍ NÂNG · PHÍ HẠ
 - Row 2: PHÍ VỆ SINH · PHÍ CƯỢC
@@ -58,30 +58,14 @@ All fields and submission behavior remain unchanged from the previous version.
 
 ---
 
-### Requirement: Add cost to a trip plan
+### Requirement: Trip plans list action column contains only Edit and Delete buttons
 
-Each trip row SHALL show an "+ Chi phí" button that opens a cost modal. On submit, the modal SHALL call `POST /api/trip-plans/:id/costs`. The button SHALL be available for trips in any non-CANCELLED status.
+The trip plans list table action column SHALL contain exactly two buttons per row: "Sửa" (Edit) and "Xóa" (Delete). All previous action buttons (status transition buttons such as "Điều xe", "Xuất phát", "Hoàn thành"; the "Hủy" cancel button; and the "+ Chi phí" button) SHALL be removed.
 
-The cost form SHALL include:
+#### Scenario: Action column shows only Sửa and Xóa
 
-- Cost type — select from TripCost catalog items fetched from `GET /api/trip-costs` (required)
-- Amount — numeric (required, > 0)
-- SHĐ / Invoice number — plain text input (optional)
-
-#### Scenario: Add cost to trip
-
-- **WHEN** user clicks "+ Chi phí" on a trip and submits a valid cost
-- **THEN** `POST /api/trip-plans/:id/costs` is called with `{ tripCostId, amount, invoiceNumber? }` and the modal closes
-
-#### Scenario: Cost type select is populated from catalog
-
-- **WHEN** the cost modal opens
-- **THEN** the cost type select element lists all TripCost catalog items from `GET /api/trip-costs`
-
-#### Scenario: Cost form validates amount
-
-- **WHEN** user submits with amount = 0 or empty
-- **THEN** validation error is shown and form does not submit
+- **WHEN** the user views the trip plans list
+- **THEN** each row's action column contains exactly "Sửa" and "Xóa" buttons and no other buttons
 
 ---
 
@@ -106,6 +90,8 @@ The `GET /trip-plans` endpoint SHALL accept an optional `search` query parameter
 - **THEN** all filter conditions SHALL be applied together (AND logic)
 - **THEN** the response `meta` SHALL reflect the filtered total count
 
+---
+
 ## ADDED Requirements
 
 ### Requirement: Trip plan list view shows all 31 Excel columns with horizontal scroll
@@ -116,9 +102,9 @@ The columns SHALL be in this order: STT, NGÀY, SỐ XE, KHÁCH HÀNG, LOẠI H�
 
 The 20'/40'/45' columns SHALL display an "X" mark if `containerSize` starts with "20", "40", or "45" respectively; otherwise blank.
 
-Cost columns (PHÍ NÂNG through CHI PHÍ PHÁT SINH) SHALL display the amount from the corresponding `TripPlanCost` row (matched by TripCost name), or blank if no such cost exists.
+Cost columns (PHÍ NÂNG through CHI PHÍ PHÁT SINH) SHALL display the amount from the corresponding fixed cost slot on the TripPlan row (`phiNangAmount`, etc.), or blank if null.
 
-SHĐ columns SHALL display the `invoiceNumber` from the corresponding `TripPlanCost` row, or blank.
+SHĐ columns SHALL display the value from the corresponding SHĐ field on the TripPlan row, or blank.
 
 #### Scenario: All 31 Excel columns visible via horizontal scroll
 
@@ -130,10 +116,10 @@ SHĐ columns SHALL display the `invoiceNumber` from the corresponding `TripPlanC
 - **WHEN** a trip plan has `containerSize = "40HC"`
 - **THEN** the 40' column shows "X" and the 20' and 45' columns are blank
 
-#### Scenario: Cost column shows amount from TripPlanCost
+#### Scenario: Cost column shows amount from fixed slot
 
-- **WHEN** a trip plan has a TripPlanCost row with costName "PHÍ NÂNG" and amount 1200000
-- **THEN** the PHÍ NÂNG column displays "1,200,000"
+- **WHEN** a trip plan has `phiNangAmount = 1200000`
+- **THEN** the PHÍ NÂNG column displays the formatted amount
 
 ### Requirement: TripPlan API accepts and returns containerSize and description
 
@@ -149,9 +135,21 @@ The `POST /api/v1/trip-plans` body SHALL accept optional `containerSize` (string
 - **WHEN** `GET /api/v1/trip-plans` is called
 - **THEN** each object in `data` includes `containerSize`, `description`, `tripCostName`, `tripCostAmount` (null if not set)
 
+---
+
 ## REMOVED Requirements
+
+### Requirement: Add cost to a trip plan
+
+**Reason**: The "+ Chi phí" button and CostModal are removed as part of the TripCost catalog removal. Cost entry is now handled exclusively within the create and edit forms (see `trip-cost-freeform-entry` spec).
+**Migration**: Use the EditTripModal to update cost slot values on an existing trip plan.
+
+### Requirement: Create trip plan via modal form — cost section uses TripCost catalog select
+
+**Reason**: TripCost catalog is removed. The cost section now uses free-form formatted amount inputs. See `trip-cost-freeform-entry` spec.
+**Migration**: The cost section select dropdowns are replaced with plain formatted amount text inputs.
 
 ### Requirement: Add cost to a completed trip
 
-**Reason**: Cost entry is no longer restricted to COMPLETED trips and no longer uses CostType enum. Replaced by the "Add cost to a trip plan" requirement above which uses TripCost catalog selection.
-**Migration**: Use the updated cost modal with TripCost catalog select on any non-cancelled trip.
+**Reason**: Cost entry is no longer restricted to COMPLETED trips and no longer uses CostType enum. Replaced by the free-form cost slots in create/edit forms.
+**Migration**: Use CreateTripModal or EditTripModal cost slots on any trip plan.

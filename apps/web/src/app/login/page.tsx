@@ -2,9 +2,11 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/lib/toast-context";
 
 export default function LoginPage() {
   const router = useRouter();
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -25,13 +27,18 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        setError("Tên đăng nhập hoặc mật khẩu không đúng");
+        const msg = "Tên đăng nhập hoặc mật khẩu không đúng";
+        setError(msg);
+        toast.error(msg);
         return;
       }
 
+      toast.success("Đăng nhập thành công");
       router.push("/dashboard");
     } catch {
-      setError("Không thể kết nối máy chủ. Vui lòng thử lại.");
+      const msg = "Không thể kết nối máy chủ. Vui lòng thử lại.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -59,13 +66,19 @@ export default function LoginPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
           TMS Platform
         </h1>
-        <p style={{ color: "#64748b", marginBottom: 28, fontSize: 14 }}>
-          Hệ thống quản lý vận tải
-        </p>
+        <p style={{ color: "#64748b", marginBottom: 28, fontSize: 14 }}>Hệ thống quản lý vận tải</p>
 
         <form onSubmit={handleSubmit}>
           <label style={{ display: "block", marginBottom: 16 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#374151", display: "block", marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#374151",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
               Tên đăng nhập
             </span>
             <input
@@ -85,7 +98,15 @@ export default function LoginPage() {
           </label>
 
           <label style={{ display: "block", marginBottom: 24 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#374151", display: "block", marginBottom: 6 }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#374151",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
               Mật khẩu
             </span>
             <input

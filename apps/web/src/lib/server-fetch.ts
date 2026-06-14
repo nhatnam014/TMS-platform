@@ -1,11 +1,9 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:4000/api/v1";
 
-export async function serverFetch<T = unknown>(
-  path: string,
-  options?: RequestInit,
-): Promise<T> {
+export async function serverFetch<T = unknown>(path: string, options?: RequestInit): Promise<T> {
   const cookieStore = await cookies();
   const token = cookieStore.get("tms_token")?.value;
 
@@ -18,6 +16,10 @@ export async function serverFetch<T = unknown>(
     },
     cache: "no-store",
   });
+
+  if (res.status === 401) {
+    redirect("/api/auth/logout-redirect");
+  }
 
   if (!res.ok) {
     throw new Error(`API error ${res.status}: ${path}`);

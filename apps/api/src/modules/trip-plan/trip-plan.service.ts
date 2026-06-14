@@ -3,7 +3,7 @@ import { Prisma, TripMode } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import type {
   CreateTripPlanDto,
-  AddTripPlanCostDto,
+  UpdateTripPlanDto,
   TripPlanFilters,
   PaginationQuery,
   PaginatedResponse,
@@ -70,7 +70,6 @@ export class TripPlanService {
           costs: {
             select: {
               id: true,
-              tripCostId: true,
               costName: true,
               amount: true,
               invoiceNumber: true,
@@ -85,7 +84,6 @@ export class TripPlanService {
       ...tp,
       costs: tp.costs.map((c: any) => ({
         id: c.id,
-        tripCostId: c.tripCostId ?? null,
         costName: c.costName ?? null,
         amount: Number(c.amount),
         invoiceNumber: c.invoiceNumber ?? null,
@@ -111,7 +109,6 @@ export class TripPlanService {
         costs: {
           select: {
             id: true,
-            tripCostId: true,
             costName: true,
             amount: true,
             invoiceNumber: true,
@@ -126,7 +123,6 @@ export class TripPlanService {
       ...trip,
       costs: trip.costs.map((c: any) => ({
         id: c.id,
-        tripCostId: c.tripCostId ?? null,
         costName: c.costName ?? null,
         amount: Number(c.amount),
         invoiceNumber: c.invoiceNumber ?? null,
@@ -240,54 +236,83 @@ export class TripPlanService {
     });
   }
 
-  async addCost(tripId: string, dto: AddTripPlanCostDto) {
-    const tripCost = await this.prisma.tripCost.findUnique({ where: { id: dto.tripCostId } });
-    if (!tripCost) throw new NotFoundException(`TripCost ${dto.tripCostId} not found`);
-
-    if (!dto.amount || dto.amount <= 0) {
-      throw new BadRequestException("Amount must be greater than 0");
-    }
-
-    await this.findOne(tripId);
+  async update(id: string, dto: UpdateTripPlanDto) {
+    const trip = await this.findOne(id);
 
     return this.prisma.$transaction(async (tx) => {
-      const cost = await tx.tripPlanCost.create({
+      const updated = await tx.tripPlan.update({
+        where: { id },
         data: {
-          tripPlanId: tripId,
-          tripCostId: dto.tripCostId,
-          costName: tripCost.name,
-          amount: dto.amount,
-          invoiceNumber: dto.invoiceNumber ?? null,
-        },
-      });
-
-      await tx.tripPlan.update({
-        where: { id: tripId },
-        data: {
-          tripCostName: tripCost.name,
-          tripCostAmount: dto.amount,
+          ...(dto.tripDate !== undefined && { tripDate: new Date(dto.tripDate) }),
+          ...(dto.serviceType !== undefined && { serviceType: dto.serviceType as any }),
+          ...(dto.tripMode !== undefined && { tripMode: dto.tripMode as any }),
+          ...(dto.vehicleId !== undefined && { vehicleId: dto.vehicleId }),
+          ...(dto.customerId !== undefined && { customerId: dto.customerId }),
+          ...(dto.carrierId !== undefined && { carrierId: dto.carrierId }),
+          ...(dto.containerSize !== undefined && { containerSize: dto.containerSize }),
+          ...(dto.outboundContainerNumber !== undefined && {
+            outboundContainerNumber: dto.outboundContainerNumber,
+          }),
+          ...(dto.inboundContainerNumber !== undefined && {
+            inboundContainerNumber: dto.inboundContainerNumber,
+          }),
+          ...(dto.pickupLocationId !== undefined && { pickupLocationId: dto.pickupLocationId }),
+          ...(dto.loadUnloadLocationId !== undefined && {
+            loadUnloadLocationId: dto.loadUnloadLocationId,
+          }),
+          ...(dto.dropoffLocationId !== undefined && { dropoffLocationId: dto.dropoffLocationId }),
+          ...(dto.documentSentDate !== undefined && {
+            documentSentDate: dto.documentSentDate ? new Date(dto.documentSentDate) : null,
+          }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.notes !== undefined && { notes: dto.notes }),
+          ...(dto.status !== undefined && { status: dto.status as any }),
+          ...(dto.phiNangName !== undefined && { phiNangName: dto.phiNangName }),
+          ...(dto.phiNangAmount !== undefined && { phiNangAmount: dto.phiNangAmount }),
+          ...(dto.shdNang !== undefined && { shdNang: dto.shdNang }),
+          ...(dto.phiHaName !== undefined && { phiHaName: dto.phiHaName }),
+          ...(dto.phiHaAmount !== undefined && { phiHaAmount: dto.phiHaAmount }),
+          ...(dto.shdHa !== undefined && { shdHa: dto.shdHa }),
+          ...(dto.phiVeSinhName !== undefined && { phiVeSinhName: dto.phiVeSinhName }),
+          ...(dto.phiVeSinhAmount !== undefined && { phiVeSinhAmount: dto.phiVeSinhAmount }),
+          ...(dto.shdVeSinh !== undefined && { shdVeSinh: dto.shdVeSinh }),
+          ...(dto.phiCuocName !== undefined && { phiCuocName: dto.phiCuocName }),
+          ...(dto.phiCuocAmount !== undefined && { phiCuocAmount: dto.phiCuocAmount }),
+          ...(dto.veCongName !== undefined && { veCongName: dto.veCongName }),
+          ...(dto.veCongAmount !== undefined && { veCongAmount: dto.veCongAmount }),
+          ...(dto.shdVeCong !== undefined && { shdVeCong: dto.shdVeCong }),
+          ...(dto.chiPhiKhacName !== undefined && { chiPhiKhacName: dto.chiPhiKhacName }),
+          ...(dto.chiPhiKhacAmount !== undefined && { chiPhiKhacAmount: dto.chiPhiKhacAmount }),
+          ...(dto.chiPhiTraiTuyenName !== undefined && {
+            chiPhiTraiTuyenName: dto.chiPhiTraiTuyenName,
+          }),
+          ...(dto.chiPhiTraiTuyenAmount !== undefined && {
+            chiPhiTraiTuyenAmount: dto.chiPhiTraiTuyenAmount,
+          }),
+          ...(dto.cauDuongName !== undefined && { cauDuongName: dto.cauDuongName }),
+          ...(dto.cauDuongAmount !== undefined && { cauDuongAmount: dto.cauDuongAmount }),
+          ...(dto.chiPhiPhatSinhName !== undefined && {
+            chiPhiPhatSinhName: dto.chiPhiPhatSinhName,
+          }),
+          ...(dto.chiPhiPhatSinhAmount !== undefined && {
+            chiPhiPhatSinhAmount: dto.chiPhiPhatSinhAmount,
+          }),
         },
       });
 
       await this.auditService.log(
         {
-          action: "COST_ADDED",
-          entityType: ENTITY_TYPES.TRIP_COST,
-          entityId: cost.id,
-          summary: `Cost added to trip plan: ${tripCost.name} ${dto.amount}`,
-          afterSnapshot: cost as object,
-          metadata: { tripPlanId: tripId },
+          action: "UPDATE",
+          entityType: ENTITY_TYPES.TRIP_PLAN,
+          entityId: id,
+          summary: `Updated trip plan`,
+          beforeSnapshot: trip as object,
+          afterSnapshot: updated as object,
         },
         tx,
       );
 
-      return {
-        id: cost.id,
-        tripCostId: cost.tripCostId,
-        costName: tripCost.name,
-        amount: Number(cost.amount),
-        invoiceNumber: cost.invoiceNumber ?? null,
-      };
+      return updated;
     });
   }
 

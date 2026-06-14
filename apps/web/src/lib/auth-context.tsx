@@ -15,7 +15,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 401) {
+          window.location.href = "/api/auth/logout-redirect";
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
       .then((data) => {
         if (data) setUser({ id: data.id, username: data.username, role: data.role });
       })
