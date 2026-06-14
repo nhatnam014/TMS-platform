@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/toast-context";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,8 +35,9 @@ export default function LoginPage() {
 
       toast.success("Đăng nhập thành công");
       router.push("/dashboard");
-    } catch {
+    } catch (err) {
       const msg = "Không thể kết nối máy chủ. Vui lòng thử lại.";
+      console.error("Login error: ", err);
       setError(msg);
       toast.error(msg);
     } finally {
