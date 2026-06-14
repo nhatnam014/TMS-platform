@@ -20,6 +20,14 @@ const ToastContext = createContext<ToastContextValue>({
   removeToast: () => {},
 });
 
+function createToastId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -29,7 +37,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const addToast = useCallback(
     (type: Toast["type"], message: string) => {
-      const id = typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now());
+      const id = createToastId();
       setToasts((prev) => [{ id, type, message }, ...prev]);
       if (type === "success") {
         setTimeout(() => removeToast(id), 3000);
