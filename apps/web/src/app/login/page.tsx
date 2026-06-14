@@ -27,14 +27,17 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        const msg = "Tên đăng nhập hoặc mật khẩu không đúng";
+        const msg =
+          res.status === 401
+            ? "Tên đăng nhập hoặc mật khẩu không đúng"
+            : "Không thể kết nối máy chủ. Vui lòng thử lại.";
         setError(msg);
         toast.error(msg);
         return;
       }
 
       toast.success("Đăng nhập thành công");
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } catch (err) {
       const msg = "Không thể kết nối máy chủ. Vui lòng thử lại.";
       console.error("Login error: ", err);

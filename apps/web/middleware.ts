@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { jwtVerify } from "jose";
+import { AUTH_COOKIE_NAME } from "@/lib/auth-cookie";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/logout-redirect"];
-
-function clearAndRedirect(request: NextRequest) {
-  const res = NextResponse.redirect(new URL("/login", request.url));
-  res.cookies.delete("tms_token");
-  return res;
-}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,16 +14,9 @@ export async function middleware(request: NextRequest) {
 
   if (isPublic) return NextResponse.next();
 
-  const token = request.cookies.get("tms_token");
+  const token = request.cookies.get(AUTH_COOKIE_NAME);
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? "change-me-in-production");
-    await jwtVerify(token.value, secret);
-  } catch {
-    return clearAndRedirect(request);
   }
 
   return NextResponse.next();
