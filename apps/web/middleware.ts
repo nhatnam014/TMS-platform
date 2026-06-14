@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { jwtVerify } from "jose";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/logout-redirect"];
 
-export function middleware(request: NextRequest) {
+function clearAndRedirect(request: NextRequest) {
+  const res = NextResponse.redirect(new URL("/login", request.url));
+  res.cookies.delete("tms_token");
+  return res;
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublic =
@@ -15,8 +22,14 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get("tms_token");
   if (!token) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? "change-me-in-production");
+    await jwtVerify(token.value, secret);
+  } catch {
+    return clearAndRedirect(request);
   }
 
   return NextResponse.next();

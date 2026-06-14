@@ -102,29 +102,9 @@ export interface UpdateLocationDto {
   isActive?: boolean;
 }
 
-// ---------- TripCost Catalog ----------
-export interface TripCostDto {
-  id: string;
-  name: string;
-  amount: number | null;
-  isActive: boolean;
-}
-
-export interface CreateTripCostDto {
-  name: string;
-  amount?: number;
-}
-
-export interface UpdateTripCostDto {
-  name?: string;
-  isActive?: boolean;
-  amount?: number | null;
-}
-
 // ---------- Trip Plan ----------
 export interface TripPlanCostItem {
   id: string;
-  tripCostId: string | null;
   costName: string | null;
   amount: number;
   invoiceNumber?: string | null;
@@ -172,9 +152,50 @@ export interface CreateTripPlanDto {
 }
 
 export interface AddTripPlanCostDto {
-  tripCostId: string;
+  costName: string;
   amount: number;
   invoiceNumber?: string;
+}
+
+export interface UpdateTripPlanDto {
+  tripDate?: string;
+  serviceType?: ServiceType;
+  tripMode?: TripMode;
+  vehicleId?: string;
+  customerId?: string;
+  carrierId?: string;
+  containerSize?: string;
+  outboundContainerNumber?: string;
+  inboundContainerNumber?: string;
+  pickupLocationId?: string;
+  loadUnloadLocationId?: string;
+  dropoffLocationId?: string;
+  documentSentDate?: string;
+  description?: string;
+  notes?: string;
+  status?: TripStatus;
+  phiNangName?: string;
+  phiNangAmount?: number;
+  shdNang?: string;
+  phiHaName?: string;
+  phiHaAmount?: number;
+  shdHa?: string;
+  phiVeSinhName?: string;
+  phiVeSinhAmount?: number;
+  shdVeSinh?: string;
+  phiCuocName?: string;
+  phiCuocAmount?: number;
+  veCongName?: string;
+  veCongAmount?: number;
+  shdVeCong?: string;
+  chiPhiKhacName?: string;
+  chiPhiKhacAmount?: number;
+  chiPhiTraiTuyenName?: string;
+  chiPhiTraiTuyenAmount?: number;
+  cauDuongName?: string;
+  cauDuongAmount?: number;
+  chiPhiPhatSinhName?: string;
+  chiPhiPhatSinhAmount?: number;
 }
 
 export interface TripPlanFilters {
@@ -242,7 +263,6 @@ export type AuditAction =
 // ---------- Audit ----------
 export const ENTITY_TYPES = {
   TRIP_PLAN: "TripPlan",
-  TRIP_COST: "TripCost",
   YARD_MOVE: "YardMove",
   YARD_MOVE_COST: "YardMoveCost",
   USER: "User",
@@ -291,6 +311,17 @@ export interface YardMoveFilters {
 export interface ImportResult {
   imported: number;
   warnings: string[];
+  errors: string[];
+}
+
+export interface VehicleConflictEntry {
+  licensePlate: string;
+  fields: Record<string, { current: unknown; incoming: unknown }>;
+}
+
+export interface VehicleImportPreviewResult {
+  toCreate: number;
+  conflicts: VehicleConflictEntry[];
   errors: string[];
 }
 

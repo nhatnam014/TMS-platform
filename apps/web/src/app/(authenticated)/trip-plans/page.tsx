@@ -3,6 +3,8 @@
 import { useEffect, useState, Fragment } from "react";
 import type { PaginatedResponse, TripStatus, ServiceType, TripPlanCostItem } from "@tms/shared";
 import { SERVICE_TYPE_LABELS } from "@tms/shared";
+import { useToast } from "@/lib/toast-context";
+import { formatDate } from "@/lib/date-utils";
 
 interface LocationRef {
   id: string;
@@ -19,13 +21,6 @@ interface NamedOption {
   code: string;
   name: string;
 }
-interface TripCostOption {
-  id: string;
-  name: string;
-  amount: number | null;
-  isActive: boolean;
-}
-
 interface TripPlanRow {
   id: string;
   tripDate: string;
@@ -293,129 +288,24 @@ const btnSecondary: React.CSSProperties = {
   cursor: "pointer",
 };
 
-// ─── COST MODAL ─────────────────────────────────────────────────────────────
-
-function CostModal({
-  tripId,
-  onClose,
-  onDone,
-}: {
-  tripId: string;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [costOptions, setCostOptions] = useState<TripCostOption[]>([]);
-  const [tripCostId, setTripCostId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/trip-costs")
-      .then((r) => r.json())
-      .then((data: TripCostOption[]) => {
-        const active = data.filter((c) => c.isActive);
-        setCostOptions(active);
-        if (active.length) setTripCostId(active[0].id);
-      })
-      .catch(() => {});
-  }, []);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const amt = Number(amount);
-    if (!amt || amt <= 0) {
-      setError("Số tiền phải lớn hơn 0");
-      return;
-    }
-    if (!tripCostId) {
-      setError("Vui lòng chọn loại chi phí");
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/trip-plans/${tripId}/costs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tripCostId,
-          amount: amt,
-          invoiceNumber: invoiceNumber || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.message ?? "Lỗi không xác định");
-      }
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Lỗi không xác định");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Modal title="Thêm chi phí" onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        <Field label="Loại chi phí *">
-          <select
-            value={tripCostId}
-            onChange={(e) => setTripCostId(e.target.value)}
-            style={inputStyle}
-          >
-            {costOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Số tiền (VND) *">
-          <input
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            style={inputStyle}
-            placeholder="1200000"
-            required
-          />
-        </Field>
-        <Field label="SHĐ (Số hóa đơn)">
-          <input
-            type="text"
-            value={invoiceNumber}
-            onChange={(e) => setInvoiceNumber(e.target.value)}
-            style={inputStyle}
-            placeholder="HD001..."
-          />
-        </Field>
-        {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>
-            Hủy
-          </button>
-          <button type="submit" disabled={loading} style={btnPrimary}>
-            {loading ? "Đang lưu..." : "Lưu"}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 // ─── CREATE TRIP MODAL ───────────────────────────────────────────────────────
 
 interface CostSlotState {
-  id: string;
-  name: string;
   amount: string;
   shd: string;
 }
-const emptyCostSlot = (): CostSlotState => ({ id: "", name: "", amount: "", shd: "" });
+const emptyCostSlot = (): CostSlotState => ({ amount: "", shd: "" });
+
+function fmtInput(raw: string): string {
+  if (!raw) return "";
+  const n = Number(raw);
+  if (isNaN(n)) return raw;
+  return n.toLocaleString("vi-VN");
+}
+
+function stripNonDigits(v: string): string {
+  return v.replace(/\D/g, "");
+}
 
 const colHeaderStyle: React.CSSProperties = {
   fontSize: 11,
@@ -441,11 +331,11 @@ const costLabelStyle: React.CSSProperties = {
 };
 
 function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [customers, setCustomers] = useState<NamedOption[]>([]);
   const [carriers, setCarriers] = useState<NamedOption[]>([]);
   const [locations, setLocations] = useState<NamedOption[]>([]);
-  const [costOptions, setCostOptions] = useState<TripCostOption[]>([]);
   const [loadingRefs, setLoadingRefs] = useState(true);
 
   const [tripDate, setTripDate] = useState(new Date().toISOString().slice(0, 10));
@@ -475,20 +365,7 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [chiPhiTraiTuyen, setChiPhiTraiTuyen] = useState<CostSlotState>(emptyCostSlot());
   const [cauDuong, setCauDuong] = useState<CostSlotState>(emptyCostSlot());
   const [chiPhiPhatSinh, setChiPhiPhatSinh] = useState<CostSlotState>(emptyCostSlot());
-
-  function selectCostSlot(setter: (s: CostSlotState) => void, id: string) {
-    if (!id) {
-      setter(emptyCostSlot());
-      return;
-    }
-    const opt = costOptions.find((c) => c.id === id);
-    setter({
-      id,
-      name: opt?.name ?? "",
-      amount: opt?.amount != null ? String(opt.amount) : "",
-      shd: "",
-    });
-  }
+  const [chiPhiPhatSinhName, setChiPhiPhatSinhName] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -496,14 +373,12 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
       fetch("/api/customers").then((r) => r.json()),
       fetch("/api/carriers").then((r) => r.json()),
       fetch("/api/locations").then((r) => r.json()),
-      fetch("/api/trip-costs").then((r) => r.json()),
     ])
-      .then(([v, c, ca, l, tc]) => {
+      .then(([v, c, ca, l]) => {
         setVehicles(v);
         setCustomers(c);
         setCarriers(ca);
         setLocations(l);
-        setCostOptions((tc as TripCostOption[]).filter((x) => x.isActive));
         if (v.length) setVehicleId(v[0].id);
         if (c.length) setCustomerId(c[0].id);
       })
@@ -546,27 +421,29 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           description: description || undefined,
           notes: notes || undefined,
           // cost slots
-          phiNangName: phiNang.id ? phiNang.name : undefined,
-          phiNangAmount: phiNang.id ? toNum(phiNang.amount) : undefined,
-          shdNang: phiNang.id ? toStr(phiNang.shd) : undefined,
-          phiHaName: phiHa.id ? phiHa.name : undefined,
-          phiHaAmount: phiHa.id ? toNum(phiHa.amount) : undefined,
-          shdHa: phiHa.id ? toStr(phiHa.shd) : undefined,
-          phiVeSinhName: phiVeSinh.id ? phiVeSinh.name : undefined,
-          phiVeSinhAmount: phiVeSinh.id ? toNum(phiVeSinh.amount) : undefined,
-          shdVeSinh: phiVeSinh.id ? toStr(phiVeSinh.shd) : undefined,
-          phiCuocName: phiCuoc.id ? phiCuoc.name : undefined,
-          phiCuocAmount: phiCuoc.id ? toNum(phiCuoc.amount) : undefined,
-          veCongName: veCong.id ? veCong.name : undefined,
-          veCongAmount: veCong.id ? toNum(veCong.amount) : undefined,
-          shdVeCong: veCong.id ? toStr(veCong.shd) : undefined,
-          chiPhiKhacName: chiPhiKhac.id ? chiPhiKhac.name : undefined,
-          chiPhiKhacAmount: chiPhiKhac.id ? toNum(chiPhiKhac.amount) : undefined,
-          chiPhiTraiTuyenName: chiPhiTraiTuyen.id ? chiPhiTraiTuyen.name : undefined,
-          chiPhiTraiTuyenAmount: chiPhiTraiTuyen.id ? toNum(chiPhiTraiTuyen.amount) : undefined,
-          cauDuongName: cauDuong.id ? cauDuong.name : undefined,
-          cauDuongAmount: cauDuong.id ? toNum(cauDuong.amount) : undefined,
-          chiPhiPhatSinhName: chiPhiPhatSinh.name.trim() || undefined,
+          phiNangName: phiNang.amount ? "PHÍ NÂNG" : undefined,
+          phiNangAmount: toNum(phiNang.amount),
+          shdNang: toStr(phiNang.shd),
+          phiHaName: phiHa.amount ? "PHÍ HẠ" : undefined,
+          phiHaAmount: toNum(phiHa.amount),
+          shdHa: toStr(phiHa.shd),
+          phiVeSinhName: phiVeSinh.amount ? "PHÍ VỆ SINH" : undefined,
+          phiVeSinhAmount: toNum(phiVeSinh.amount),
+          shdVeSinh: toStr(phiVeSinh.shd),
+          phiCuocName: phiCuoc.amount ? "PHÍ CƯỢC" : undefined,
+          phiCuocAmount: toNum(phiCuoc.amount),
+          veCongName: veCong.amount ? "VÉ CỔNG" : undefined,
+          veCongAmount: toNum(veCong.amount),
+          shdVeCong: toStr(veCong.shd),
+          chiPhiKhacName: chiPhiKhac.amount ? "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM" : undefined,
+          chiPhiKhacAmount: toNum(chiPhiKhac.amount),
+          chiPhiTraiTuyenName: chiPhiTraiTuyen.amount
+            ? "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM"
+            : undefined,
+          chiPhiTraiTuyenAmount: toNum(chiPhiTraiTuyen.amount),
+          cauDuongName: cauDuong.amount ? "CẦU ĐƯỜNG" : undefined,
+          cauDuongAmount: toNum(cauDuong.amount),
+          chiPhiPhatSinhName: chiPhiPhatSinhName.trim() || undefined,
           chiPhiPhatSinhAmount: toNum(chiPhiPhatSinh.amount),
         }),
       });
@@ -574,9 +451,12 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         const d = await res.json().catch(() => ({}));
         throw new Error(d.message ?? "Lỗi không xác định");
       }
+      toast.success("Tạo chuyến thành công");
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Lỗi không xác định");
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -597,18 +477,6 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     ...locations.map((l) => (
       <option key={l.id} value={l.id}>
         {l.name}
-      </option>
-    )),
-  ];
-
-  const costSelectOpts = [
-    <option key="" value="">
-      — Không chọn —
-    </option>,
-    ...costOptions.map((c) => (
-      <option key={c.id} value={c.id}>
-        {c.name}
-        {c.amount != null ? ` (${c.amount.toLocaleString("vi-VN")})` : ""}
       </option>
     )),
   ];
@@ -793,21 +661,14 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             >
               <span style={costLabelStyle}>PHÍ NÂNG</span>
               <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={phiNang.id}
-                  onChange={(e) => selectCostSlot(setPhiNang, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
                 <input
-                  type="number"
-                  min={1}
-                  value={phiNang.amount}
-                  onChange={(e) => setPhiNang({ ...phiNang, amount: e.target.value })}
+                  type="text"
+                  value={fmtInput(phiNang.amount)}
+                  onChange={(e) =>
+                    setPhiNang({ ...phiNang, amount: stripNonDigits(e.target.value) })
+                  }
                   style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!phiNang.id}
+                  placeholder="0"
                 />
                 <input
                   type="text"
@@ -815,28 +676,18 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
                   onChange={(e) => setPhiNang({ ...phiNang, shd: e.target.value })}
                   style={{ ...inputStyle, flex: 1 }}
                   placeholder="SHĐ"
-                  disabled={!phiNang.id}
                 />
               </div>
             </div>
             <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
               <span style={costLabelStyle}>PHÍ HẠ</span>
               <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={phiHa.id}
-                  onChange={(e) => selectCostSlot(setPhiHa, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
                 <input
-                  type="number"
-                  min={1}
-                  value={phiHa.amount}
-                  onChange={(e) => setPhiHa({ ...phiHa, amount: e.target.value })}
+                  type="text"
+                  value={fmtInput(phiHa.amount)}
+                  onChange={(e) => setPhiHa({ ...phiHa, amount: stripNonDigits(e.target.value) })}
                   style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!phiHa.id}
+                  placeholder="0"
                 />
                 <input
                   type="text"
@@ -844,7 +695,6 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
                   onChange={(e) => setPhiHa({ ...phiHa, shd: e.target.value })}
                   style={{ ...inputStyle, flex: 1 }}
                   placeholder="SHĐ"
-                  disabled={!phiHa.id}
                 />
               </div>
             </div>
@@ -857,21 +707,14 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             >
               <span style={costLabelStyle}>PHÍ VỆ SINH</span>
               <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={phiVeSinh.id}
-                  onChange={(e) => selectCostSlot(setPhiVeSinh, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
                 <input
-                  type="number"
-                  min={1}
-                  value={phiVeSinh.amount}
-                  onChange={(e) => setPhiVeSinh({ ...phiVeSinh, amount: e.target.value })}
+                  type="text"
+                  value={fmtInput(phiVeSinh.amount)}
+                  onChange={(e) =>
+                    setPhiVeSinh({ ...phiVeSinh, amount: stripNonDigits(e.target.value) })
+                  }
                   style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!phiVeSinh.id}
+                  placeholder="0"
                 />
                 <input
                   type="text"
@@ -879,30 +722,18 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
                   onChange={(e) => setPhiVeSinh({ ...phiVeSinh, shd: e.target.value })}
                   style={{ ...inputStyle, flex: 1 }}
                   placeholder="SHĐ"
-                  disabled={!phiVeSinh.id}
                 />
               </div>
             </div>
             <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
               <span style={costLabelStyle}>PHÍ CƯỢC</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={phiCuoc.id}
-                  onChange={(e) => selectCostSlot(setPhiCuoc, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={phiCuoc.amount}
-                  onChange={(e) => setPhiCuoc({ ...phiCuoc, amount: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!phiCuoc.id}
-                />
-              </div>
+              <input
+                type="text"
+                value={fmtInput(phiCuoc.amount)}
+                onChange={(e) => setPhiCuoc({ ...phiCuoc, amount: stripNonDigits(e.target.value) })}
+                style={inputStyle}
+                placeholder="0"
+              />
             </div>
             <div
               style={{
@@ -913,21 +744,12 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             >
               <span style={costLabelStyle}>VÉ CỔNG</span>
               <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={veCong.id}
-                  onChange={(e) => selectCostSlot(setVeCong, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
                 <input
-                  type="number"
-                  min={1}
-                  value={veCong.amount}
-                  onChange={(e) => setVeCong({ ...veCong, amount: e.target.value })}
+                  type="text"
+                  value={fmtInput(veCong.amount)}
+                  onChange={(e) => setVeCong({ ...veCong, amount: stripNonDigits(e.target.value) })}
                   style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!veCong.id}
+                  placeholder="0"
                 />
                 <input
                   type="text"
@@ -935,74 +757,44 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
                   onChange={(e) => setVeCong({ ...veCong, shd: e.target.value })}
                   style={{ ...inputStyle, flex: 1 }}
                   placeholder="SHĐ"
-                  disabled={!veCong.id}
                 />
               </div>
             </div>
             <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
               <span style={costLabelStyle}>CHI PHÍ KHÁC / PHÍ ĐỨT TEM</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={chiPhiKhac.id}
-                  onChange={(e) => selectCostSlot(setChiPhiKhac, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={chiPhiKhac.amount}
-                  onChange={(e) => setChiPhiKhac({ ...chiPhiKhac, amount: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!chiPhiKhac.id}
-                />
-              </div>
+              <input
+                type="text"
+                value={fmtInput(chiPhiKhac.amount)}
+                onChange={(e) =>
+                  setChiPhiKhac({ ...chiPhiKhac, amount: stripNonDigits(e.target.value) })
+                }
+                style={inputStyle}
+                placeholder="0"
+              />
             </div>
             <div style={{ padding: "8px 12px", borderRight: "1px solid #e2e8f0" }}>
               <span style={costLabelStyle}>TRÁI TUYẾN / CHỈ ĐỊNH / BP CAM</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={chiPhiTraiTuyen.id}
-                  onChange={(e) => selectCostSlot(setChiPhiTraiTuyen, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={chiPhiTraiTuyen.amount}
-                  onChange={(e) =>
-                    setChiPhiTraiTuyen({ ...chiPhiTraiTuyen, amount: e.target.value })
-                  }
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!chiPhiTraiTuyen.id}
-                />
-              </div>
+              <input
+                type="text"
+                value={fmtInput(chiPhiTraiTuyen.amount)}
+                onChange={(e) =>
+                  setChiPhiTraiTuyen({ ...chiPhiTraiTuyen, amount: stripNonDigits(e.target.value) })
+                }
+                style={inputStyle}
+                placeholder="0"
+              />
             </div>
             <div style={{ padding: "8px 12px" }}>
               <span style={costLabelStyle}>CẦU ĐƯỜNG</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <select
-                  value={cauDuong.id}
-                  onChange={(e) => selectCostSlot(setCauDuong, e.target.value)}
-                  style={{ ...inputStyle, flex: 2 }}
-                >
-                  {costSelectOpts}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={cauDuong.amount}
-                  onChange={(e) => setCauDuong({ ...cauDuong, amount: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="VND"
-                  disabled={!cauDuong.id}
-                />
-              </div>
+              <input
+                type="text"
+                value={fmtInput(cauDuong.amount)}
+                onChange={(e) =>
+                  setCauDuong({ ...cauDuong, amount: stripNonDigits(e.target.value) })
+                }
+                style={inputStyle}
+                placeholder="0"
+              />
             </div>
           </div>
           <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px" }}>
@@ -1010,16 +802,17 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             <div style={{ display: "flex", gap: 4 }}>
               <input
                 type="text"
-                value={chiPhiPhatSinh.name}
-                onChange={(e) => setChiPhiPhatSinh({ ...chiPhiPhatSinh, name: e.target.value })}
+                value={chiPhiPhatSinhName}
+                onChange={(e) => setChiPhiPhatSinhName(e.target.value)}
                 style={{ ...inputStyle, flex: 2 }}
                 placeholder="Mô tả chi phí..."
               />
               <input
-                type="number"
-                min={1}
-                value={chiPhiPhatSinh.amount}
-                onChange={(e) => setChiPhiPhatSinh({ ...chiPhiPhatSinh, amount: e.target.value })}
+                type="text"
+                value={fmtInput(chiPhiPhatSinh.amount)}
+                onChange={(e) =>
+                  setChiPhiPhatSinh({ ...chiPhiPhatSinh, amount: stripNonDigits(e.target.value) })
+                }
                 style={{ ...inputStyle, flex: 1 }}
                 placeholder="0"
               />
@@ -1076,6 +869,595 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   );
 }
 
+// ─── EDIT TRIP MODAL ────────────────────────────────────────────────────────
+
+function EditTripModal({
+  trip,
+  onClose,
+  onDone,
+}: {
+  trip: TripPlanRow;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const toast = useToast();
+  const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
+  const [customers, setCustomers] = useState<NamedOption[]>([]);
+  const [carriers, setCarriers] = useState<NamedOption[]>([]);
+  const [locations, setLocations] = useState<NamedOption[]>([]);
+  const [loadingRefs, setLoadingRefs] = useState(true);
+
+  const [tripDate, setTripDate] = useState(trip.tripDate ? trip.tripDate.slice(0, 10) : "");
+  const [serviceType, setServiceType] = useState<ServiceType>(
+    (trip.serviceType as ServiceType) ?? "SEA_EXPORT",
+  );
+  const [status, setStatus] = useState<TripStatus>(trip.status);
+  const [vehicleId, setVehicleId] = useState(trip.vehicle?.id ?? "");
+  const [customerId, setCustomerId] = useState(trip.customer?.id ?? "");
+  const [carrierId, setCarrierId] = useState(trip.carrier?.id ?? "");
+  const [containerSize, setContainerSize] = useState(trip.containerSize ?? "");
+  const [outboundContainerNumber, setOutboundContainerNumber] = useState(
+    trip.outboundContainerNumber ?? "",
+  );
+  const [inboundContainerNumber, setInboundContainerNumber] = useState(
+    trip.inboundContainerNumber ?? "",
+  );
+  const [pickupLocationId, setPickupLocationId] = useState(trip.pickupLocation?.id ?? "");
+  const [loadUnloadLocationId, setLoadUnloadLocationId] = useState(
+    trip.loadUnloadLocation?.id ?? "",
+  );
+  const [dropoffLocationId, setDropoffLocationId] = useState(trip.dropoffLocation?.id ?? "");
+  const [documentSentDate, setDocumentSentDate] = useState(
+    trip.documentSentDate ? trip.documentSentDate.slice(0, 10) : "",
+  );
+  const [description, setDescription] = useState(trip.description ?? "");
+  const [notes, setNotes] = useState(trip.notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const [phiNang, setPhiNang] = useState<CostSlotState>({
+    amount: trip.phiNangAmount != null ? String(trip.phiNangAmount) : "",
+    shd: trip.shdNang ?? "",
+  });
+  const [phiHa, setPhiHa] = useState<CostSlotState>({
+    amount: trip.phiHaAmount != null ? String(trip.phiHaAmount) : "",
+    shd: trip.shdHa ?? "",
+  });
+  const [phiVeSinh, setPhiVeSinh] = useState<CostSlotState>({
+    amount: trip.phiVeSinhAmount != null ? String(trip.phiVeSinhAmount) : "",
+    shd: trip.shdVeSinh ?? "",
+  });
+  const [phiCuoc, setPhiCuoc] = useState<CostSlotState>({
+    amount: trip.phiCuocAmount != null ? String(trip.phiCuocAmount) : "",
+    shd: "",
+  });
+  const [veCong, setVeCong] = useState<CostSlotState>({
+    amount: trip.veCongAmount != null ? String(trip.veCongAmount) : "",
+    shd: trip.shdVeCong ?? "",
+  });
+  const [chiPhiKhac, setChiPhiKhac] = useState<CostSlotState>({
+    amount: trip.chiPhiKhacAmount != null ? String(trip.chiPhiKhacAmount) : "",
+    shd: "",
+  });
+  const [chiPhiTraiTuyen, setChiPhiTraiTuyen] = useState<CostSlotState>({
+    amount: trip.chiPhiTraiTuyenAmount != null ? String(trip.chiPhiTraiTuyenAmount) : "",
+    shd: "",
+  });
+  const [cauDuong, setCauDuong] = useState<CostSlotState>({
+    amount: trip.cauDuongAmount != null ? String(trip.cauDuongAmount) : "",
+    shd: "",
+  });
+  const [chiPhiPhatSinh, setChiPhiPhatSinh] = useState<CostSlotState>({
+    amount: trip.chiPhiPhatSinhAmount != null ? String(trip.chiPhiPhatSinhAmount) : "",
+    shd: "",
+  });
+  const [chiPhiPhatSinhName, setChiPhiPhatSinhName] = useState(trip.chiPhiPhatSinhName ?? "");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/vehicles").then((r) => r.json()),
+      fetch("/api/customers").then((r) => r.json()),
+      fetch("/api/carriers").then((r) => r.json()),
+      fetch("/api/locations").then((r) => r.json()),
+    ])
+      .then(([v, c, ca, l]) => {
+        setVehicles(v);
+        setCustomers(c);
+        setCarriers(ca);
+        setLocations(l);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingRefs(false));
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!vehicleId || !customerId) {
+      setError("Vui lòng chọn xe và khách hàng");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+
+    const toNum = (s: string) => {
+      const n = Number(s);
+      return s && !isNaN(n) && n > 0 ? n : undefined;
+    };
+    const toStr = (s: string) => s.trim() || undefined;
+
+    try {
+      const res = await fetch(`/api/trip-plans/${trip.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tripDate,
+          serviceType,
+          status,
+          vehicleId,
+          customerId,
+          carrierId: carrierId || undefined,
+          containerSize: containerSize || undefined,
+          outboundContainerNumber: outboundContainerNumber || undefined,
+          inboundContainerNumber: inboundContainerNumber || undefined,
+          pickupLocationId: pickupLocationId || undefined,
+          loadUnloadLocationId: loadUnloadLocationId || undefined,
+          dropoffLocationId: dropoffLocationId || undefined,
+          documentSentDate: documentSentDate || undefined,
+          description: description || undefined,
+          notes: notes || undefined,
+          phiNangName: phiNang.amount ? "PHÍ NÂNG" : undefined,
+          phiNangAmount: toNum(phiNang.amount),
+          shdNang: toStr(phiNang.shd),
+          phiHaName: phiHa.amount ? "PHÍ HẠ" : undefined,
+          phiHaAmount: toNum(phiHa.amount),
+          shdHa: toStr(phiHa.shd),
+          phiVeSinhName: phiVeSinh.amount ? "PHÍ VỆ SINH" : undefined,
+          phiVeSinhAmount: toNum(phiVeSinh.amount),
+          shdVeSinh: toStr(phiVeSinh.shd),
+          phiCuocName: phiCuoc.amount ? "PHÍ CƯỢC" : undefined,
+          phiCuocAmount: toNum(phiCuoc.amount),
+          veCongName: veCong.amount ? "VÉ CỔNG" : undefined,
+          veCongAmount: toNum(veCong.amount),
+          shdVeCong: toStr(veCong.shd),
+          chiPhiKhacName: chiPhiKhac.amount ? "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM" : undefined,
+          chiPhiKhacAmount: toNum(chiPhiKhac.amount),
+          chiPhiTraiTuyenName: chiPhiTraiTuyen.amount
+            ? "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM"
+            : undefined,
+          chiPhiTraiTuyenAmount: toNum(chiPhiTraiTuyen.amount),
+          cauDuongName: cauDuong.amount ? "CẦU ĐƯỜNG" : undefined,
+          cauDuongAmount: toNum(cauDuong.amount),
+          chiPhiPhatSinhName: chiPhiPhatSinhName.trim() || undefined,
+          chiPhiPhatSinhAmount: toNum(chiPhiPhatSinh.amount),
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.message ?? "Lỗi không xác định");
+      }
+      toast.success("Cập nhật chuyến thành công");
+      onDone();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loadingRefs) {
+    return (
+      <Modal title="Sửa chuyến" onClose={onClose}>
+        <p style={{ color: "#64748b", fontSize: 13 }}>Đang tải dữ liệu...</p>
+      </Modal>
+    );
+  }
+
+  const locationOptions = [
+    <option key="" value="">
+      — Không chọn —
+    </option>,
+    ...locations.map((l) => (
+      <option key={l.id} value={l.id}>
+        {l.name}
+      </option>
+    )),
+  ];
+
+  return (
+    <Modal title="Sửa chuyến" onClose={onClose} wide>
+      <form onSubmit={handleSubmit}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.4fr 1fr 1fr",
+            alignItems: "start",
+            border: "1px solid #e2e8f0",
+            borderRadius: 8,
+            marginBottom: 14,
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
+            <div style={colHeaderStyle}>Chuyến đi</div>
+            <Field label="Ngày chuyến *">
+              <input
+                type="date"
+                value={tripDate}
+                onChange={(e) => setTripDate(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </Field>
+            <Field label="Loại dịch vụ *">
+              <select
+                value={serviceType}
+                onChange={(e) => setServiceType(e.target.value as ServiceType)}
+                style={inputStyle}
+              >
+                {ALL_SERVICE_TYPES.map((k) => (
+                  <option key={k} value={k}>
+                    {SERVICE_TYPE_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Trạng thái">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as TripStatus)}
+                style={inputStyle}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Xe *">
+              <select
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                style={inputStyle}
+                required
+              >
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.licensePlate}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Khách hàng *">
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+                style={inputStyle}
+                required
+              >
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Đơn vị vận chuyển">
+              <select
+                value={carrierId}
+                onChange={(e) => setCarrierId(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">— Không chọn —</option>
+                {carriers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
+            <div style={colHeaderStyle}>Container</div>
+            <Field label="Size Cont">
+              <input
+                type="text"
+                value={containerSize}
+                onChange={(e) => setContainerSize(e.target.value)}
+                style={inputStyle}
+                placeholder="40HC, 20GP..."
+              />
+            </Field>
+            <Field label="CONT ĐI">
+              <input
+                type="text"
+                value={outboundContainerNumber}
+                onChange={(e) => setOutboundContainerNumber(e.target.value)}
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="CONT VỀ">
+              <input
+                type="text"
+                value={inboundContainerNumber}
+                onChange={(e) => setInboundContainerNumber(e.target.value)}
+                style={inputStyle}
+              />
+            </Field>
+          </div>
+          <div style={{ padding: "14px 16px" }}>
+            <div style={colHeaderStyle}>Địa điểm</div>
+            <Field label="Điểm Lấy (R/H)">
+              <select
+                value={pickupLocationId}
+                onChange={(e) => setPickupLocationId(e.target.value)}
+                style={inputStyle}
+              >
+                {locationOptions}
+              </select>
+            </Field>
+            <Field label="Điểm Đóng/Rút">
+              <select
+                value={loadUnloadLocationId}
+                onChange={(e) => setLoadUnloadLocationId(e.target.value)}
+                style={inputStyle}
+              >
+                {locationOptions}
+              </select>
+            </Field>
+            <Field label="Điểm Hạ (R/H)">
+              <select
+                value={dropoffLocationId}
+                onChange={(e) => setDropoffLocationId(e.target.value)}
+                style={inputStyle}
+              >
+                {locationOptions}
+              </select>
+            </Field>
+          </div>
+        </div>
+
+        <div
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: 8,
+            marginBottom: 14,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#6366f1",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              padding: "8px 12px",
+              borderBottom: "1px solid #e2e8f0",
+              background: "#f8f7ff",
+            }}
+          >
+            Chi phí chuyến
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+            <div
+              style={{
+                padding: "8px 12px",
+                borderBottom: "1px solid #e2e8f0",
+                borderRight: "1px solid #e2e8f0",
+              }}
+            >
+              <span style={costLabelStyle}>PHÍ NÂNG</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <input
+                  type="text"
+                  value={fmtInput(phiNang.amount)}
+                  onChange={(e) =>
+                    setPhiNang({ ...phiNang, amount: stripNonDigits(e.target.value) })
+                  }
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="0"
+                />
+                <input
+                  type="text"
+                  value={phiNang.shd}
+                  onChange={(e) => setPhiNang({ ...phiNang, shd: e.target.value })}
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="SHĐ"
+                />
+              </div>
+            </div>
+            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
+              <span style={costLabelStyle}>PHÍ HẠ</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <input
+                  type="text"
+                  value={fmtInput(phiHa.amount)}
+                  onChange={(e) => setPhiHa({ ...phiHa, amount: stripNonDigits(e.target.value) })}
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="0"
+                />
+                <input
+                  type="text"
+                  value={phiHa.shd}
+                  onChange={(e) => setPhiHa({ ...phiHa, shd: e.target.value })}
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="SHĐ"
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                padding: "8px 12px",
+                borderBottom: "1px solid #e2e8f0",
+                borderRight: "1px solid #e2e8f0",
+              }}
+            >
+              <span style={costLabelStyle}>PHÍ VỆ SINH</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <input
+                  type="text"
+                  value={fmtInput(phiVeSinh.amount)}
+                  onChange={(e) =>
+                    setPhiVeSinh({ ...phiVeSinh, amount: stripNonDigits(e.target.value) })
+                  }
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="0"
+                />
+                <input
+                  type="text"
+                  value={phiVeSinh.shd}
+                  onChange={(e) => setPhiVeSinh({ ...phiVeSinh, shd: e.target.value })}
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="SHĐ"
+                />
+              </div>
+            </div>
+            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
+              <span style={costLabelStyle}>PHÍ CƯỢC</span>
+              <input
+                type="text"
+                value={fmtInput(phiCuoc.amount)}
+                onChange={(e) => setPhiCuoc({ ...phiCuoc, amount: stripNonDigits(e.target.value) })}
+                style={inputStyle}
+                placeholder="0"
+              />
+            </div>
+            <div
+              style={{
+                padding: "8px 12px",
+                borderBottom: "1px solid #e2e8f0",
+                borderRight: "1px solid #e2e8f0",
+              }}
+            >
+              <span style={costLabelStyle}>VÉ CỔNG</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <input
+                  type="text"
+                  value={fmtInput(veCong.amount)}
+                  onChange={(e) => setVeCong({ ...veCong, amount: stripNonDigits(e.target.value) })}
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="0"
+                />
+                <input
+                  type="text"
+                  value={veCong.shd}
+                  onChange={(e) => setVeCong({ ...veCong, shd: e.target.value })}
+                  style={{ ...inputStyle, flex: 1 }}
+                  placeholder="SHĐ"
+                />
+              </div>
+            </div>
+            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
+              <span style={costLabelStyle}>CHI PHÍ KHÁC / PHÍ ĐỨT TEM</span>
+              <input
+                type="text"
+                value={fmtInput(chiPhiKhac.amount)}
+                onChange={(e) =>
+                  setChiPhiKhac({ ...chiPhiKhac, amount: stripNonDigits(e.target.value) })
+                }
+                style={inputStyle}
+                placeholder="0"
+              />
+            </div>
+            <div style={{ padding: "8px 12px", borderRight: "1px solid #e2e8f0" }}>
+              <span style={costLabelStyle}>TRÁI TUYẾN / CHỈ ĐỊNH / BP CAM</span>
+              <input
+                type="text"
+                value={fmtInput(chiPhiTraiTuyen.amount)}
+                onChange={(e) =>
+                  setChiPhiTraiTuyen({ ...chiPhiTraiTuyen, amount: stripNonDigits(e.target.value) })
+                }
+                style={inputStyle}
+                placeholder="0"
+              />
+            </div>
+            <div style={{ padding: "8px 12px" }}>
+              <span style={costLabelStyle}>CẦU ĐƯỜNG</span>
+              <input
+                type="text"
+                value={fmtInput(cauDuong.amount)}
+                onChange={(e) =>
+                  setCauDuong({ ...cauDuong, amount: stripNonDigits(e.target.value) })
+                }
+                style={inputStyle}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px" }}>
+            <span style={costLabelStyle}>CHI PHÍ PHÁT SINH KHÁC (THANH LÝ - CHI HỘ)</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              <input
+                type="text"
+                value={chiPhiPhatSinhName}
+                onChange={(e) => setChiPhiPhatSinhName(e.target.value)}
+                style={{ ...inputStyle, flex: 2 }}
+                placeholder="Mô tả chi phí..."
+              />
+              <input
+                type="text"
+                value={fmtInput(chiPhiPhatSinh.amount)}
+                onChange={(e) =>
+                  setChiPhiPhatSinh({ ...chiPhiPhatSinh, amount: stripNonDigits(e.target.value) })
+                }
+                style={{ ...inputStyle, flex: 1 }}
+                placeholder="0"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "auto 1fr 1fr",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <Field label="Ngày gửi CT">
+            <input
+              type="date"
+              value={documentSentDate}
+              onChange={(e) => setDocumentSentDate(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+          <Field label="Nội dung">
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+          <Field label="Ghi chú">
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+        </div>
+
+        {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+          <button type="button" onClick={onClose} style={btnSecondary}>
+            Hủy
+          </button>
+          <button type="submit" disabled={loading} style={btnPrimary}>
+            {loading ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ─── PAGINATION ───────────────────────────────────────────────────────────────
 
 function getPageNumbers(current: number, total: number): number[] {
@@ -1088,12 +1470,12 @@ function getPageNumbers(current: number, total: number): number[] {
 // ─── MAIN PAGE ───────────────────────────────────────────────────────────────
 
 export default function TripPlansPage() {
+  const toast = useToast();
   const [trips, setTrips] = useState<TripPlanRow[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [rawSearch, setRawSearch] = useState("");
@@ -1101,7 +1483,7 @@ export default function TripPlansPage() {
   const [filterCarriers, setFilterCarriers] = useState<NamedOption[]>([]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [costModalTripId, setCostModalTripId] = useState<string | null>(null);
+  const [editingTrip, setEditingTrip] = useState<TripPlanRow | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -1141,7 +1523,6 @@ export default function TripPlansPage() {
           setTrips(data.data);
           setTotal(data.meta.total);
           setTotalPages(data.meta.totalPages);
-          setActionError(null);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Lỗi không xác định");
@@ -1159,21 +1540,18 @@ export default function TripPlansPage() {
     setFilters((f) => ({ ...f, [key]: value, page: 1 }));
   }
 
-  async function handleStatusUpdate(id: string, status: TripStatus) {
-    setActionError(null);
+  async function handleDelete(id: string) {
+    if (!window.confirm("Bạn có chắc muốn xóa chuyến này không?")) return;
     try {
-      const res = await fetch(`/api/trip-plans/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
+      const res = await fetch(`/api/trip-plans/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message ?? "Lỗi cập nhật");
+        throw new Error(d.message ?? "Lỗi xóa");
       }
+      toast.success("Xóa chuyến thành công");
       setFilters((f) => ({ ...f }));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Lỗi không xác định");
+      toast.error(err instanceof Error ? err.message : "Lỗi không xác định");
     }
   }
 
@@ -1228,12 +1606,12 @@ export default function TripPlansPage() {
           }}
         />
       )}
-      {costModalTripId && (
-        <CostModal
-          tripId={costModalTripId}
-          onClose={() => setCostModalTripId(null)}
+      {editingTrip && (
+        <EditTripModal
+          trip={editingTrip}
+          onClose={() => setEditingTrip(null)}
           onDone={() => {
-            setCostModalTripId(null);
+            setEditingTrip(null);
             setFilters((f) => ({ ...f }));
           }}
         />
@@ -1406,21 +1784,6 @@ export default function TripPlansPage() {
         )}
       </div>
 
-      {actionError && (
-        <p
-          style={{
-            color: "#dc2626",
-            background: "#fef2f2",
-            padding: "10px 14px",
-            borderRadius: 8,
-            fontSize: 13,
-            marginBottom: 16,
-          }}
-        >
-          {actionError}
-        </p>
-      )}
-
       {/* Table */}
       {loading ? (
         <p style={{ color: "#64748b", fontSize: 14 }}>Đang tải...</p>
@@ -1481,16 +1844,12 @@ export default function TripPlansPage() {
                   </tr>
                 ) : (
                   trips.map((trip, i) => {
-                    const next = NEXT_STATUS[trip.status];
-                    const isTerminal = TERMINAL.includes(trip.status);
                     const rowBg = i % 2 === 0 ? "#fff" : "#fafafa";
 
                     return (
                       <tr key={trip.id} style={{ background: rowBg }}>
                         <td style={tdStyle}>{trip.tripNumber ?? "—"}</td>
-                        <td style={tdStyle}>
-                          {new Date(trip.tripDate).toLocaleDateString("vi-VN")}
-                        </td>
+                        <td style={tdStyle}>{formatDate(trip.tripDate)}</td>
                         <td style={tdMono}>{trip.vehicle?.licensePlate ?? "—"}</td>
                         <td style={tdStyle}>{trip.customer?.name ?? "—"}</td>
                         <td style={tdStyle}>
@@ -1516,11 +1875,7 @@ export default function TripPlansPage() {
                             )}
                           </Fragment>
                         ))}
-                        <td style={tdStyle}>
-                          {trip.documentSentDate
-                            ? new Date(trip.documentSentDate).toLocaleDateString("vi-VN")
-                            : ""}
-                        </td>
+                        <td style={tdStyle}>{formatDate(trip.documentSentDate)}</td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           {fmt(trip.chiPhiPhatSinhAmount)}
                         </td>
@@ -1542,56 +1897,36 @@ export default function TripPlansPage() {
                           </span>
                         </td>
                         <td style={tdStyle}>
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                            {next && (
-                              <button
-                                onClick={() => handleStatusUpdate(trip.id, next.status)}
-                                style={{
-                                  padding: "3px 8px",
-                                  fontSize: 11,
-                                  fontWeight: 500,
-                                  background: "#2563eb",
-                                  color: "#fff",
-                                  border: "none",
-                                  borderRadius: 4,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                {next.label}
-                              </button>
-                            )}
-                            {!isTerminal && (
-                              <button
-                                onClick={() => handleStatusUpdate(trip.id, "CANCELLED")}
-                                style={{
-                                  padding: "3px 8px",
-                                  fontSize: 11,
-                                  background: "#fef2f2",
-                                  color: "#ef4444",
-                                  border: "1px solid #fecaca",
-                                  borderRadius: 4,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Hủy
-                              </button>
-                            )}
-                            {trip.status !== "CANCELLED" && (
-                              <button
-                                onClick={() => setCostModalTripId(trip.id)}
-                                style={{
-                                  padding: "3px 8px",
-                                  fontSize: 11,
-                                  background: "#f0fdf4",
-                                  color: "#16a34a",
-                                  border: "1px solid #bbf7d0",
-                                  borderRadius: 4,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                + Chi phí
-                              </button>
-                            )}
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              onClick={() => setEditingTrip(trip)}
+                              style={{
+                                padding: "3px 8px",
+                                fontSize: 11,
+                                fontWeight: 500,
+                                background: "#f0f9ff",
+                                color: "#0369a1",
+                                border: "1px solid #bae6fd",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Sửa
+                            </button>
+                            <button
+                              onClick={() => handleDelete(trip.id)}
+                              style={{
+                                padding: "3px 8px",
+                                fontSize: 11,
+                                background: "#fef2f2",
+                                color: "#ef4444",
+                                border: "1px solid #fecaca",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Xóa
+                            </button>
                           </div>
                         </td>
                       </tr>

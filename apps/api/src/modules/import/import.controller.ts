@@ -1,13 +1,14 @@
 import {
   Controller,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
   BadRequestException,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../audit/roles.guard";
 import { ImportService } from "./import.service";
@@ -20,12 +21,21 @@ export class ImportController {
   constructor(private readonly importService: ImportService) {}
 
   @Post("vehicles")
-  @ApiOperation({ summary: "Import vehicles, drivers, trailers from quản lý xe sheet (ADMIN only)" })
+  @ApiOperation({
+    summary:
+      "Import vehicle records from quản lý xe sheet (ADMIN only). Without ?confirm=true returns a preview with conflict analysis.",
+  })
+  @ApiQuery({
+    name: "confirm",
+    required: false,
+    type: Boolean,
+    description: "Set to true to execute the import; omit for preview only",
+  })
   @ApiConsumes("multipart/form-data")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
-  importVehicles(@UploadedFile() file: Express.Multer.File) {
+  importVehicles(@UploadedFile() file: Express.Multer.File, @Query("confirm") confirm?: string) {
     if (!file) throw new BadRequestException("No file uploaded");
-    return this.importService.importVehicles(file.buffer);
+    return this.importService.importVehicles(file.buffer, confirm === "true");
   }
 
   @Post("trip-plans")

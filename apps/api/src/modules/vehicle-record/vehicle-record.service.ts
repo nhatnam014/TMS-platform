@@ -15,7 +15,7 @@ export class VehicleRecordService {
   async findAll() {
     return this.prisma.vehicleRecord.findMany({
       include: { moocs: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
   }
 

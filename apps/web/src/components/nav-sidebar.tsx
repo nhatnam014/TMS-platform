@@ -1,9 +1,8 @@
 "use client";
 
+import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
 
 const BASE_NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -13,14 +12,12 @@ const BASE_NAV_ITEMS = [
   { href: "/drivers", label: "Tài xế" },
   { href: "/yard-moves", label: "Lệnh bãi" },
   { href: "/customers", label: "Khách hàng" },
-  { href: "/carriers", label: "Hãng xe" },
+  { href: "/carriers", label: "VENDOR" },
   { href: "/locations", label: "Địa điểm" },
-  { href: "/trip-costs", label: "Danh mục chi phí" },
 ];
 
 export function NavSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { role } = useAuth();
 
   const navItems = [
@@ -36,7 +33,7 @@ export function NavSidebar() {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    window.location.href = "/login";
   }
 
   return (

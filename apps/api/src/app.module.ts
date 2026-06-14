@@ -10,7 +10,6 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { ExportModule } from "./modules/export/export.module";
 import { ImportModule } from "./modules/import/import.module";
 import { LocationModule } from "./modules/location/location.module";
-import { TripCostModule } from "./modules/trip-cost/trip-cost.module";
 import { TripPlanModule } from "./modules/trip-plan/trip-plan.module";
 import { VehicleModule } from "./modules/vehicle/vehicle.module";
 import { VehicleRecordModule } from "./modules/vehicle-record/vehicle-record.module";
@@ -36,7 +35,6 @@ import { YardMoveModule } from "./modules/yard-move/yard-move.module";
     ExportModule,
     ImportModule,
     LocationModule,
-    TripCostModule,
     TripPlanModule,
     UserModule,
     VehicleModule,

@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import type { ImportResult } from "@tms/shared";
+import type { ImportResult, VehicleConflictEntry, VehicleImportPreviewResult } from "@tms/shared";
 import { parseQuanLyXe } from "./parsers/quanly-xe.parser";
 import { parseKeHoachXe } from "./parsers/kehoach-xe.parser";
 
@@ -13,160 +13,223 @@ export class ImportService {
     private readonly auditService: AuditService,
   ) {}
 
-  async importVehicles(buffer: Buffer): Promise<ImportResult> {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  async importVehicles(
+    buffer: Buffer,
+    confirm: boolean,
+  ): Promise<ImportResult | VehicleImportPreviewResult> {
+    let rows: ReturnType<typeof parseQuanLyXe>;
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      rows = parseQuanLyXe(workbook);
+    } catch (err) {
+      console.error("[import/vehicles] xlsx parse failed:", err);
+      throw new BadRequestException("File không hợp lệ hoặc không đúng định dạng .xlsx");
+    }
 
-    const rows = parseQuanLyXe(workbook);
-    const warnings: string[] = [];
     const errors: string[] = [];
-    let imported = 0;
 
-    let currentVehicleId: string | null = null;
+    // ── Phase 1: Preview (no writes) ──────────────────────────────────────────
+    if (!confirm) {
+      const conflicts: VehicleConflictEntry[] = [];
+      let toCreate = 0;
+
+      for (const row of rows) {
+        if (row.type !== "record") continue;
+
+        toCreate++;
+
+        if (row.bienSo) {
+          const conflict = await this.detectVehicleConflict(row.bienSo, row);
+          if (conflict) conflicts.push(conflict);
+        }
+      }
+
+      // Collect structural errors (mooc_continuation with no preceding record)
+      let hasRecord = false;
+      for (const row of rows) {
+        if (row.type === "record") {
+          hasRecord = true;
+          continue;
+        }
+        if (row.type === "mooc_continuation" && !hasRecord) {
+          errors.push(`Hàng ${row.rowNum}: mooc continuation nhưng chưa có xe nào, bỏ qua`);
+        }
+      }
+
+      return { toCreate, conflicts, errors };
+    }
+
+    // ── Phase 2: Execute (writes) ─────────────────────────────────────────────
+    const warnings: string[] = [];
+    let imported = 0;
+    let currentRecordId: string | null = null;
 
     for (const row of rows) {
       try {
-        if (row.type === "skip") {
-          if (row.reason) errors.push(row.reason);
-          continue;
-        }
+        if (row.type === "record") {
+          // Driver upsert — only when both name and phone are present
+          if (row.tenTaiXe && row.sdt) {
+            await this.findOrCreateDriver(row.tenTaiXe, row.sdt);
+          }
 
-        if (row.type === "vehicle" || row.type === "vehicle_driver") {
-          if (!row.licensePlate) {
-            errors.push(`Hàng ${row.rowNum}: thiếu số xe, bỏ qua`);
+          // Vehicle upsert (create or update on conflict)
+          if (row.bienSo) {
+            await this.upsertVehicle(row.bienSo, row);
+          }
+
+          const record = await this.prisma.vehicleRecord.create({
+            data: {
+              tenTaiXe: row.tenTaiXe ?? null,
+              sdt: row.sdt ?? null,
+              loaiXe: row.loaiXe ?? null,
+              bienSo: row.bienSo ?? null,
+              hanDangKiem: row.hanDangKiem ?? null,
+              hanBaoHiem: row.hanBaoHiem ?? null,
+              hanCaVet: row.hanCaVet ?? null,
+              ghiChu: row.ghiChu ?? null,
+              ...(row.soMooc
+                ? {
+                    moocs: {
+                      create: [
+                        {
+                          soMooc: row.soMooc,
+                          hanDangKiem: row.moocHanDangKiem ?? null,
+                          hanBaoHiem: row.moocHanBaoHiem ?? null,
+                          hanCaVet: row.moocHanCaVet ?? null,
+                        },
+                      ],
+                    },
+                  }
+                : {}),
+            },
+          });
+          currentRecordId = record.id;
+          imported++;
+        } else if (row.type === "mooc_continuation") {
+          if (!currentRecordId) {
+            errors.push(`Hàng ${row.rowNum}: mooc continuation nhưng chưa có xe nào, bỏ qua`);
             continue;
           }
-
-          const existingVehicle = await this.prisma.vehicle.findUnique({
-            where: { licensePlate: row.licensePlate },
-          });
-
-          const vehicle = await this.prisma.vehicle.upsert({
-            where: { licensePlate: row.licensePlate },
-            update: {
-              ...(row.inspectionExpiry !== undefined && { inspectionExpiry: row.inspectionExpiry }),
-              ...(row.insuranceExpiry !== undefined && { insuranceExpiry: row.insuranceExpiry }),
-              ...(row.vehicleType && { vehicleType: row.vehicleType }),
-            },
-            create: {
-              licensePlate: row.licensePlate,
-              vehicleType: row.vehicleType ?? "OTHER",
-              inspectionExpiry: row.inspectionExpiry,
-              insuranceExpiry: row.insuranceExpiry,
+          await this.prisma.vehicleRecordMooc.create({
+            data: {
+              vehicleRecordId: currentRecordId,
+              soMooc: row.soMooc ?? "",
+              hanDangKiem: row.moocHanDangKiem ?? null,
+              hanBaoHiem: row.moocHanBaoHiem ?? null,
+              hanCaVet: row.moocHanCaVet ?? null,
             },
           });
-
-          if (!existingVehicle) {
-            warnings.push(`Xe mới: ${row.licensePlate}`);
-          }
-
-          currentVehicleId = vehicle.id;
-          imported++;
-
-          if (row.type === "vehicle_driver" && row.driverName) {
-            const existingDriver = await this.prisma.driver.findUnique({
-              where: { vehicleId: vehicle.id },
-            });
-            await this.prisma.driver.upsert({
-              where: { vehicleId: vehicle.id },
-              update: {
-                fullName: row.driverName,
-                ...(row.driverPhone && { phone: row.driverPhone }),
-              },
-              create: {
-                fullName: row.driverName,
-                phone: row.driverPhone ?? null,
-                vehicleId: vehicle.id,
-              },
-            });
-            if (!existingDriver) {
-              warnings.push(`Tài xế mới: ${row.driverName} (xe ${row.licensePlate})`);
-            }
-          }
-
-          if (row.trailerNumber) {
-            await this.upsertTrailerAndLink(
-              row.trailerNumber,
-              vehicle.id,
-              row.trailerInspectionExpiry,
-              row.trailerInsuranceExpiry,
-              warnings,
-            );
-          }
-        } else if (row.type === "trailer_orphan") {
-          if (!row.trailerNumber) continue;
-          const existingTrailer = await this.prisma.trailer.findUnique({
-            where: { trailerNumber: row.trailerNumber },
-          });
-          await this.prisma.trailer.upsert({
-            where: { trailerNumber: row.trailerNumber },
-            update: {},
-            create: {
-              trailerNumber: row.trailerNumber,
-              inspectionExpiry: row.trailerInspectionExpiry,
-              insuranceExpiry: row.trailerInsuranceExpiry,
-            },
-          });
-          if (!existingTrailer) warnings.push(`Rơ moóc mới (không có xe): ${row.trailerNumber}`);
-        } else if (row.type === "trailer_continuation") {
-          if (!row.trailerNumber) continue;
-          await this.upsertTrailerAndLink(
-            row.trailerNumber,
-            currentVehicleId,
-            row.trailerInspectionExpiry,
-            row.trailerInsuranceExpiry,
-            warnings,
-          );
         }
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
-    await this.auditService.log({
-      action: "CREATE",
-      entityType: "Vehicle",
-      summary: `Excel import: ${imported} xe/tài xế/rơ moóc, ${warnings.length} cảnh báo, ${errors.length} lỗi`,
-    });
+    try {
+      await this.auditService.log({
+        action: "CREATE",
+        entityType: "VehicleRecord",
+        summary: `Excel import: ${imported} bản ghi quản lý xe, ${errors.length} lỗi`,
+      });
+    } catch (err) {
+      console.error("Audit log failed (non-fatal):", err);
+    }
 
     return { imported, warnings, errors };
   }
 
-  private async upsertTrailerAndLink(
-    trailerNumber: string,
-    vehicleId: string | null,
-    inspectionExpiry: Date | null | undefined,
-    insuranceExpiry: Date | null | undefined,
-    warnings: string[],
-  ) {
-    const existingTrailer = await this.prisma.trailer.findUnique({ where: { trailerNumber } });
-    const trailer = await this.prisma.trailer.upsert({
-      where: { trailerNumber },
-      update: {},
-      create: {
-        trailerNumber,
-        inspectionExpiry: inspectionExpiry ?? null,
-        insuranceExpiry: insuranceExpiry ?? null,
-      },
+  private async findOrCreateDriver(fullName: string, phone: string) {
+    if (!fullName && !phone) return null;
+    const existing = await this.prisma.driver.findFirst({
+      where: { fullName, phone: phone || null },
     });
-    if (!existingTrailer) warnings.push(`Rơ moóc mới: ${trailerNumber}`);
+    if (existing) return existing;
+    return this.prisma.driver.create({
+      data: { fullName, phone: phone || null, status: "ACTIVE" },
+    });
+  }
 
-    if (vehicleId) {
-      const link = await this.prisma.vehicleTrailer.findFirst({
-        where: { vehicleId, trailerId: trailer.id },
+  private async detectVehicleConflict(
+    licensePlate: string,
+    row: ReturnType<typeof parseQuanLyXe>[number],
+  ): Promise<VehicleConflictEntry | null> {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { licensePlate } });
+    if (!vehicle) return null;
+
+    const fields: VehicleConflictEntry["fields"] = {};
+
+    if (row.loaiXe && vehicle.vehicleType !== row.loaiXe) {
+      fields["vehicleType"] = { current: vehicle.vehicleType, incoming: row.loaiXe };
+    }
+
+    const toDateStr = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+
+    const incomingInspection = toDateStr(row.hanDangKiem);
+    const currentInspection = toDateStr(vehicle.inspectionExpiry);
+    if (incomingInspection !== currentInspection) {
+      fields["inspectionExpiry"] = { current: currentInspection, incoming: incomingInspection };
+    }
+
+    const incomingInsurance = toDateStr(row.hanBaoHiem);
+    const currentInsurance = toDateStr(vehicle.insuranceExpiry);
+    if (incomingInsurance !== currentInsurance) {
+      fields["insuranceExpiry"] = { current: currentInsurance, incoming: incomingInsurance };
+    }
+
+    const incomingRegistration = toDateStr(row.hanCaVet);
+    const currentRegistration = toDateStr(vehicle.registrationExpiry);
+    if (incomingRegistration !== currentRegistration) {
+      fields["registrationExpiry"] = {
+        current: currentRegistration,
+        incoming: incomingRegistration,
+      };
+    }
+
+    if (Object.keys(fields).length === 0) return null;
+    return { licensePlate, fields };
+  }
+
+  private async upsertVehicle(licensePlate: string, row: ReturnType<typeof parseQuanLyXe>[number]) {
+    const existing = await this.prisma.vehicle.findUnique({ where: { licensePlate } });
+    const KNOWN_VEHICLE_TYPES = ["SHACMAN", "CHENGLONG", "HOWO", "FREIGHTLINER", "FAW", "OTHER"];
+    const vehicleType =
+      row.loaiXe && KNOWN_VEHICLE_TYPES.includes(row.loaiXe) ? (row.loaiXe as any) : "OTHER";
+
+    if (existing) {
+      await this.prisma.vehicle.update({
+        where: { licensePlate },
+        data: {
+          vehicleType,
+          inspectionExpiry: row.hanDangKiem ?? null,
+          insuranceExpiry: row.hanBaoHiem ?? null,
+          registrationExpiry: row.hanCaVet ?? null,
+        },
       });
-      if (!link) {
-        await this.prisma.vehicleTrailer.create({ data: { vehicleId, trailerId: trailer.id } });
-      }
+    } else {
+      await this.prisma.vehicle.create({
+        data: {
+          licensePlate,
+          vehicleType,
+          inspectionExpiry: row.hanDangKiem ?? null,
+          insuranceExpiry: row.hanBaoHiem ?? null,
+          registrationExpiry: row.hanCaVet ?? null,
+        },
+      });
     }
   }
 
   async importTripPlans(buffer: Buffer): Promise<ImportResult> {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
-
     const warnings: string[] = [];
-    const rows = parseKeHoachXe(workbook, warnings);
+    let rows: ReturnType<typeof parseKeHoachXe>;
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      rows = parseKeHoachXe(workbook, warnings);
+    } catch (err) {
+      console.error("[import/trip-plans] xlsx parse failed:", err);
+      throw new BadRequestException("File không hợp lệ hoặc không đúng định dạng .xlsx");
+    }
     const errors: string[] = [];
     let imported = 0;
 
@@ -234,29 +297,13 @@ export class ImportService {
           });
 
           for (const costItem of row.costs ?? []) {
-            let tripCost = await tx.tripCost.findFirst({
-              where: { name: { equals: costItem.costName, mode: "insensitive" } },
-            });
-            if (!tripCost) {
-              warnings.push(`Chi phí mới tự tạo: ${costItem.costName}`);
-              tripCost = await tx.tripCost.create({ data: { name: costItem.costName } });
-            }
             await tx.tripPlanCost.create({
               data: {
                 tripPlanId: tripPlan.id,
-                tripCostId: tripCost.id,
+                costName: costItem.costName,
                 amount: costItem.amount,
                 invoiceNumber: costItem.invoiceNumber ?? null,
               },
-            });
-          }
-
-          const lastCost =
-            row.costs && row.costs.length > 0 ? row.costs[row.costs.length - 1] : null;
-          if (lastCost) {
-            await tx.tripPlan.update({
-              where: { id: tripPlan.id },
-              data: { tripCostName: lastCost.costName, tripCostAmount: lastCost.amount },
             });
           }
         });

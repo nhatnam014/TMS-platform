@@ -4,6 +4,8 @@
 
 The system SHALL provide `POST /api/v1/import/trip-plans` that accepts a multipart/form-data request with a field named `file` containing an `.xlsx` file. The endpoint MUST parse the "kế hoạch xe" sheet using the actual 31-column template header structure, insert TripPlan and TripPlanCost records, auto-create missing reference entities (Customer, Carrier, Location, Vehicle), and return `{ imported: number, warnings: string[], errors: string[] }` with HTTP 200. Container records are NOT created during import. The endpoint SHALL be restricted to users with role ADMIN.
 
+For each cost column with a non-zero value, the importer MUST create a `TripPlanCost` row with `costName` set directly to the cost column's label (e.g. "PHÍ NÂNG"). The endpoint MUST NOT look up or create any `TripCost` catalog entries. No warnings SHALL be emitted for cost names that are not in any catalog (the catalog no longer exists).
+
 The parser MUST map columns by their actual Vietnamese header names as they appear in the template:
 
 - Col 1: STT → `tripNumber`
@@ -18,24 +20,22 @@ The parser MUST map columns by their actual Vietnamese header names as they appe
 - Col 13: Điểm Lấy (R/H) → `pickupLocation`
 - Col 14: Điểm (Đóng/Rút) → `loadUnloadLocation`
 - Col 15: Điểm hạ (R/H) → `dropoffLocation`
-- Col 16: PHÍ NÂNG → cost amount for TripCost named "PHÍ NÂNG"
+- Col 16: PHÍ NÂNG → `costName: "PHÍ NÂNG"`, amount
 - Col 17: SHĐ NÂNG → invoiceNumber for PHÍ NÂNG cost
-- Col 18: PHÍ HẠ → cost amount for TripCost named "PHÍ HẠ"
+- Col 18: PHÍ HẠ → `costName: "PHÍ HẠ"`, amount
 - Col 19: SHĐ HẠ → invoiceNumber for PHÍ HẠ cost
-- Col 20: PHÍ VỆ SINH → cost amount for TripCost named "PHÍ VỆ SINH"
+- Col 20: PHÍ VỆ SINH → `costName: "PHÍ VỆ SINH"`, amount
 - Col 21: SHĐ → invoiceNumber for PHÍ VỆ SINH cost
-- Col 22: PHÍ CƯỢC → cost amount for TripCost named "PHÍ CƯỢC"
-- Col 23: VÉ CỔNG → cost amount for TripCost named "VÉ CỔNG"
+- Col 22: PHÍ CƯỢC → `costName: "PHÍ CƯỢC"`, amount
+- Col 23: VÉ CỔNG → `costName: "VÉ CỔNG"`, amount
 - Col 24: SHĐ → invoiceNumber for VÉ CỔNG cost
-- Col 25: CHI PHÍ KHÁC / PHÍ ĐỨT TEM → cost amount for TripCost named "PHÍ ĐỨT TEM"
-- Col 26: CHI PHÍ TRÁI TUYẾN / CHỈ ĐỊNH / BP CAM → cost amount for TripCost named "CHI PHÍ TRÁI TUYẾN"
-- Col 27: CẦU ĐƯỜNG → cost amount for TripCost named "CẦU ĐƯỜNG"
+- Col 25: CHI PHÍ KHÁC / PHÍ ĐỨT TEM → `costName: "PHÍ ĐỨT TEM"`, amount
+- Col 26: CHI PHÍ TRÁI TUYẾN / CHỈ ĐỊNH / BP CAM → `costName: "CHI PHÍ TRÁI TUYẾN"`, amount
+- Col 27: CẦU ĐƯỜNG → `costName: "CẦU ĐƯỜNG"`, amount
 - Col 28: NGÀY GỬI CT → `documentSentDate`
-- Col 29: CHI PHÍ PHÁT SINH KHÁC: THANH LÝ - CHI HỘ → cost amount for TripCost named "CHI PHÍ PHÁT SINH KHÁC"
+- Col 29: CHI PHÍ PHÁT SINH KHÁC: THANH LÝ - CHI HỘ → `costName: "CHI PHÍ PHÁT SINH KHÁC"`, amount
 - Col 30: NỘI DUNG → `description`
 - Col 31: GHI CHÚ → `notes`
-
-For each cost column that has a non-zero value, the importer MUST find or create a TripCost catalog item by that name and create a TripPlanCost row.
 
 #### Scenario: Valid upload returns import summary
 
@@ -62,20 +62,25 @@ For each cost column that has a non-zero value, the importer MUST find or create
 - **WHEN** a row has NỘI DUNG = "Hàng đặc biệt"
 - **THEN** the created TripPlan has `description = "Hàng đặc biệt"`
 
-#### Scenario: Cost columns create TripPlanCost rows
+#### Scenario: Cost columns create TripPlanCost rows without catalog lookup
 
-- **WHEN** a row has PHÍ NÂNG = 500000 and SHĐ NÂNG = "HD001"
-- **THEN** a TripPlanCost row is created with the TripCost named "PHÍ NÂNG", amount 500000, invoiceNumber "HD001"
+- **WHEN** an admin uploads a valid "kế hoạch xe" Excel file with PHÍ NÂNG = 500000 and SHĐ NÂNG = "HD001"
+- **THEN** a TripPlanCost row is created with `costName = "PHÍ NÂNG"`, `amount = 500000`, `invoiceNumber = "HD001"` — no TripCost row is created or looked up
+
+#### Scenario: No "Chi phí mới tự tạo" warnings in import result
+
+- **WHEN** an admin imports a file with cost column values
+- **THEN** the `warnings` array does NOT contain any "Chi phí mới tự tạo" messages
 
 #### Scenario: Zero or blank cost columns are skipped
 
 - **WHEN** a row has an empty or zero value in a cost column
 - **THEN** no TripPlanCost row is created for that cost type
 
-#### Scenario: TripCost catalog item auto-created if not found
+#### Scenario: TripPlanCost rows have no tripCostId
 
-- **WHEN** a cost column has a value but no TripCost with that name exists
-- **THEN** a new TripCost catalog item is created with that name and a warning is added
+- **WHEN** the import creates TripPlanCost rows
+- **THEN** those rows have `costName` set and `tripCostId` does not exist on the model (column was dropped)
 
 #### Scenario: Non-admin role is rejected
 
@@ -88,3 +93,8 @@ For each cost column that has a non-zero value, the importer MUST find or create
 
 **Reason**: Container size is now stored as a plain string on TripPlan (`containerSize` field). No enum or normalization is needed.
 **Migration**: Read SIZE CONT column (col 7) as a plain string and assign to `TripPlan.containerSize`.
+
+### Requirement: TripCost catalog item auto-created if not found during import
+
+**Reason**: The TripCost catalog no longer exists. Cost names are stored directly on TripPlanCost rows.
+**Migration**: Remove any `tripCost.findFirst` / `tripCost.create` logic; use `costName` directly on TripPlanCost creation.

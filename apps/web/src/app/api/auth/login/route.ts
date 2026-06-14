@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: false, // Set to false for HTTP, or use HTTPS in production
+    secure: false,
+    maxAge: 604800,
   });
 
   return response;
