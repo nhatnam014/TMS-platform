@@ -11,6 +11,33 @@ import type {
 import { ENTITY_TYPES } from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 
+const TRIP_PLAN_INCLUDE = {
+  vehicle: { select: { id: true, licensePlate: true, vehicleType: true } },
+  customer: { select: { id: true, code: true, name: true } },
+  carrier: { select: { id: true, code: true, name: true } },
+  serviceTypeMaster: { select: { id: true, code: true, description: true } },
+  containerSize: { select: { id: true, code: true, name: true } },
+  costs: {
+    select: {
+      id: true,
+      costName: true,
+      amount: true,
+      invoiceNumber: true,
+    },
+  },
+} as const;
+
+function mapCosts(
+  costs: { id: string; costName: string | null; amount: any; invoiceNumber: string | null }[],
+) {
+  return costs.map((c) => ({
+    id: c.id,
+    costName: c.costName ?? null,
+    amount: Number(c.amount),
+    invoiceNumber: c.invoiceNumber ?? null,
+  }));
+}
+
 @Injectable()
 export class TripPlanService {
   constructor(
@@ -38,7 +65,9 @@ export class TripPlanService {
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.carrierId) where.carrierId = filters.carrierId;
     if (filters.vehicleId) where.vehicleId = filters.vehicleId;
-    if (filters.serviceType) where.serviceType = filters.serviceType as any;
+    if (filters.serviceTypeCode) {
+      (where as any).serviceTypeMaster = { code: filters.serviceTypeCode };
+    }
     if (filters.status) where.status = filters.status as any;
 
     if (filters.search) {
@@ -60,34 +89,15 @@ export class TripPlanService {
         skip,
         take: limit,
         orderBy: { [sortBy]: sortOrder },
-        include: {
-          vehicle: { select: { id: true, licensePlate: true, vehicleType: true } },
-          customer: { select: { id: true, code: true, name: true } },
-          carrier: { select: { id: true, code: true, name: true } },
-          pickupLocation: { select: { id: true, code: true, name: true } },
-          loadUnloadLocation: { select: { id: true, code: true, name: true } },
-          dropoffLocation: { select: { id: true, code: true, name: true } },
-          costs: {
-            select: {
-              id: true,
-              costName: true,
-              amount: true,
-              invoiceNumber: true,
-            },
-          },
-        },
+        include: TRIP_PLAN_INCLUDE,
       }),
       this.prisma.tripPlan.count({ where }),
     ]);
 
     const mapped = data.map((tp: any) => ({
       ...tp,
-      costs: tp.costs.map((c: any) => ({
-        id: c.id,
-        costName: c.costName ?? null,
-        amount: Number(c.amount),
-        invoiceNumber: c.invoiceNumber ?? null,
-      })),
+      serviceType: tp.serviceTypeMaster ?? null,
+      costs: mapCosts(tp.costs),
     }));
 
     return {
@@ -99,34 +109,15 @@ export class TripPlanService {
   async findOne(id: string) {
     const trip = await this.prisma.tripPlan.findUnique({
       where: { id },
-      include: {
-        vehicle: true,
-        customer: true,
-        carrier: true,
-        pickupLocation: true,
-        loadUnloadLocation: true,
-        dropoffLocation: true,
-        costs: {
-          select: {
-            id: true,
-            costName: true,
-            amount: true,
-            invoiceNumber: true,
-          },
-        },
-      },
+      include: TRIP_PLAN_INCLUDE,
     });
 
     if (!trip) throw new NotFoundException(`Trip plan ${id} not found`);
 
     return {
       ...trip,
-      costs: trip.costs.map((c: any) => ({
-        id: c.id,
-        costName: c.costName ?? null,
-        amount: Number(c.amount),
-        invoiceNumber: c.invoiceNumber ?? null,
-      })),
+      serviceType: (trip as any).serviceTypeMaster ?? null,
+      costs: mapCosts(trip.costs as any),
     };
   }
 
@@ -151,20 +142,20 @@ export class TripPlanService {
       const trip = await tx.tripPlan.create({
         data: {
           tripDate: new Date(dto.tripDate),
-          serviceType: dto.serviceType as any,
+          serviceTypeId: dto.serviceTypeId,
           tripMode,
           vehicleId: dto.vehicleId,
           customerId: dto.customerId,
-          carrierId: dto.carrierId,
-          containerSize: dto.containerSize ?? null,
+          carrierId: dto.carrierId ?? null,
+          containerSizeId: dto.containerSizeId ?? null,
           outboundContainerNumber: dto.outboundContainerNumber ?? null,
           inboundContainerNumber: dto.inboundContainerNumber ?? null,
-          pickupLocationId: dto.pickupLocationId,
-          loadUnloadLocationId: dto.loadUnloadLocationId,
-          dropoffLocationId: dto.dropoffLocationId,
+          pickupLocationName: dto.pickupLocationName ?? null,
+          loadUnloadLocationName: dto.loadUnloadLocationName ?? null,
+          dropoffLocationName: dto.dropoffLocationName ?? null,
           documentSentDate: dto.documentSentDate ? new Date(dto.documentSentDate) : null,
           description: dto.description ?? null,
-          notes: dto.notes,
+          notes: dto.notes ?? null,
           // Fixed cost slots
           phiNangName: dto.phiNangName ?? null,
           phiNangAmount: dto.phiNangAmount ?? null,
@@ -186,8 +177,6 @@ export class TripPlanService {
           chiPhiTraiTuyenAmount: dto.chiPhiTraiTuyenAmount ?? null,
           cauDuongName: dto.cauDuongName ?? null,
           cauDuongAmount: dto.cauDuongAmount ?? null,
-          chiPhiPhatSinhName: dto.chiPhiPhatSinhName ?? null,
-          chiPhiPhatSinhAmount: dto.chiPhiPhatSinhAmount ?? null,
         },
         include: {
           vehicle: true,
@@ -195,6 +184,17 @@ export class TripPlanService {
           carrier: true,
         },
       });
+
+      if (dto.otherCosts && dto.otherCosts.length > 0) {
+        await tx.tripPlanCost.createMany({
+          data: dto.otherCosts.map((c) => ({
+            tripPlanId: trip.id,
+            costName: c.costName ?? null,
+            amount: c.amount,
+            invoiceNumber: c.invoiceNumber ?? null,
+          })),
+        });
+      }
 
       await this.auditService.log(
         {
@@ -244,23 +244,27 @@ export class TripPlanService {
         where: { id },
         data: {
           ...(dto.tripDate !== undefined && { tripDate: new Date(dto.tripDate) }),
-          ...(dto.serviceType !== undefined && { serviceType: dto.serviceType as any }),
+          ...(dto.serviceTypeId !== undefined && { serviceTypeId: dto.serviceTypeId }),
           ...(dto.tripMode !== undefined && { tripMode: dto.tripMode as any }),
           ...(dto.vehicleId !== undefined && { vehicleId: dto.vehicleId }),
           ...(dto.customerId !== undefined && { customerId: dto.customerId }),
           ...(dto.carrierId !== undefined && { carrierId: dto.carrierId }),
-          ...(dto.containerSize !== undefined && { containerSize: dto.containerSize }),
+          ...(dto.containerSizeId !== undefined && { containerSizeId: dto.containerSizeId }),
           ...(dto.outboundContainerNumber !== undefined && {
             outboundContainerNumber: dto.outboundContainerNumber,
           }),
           ...(dto.inboundContainerNumber !== undefined && {
             inboundContainerNumber: dto.inboundContainerNumber,
           }),
-          ...(dto.pickupLocationId !== undefined && { pickupLocationId: dto.pickupLocationId }),
-          ...(dto.loadUnloadLocationId !== undefined && {
-            loadUnloadLocationId: dto.loadUnloadLocationId,
+          ...(dto.pickupLocationName !== undefined && {
+            pickupLocationName: dto.pickupLocationName,
           }),
-          ...(dto.dropoffLocationId !== undefined && { dropoffLocationId: dto.dropoffLocationId }),
+          ...(dto.loadUnloadLocationName !== undefined && {
+            loadUnloadLocationName: dto.loadUnloadLocationName,
+          }),
+          ...(dto.dropoffLocationName !== undefined && {
+            dropoffLocationName: dto.dropoffLocationName,
+          }),
           ...(dto.documentSentDate !== undefined && {
             documentSentDate: dto.documentSentDate ? new Date(dto.documentSentDate) : null,
           }),
@@ -291,14 +295,22 @@ export class TripPlanService {
           }),
           ...(dto.cauDuongName !== undefined && { cauDuongName: dto.cauDuongName }),
           ...(dto.cauDuongAmount !== undefined && { cauDuongAmount: dto.cauDuongAmount }),
-          ...(dto.chiPhiPhatSinhName !== undefined && {
-            chiPhiPhatSinhName: dto.chiPhiPhatSinhName,
-          }),
-          ...(dto.chiPhiPhatSinhAmount !== undefined && {
-            chiPhiPhatSinhAmount: dto.chiPhiPhatSinhAmount,
-          }),
         },
       });
+
+      if (dto.otherCosts !== undefined) {
+        await tx.tripPlanCost.deleteMany({ where: { tripPlanId: id } });
+        if (dto.otherCosts.length > 0) {
+          await tx.tripPlanCost.createMany({
+            data: dto.otherCosts.map((c) => ({
+              tripPlanId: id,
+              costName: c.costName ?? null,
+              amount: c.amount,
+              invoiceNumber: c.invoiceNumber ?? null,
+            })),
+          });
+        }
+      }
 
       await this.auditService.log(
         {

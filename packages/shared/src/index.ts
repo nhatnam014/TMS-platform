@@ -102,6 +102,62 @@ export interface UpdateLocationDto {
   isActive?: boolean;
 }
 
+// ---------- Master Table Row Types ----------
+export interface ServiceTypeRow {
+  id: string;
+  code: string;
+  description: string;
+  isActive: boolean;
+}
+
+export interface ContainerSizeRow {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface CostTemplateRow {
+  id: string;
+  name: string;
+  defaultAmount: number | null;
+  isActive: boolean;
+}
+
+// ---------- Master Table DTOs ----------
+export interface CreateServiceTypeDto {
+  code: string;
+  description: string;
+}
+
+export interface UpdateServiceTypeDto {
+  code?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface CreateContainerSizeDto {
+  code: string;
+  name: string;
+}
+
+export interface UpdateContainerSizeDto {
+  code?: string;
+  name?: string;
+  isActive?: boolean;
+}
+
+export interface CreateCostTemplateDto {
+  name: string;
+  defaultAmount?: number;
+}
+
+export interface UpdateCostTemplateDto {
+  name?: string;
+  defaultAmount?: number | null;
+  isActive?: boolean;
+}
+
 // ---------- Trip Plan ----------
 export interface TripPlanCostItem {
   id: string;
@@ -110,23 +166,29 @@ export interface TripPlanCostItem {
   invoiceNumber?: string | null;
 }
 
+export interface OtherCostItem {
+  costName?: string;
+  amount: number;
+  invoiceNumber?: string;
+}
+
 export interface CreateTripPlanDto {
   tripDate: string;
-  serviceType: ServiceType;
+  serviceTypeId: string;
   tripMode?: TripMode;
   vehicleId: string;
   customerId: string;
   carrierId?: string;
-  containerSize?: string;
+  containerSizeId?: string;
   outboundContainerNumber?: string;
   inboundContainerNumber?: string;
-  pickupLocationId?: string;
-  loadUnloadLocationId?: string;
-  dropoffLocationId?: string;
+  pickupLocationName?: string;
+  loadUnloadLocationName?: string;
+  dropoffLocationName?: string;
   documentSentDate?: string;
   description?: string;
   notes?: string;
-  // Fixed cost slots
+  // Fixed cost slots (8)
   phiNangName?: string;
   phiNangAmount?: number;
   shdNang?: string;
@@ -147,8 +209,8 @@ export interface CreateTripPlanDto {
   chiPhiTraiTuyenAmount?: number;
   cauDuongName?: string;
   cauDuongAmount?: number;
-  chiPhiPhatSinhName?: string;
-  chiPhiPhatSinhAmount?: number;
+  // Multiple other-cost rows
+  otherCosts?: OtherCostItem[];
 }
 
 export interface AddTripPlanCostDto {
@@ -159,17 +221,17 @@ export interface AddTripPlanCostDto {
 
 export interface UpdateTripPlanDto {
   tripDate?: string;
-  serviceType?: ServiceType;
+  serviceTypeId?: string;
   tripMode?: TripMode;
   vehicleId?: string;
   customerId?: string;
   carrierId?: string;
-  containerSize?: string;
+  containerSizeId?: string;
   outboundContainerNumber?: string;
   inboundContainerNumber?: string;
-  pickupLocationId?: string;
-  loadUnloadLocationId?: string;
-  dropoffLocationId?: string;
+  pickupLocationName?: string;
+  loadUnloadLocationName?: string;
+  dropoffLocationName?: string;
   documentSentDate?: string;
   description?: string;
   notes?: string;
@@ -194,8 +256,7 @@ export interface UpdateTripPlanDto {
   chiPhiTraiTuyenAmount?: number;
   cauDuongName?: string;
   cauDuongAmount?: number;
-  chiPhiPhatSinhName?: string;
-  chiPhiPhatSinhAmount?: number;
+  otherCosts?: OtherCostItem[];
 }
 
 export interface TripPlanFilters {
@@ -204,7 +265,7 @@ export interface TripPlanFilters {
   customerId?: string;
   carrierId?: string;
   vehicleId?: string;
-  serviceType?: ServiceType;
+  serviceTypeCode?: string;
   status?: TripStatus;
   search?: string;
 }
@@ -240,7 +301,6 @@ export interface DashboardStats {
 }
 
 // ---------- Enums (mirrored from Prisma for frontend use) ----------
-export type ServiceType = "SEA_EXPORT" | "SEA_IMPORT" | "NEO_EXPORT" | "NEO_IMPORT";
 export type TripStatus = "PLANNED" | "DISPATCHED" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
 export type TripMode = "STANDARD" | "DROP_AND_HOOK";
 export type VehicleType = "SHACMAN" | "CHENGLONG" | "HOWO" | "FREIGHTLINER" | "FAW" | "OTHER";
@@ -325,7 +385,6 @@ export interface VehicleImportPreviewResult {
   errors: string[];
 }
 
-// ---------- Display helpers ----------
 // ---------- Vehicle Record Management (standalone, no FK) ----------
 export interface VehicleRecordMoocDto {
   soMooc: string;
@@ -357,11 +416,3 @@ export interface UpdateVehicleRecordDto {
   ghiChu?: string | null;
   moocs?: VehicleRecordMoocDto[];
 }
-
-// ---------- Display helpers ----------
-export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
-  SEA_EXPORT: "SEA - EX (Xuất khẩu đường biển)",
-  SEA_IMPORT: "SEA - IM (Nhập khẩu đường biển)",
-  NEO_EXPORT: "NEO - EX (Nội địa xuất)",
-  NEO_IMPORT: "NEO - IM (Nội địa nhập)",
-};

@@ -258,39 +258,36 @@ export class ImportService {
           carrierId = carrier.id;
         }
 
-        let pickupLocationId: string | undefined;
-        if (row.pickupLocation) {
-          const loc = await this.findOrCreateLocation(row.pickupLocation, warnings);
-          pickupLocationId = loc.id;
-        }
-
-        let loadUnloadLocationId: string | undefined;
-        if (row.loadUnloadLocation) {
-          const loc = await this.findOrCreateLocation(row.loadUnloadLocation, warnings);
-          loadUnloadLocationId = loc.id;
-        }
-
-        let dropoffLocationId: string | undefined;
-        if (row.dropoffLocation) {
-          const loc = await this.findOrCreateLocation(row.dropoffLocation, warnings);
-          dropoffLocationId = loc.id;
-        }
-
         await this.prisma.$transaction(async (tx) => {
+          const serviceTypeId = row.serviceTypeCode
+            ? (
+                await this.lookupOrCreateServiceType(
+                  row.serviceTypeCode,
+                  row.serviceTypeCode,
+                  warnings,
+                  tx,
+                )
+              ).id
+            : (await this.lookupOrCreateServiceType("SEA-EX", "SEA - EXPORT", warnings, tx)).id;
+
+          const containerSizeId = row.containerSizeCode
+            ? (await this.lookupOrCreateContainerSize(row.containerSizeCode, warnings, tx)).id
+            : null;
+
           const tripPlan = await tx.tripPlan.create({
             data: {
               tripDate: row.tripDate!,
               tripNumber: row.tripNumber ?? null,
-              serviceType: row.serviceType ?? "SEA_EXPORT",
+              serviceTypeId,
               vehicleId: vehicle.id,
               customerId: customer.id,
               carrierId: carrierId ?? null,
-              containerSize: row.containerSize ?? null,
+              containerSizeId,
               outboundContainerNumber: row.outboundContainerNumber ?? null,
               inboundContainerNumber: row.inboundContainerNumber ?? null,
-              pickupLocationId: pickupLocationId ?? null,
-              loadUnloadLocationId: loadUnloadLocationId ?? null,
-              dropoffLocationId: dropoffLocationId ?? null,
+              pickupLocationName: row.pickupLocationName ?? null,
+              loadUnloadLocationName: row.loadUnloadLocationName ?? null,
+              dropoffLocationName: row.dropoffLocationName ?? null,
               description: row.description ?? null,
               notes: row.notes ?? null,
             },
@@ -321,6 +318,29 @@ export class ImportService {
     });
 
     return { imported, warnings, errors };
+  }
+
+  private async lookupOrCreateServiceType(
+    code: string,
+    description: string,
+    warnings: string[],
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+  ) {
+    const existing = await tx.serviceTypeMaster.findUnique({ where: { code } });
+    if (existing) return existing;
+    warnings.push(`Tạo mới loại dịch vụ: ${code}`);
+    return tx.serviceTypeMaster.create({ data: { code, description } });
+  }
+
+  private async lookupOrCreateContainerSize(
+    code: string,
+    warnings: string[],
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+  ) {
+    const existing = await tx.containerSize.findUnique({ where: { code } });
+    if (existing) return existing;
+    warnings.push(`Tạo mới size cont: ${code}`);
+    return tx.containerSize.create({ data: { code, name: code } });
   }
 
   private async findOrCreateVehicle(licensePlate: string, warnings: string[]) {
@@ -356,17 +376,5 @@ export class ImportService {
     warnings.push(`Hãng xe mới tự tạo: ${name}`);
     const code = name.toUpperCase().replace(/\s+/g, "_").slice(0, 50);
     return this.prisma.carrier.create({ data: { code: `${code}_${Date.now()}`, name } });
-  }
-
-  private async findOrCreateLocation(name: string, warnings: string[]) {
-    const existing = await this.prisma.location.findFirst({
-      where: { name: { equals: name, mode: "insensitive" } },
-    });
-    if (existing) return existing;
-    warnings.push(`Địa điểm mới tự tạo: ${name}`);
-    const code = name.toUpperCase().replace(/\s+/g, "_").slice(0, 50);
-    return this.prisma.location.create({
-      data: { code: `${code}_${Date.now()}`, name, locationType: "OTHER" },
-    });
   }
 }

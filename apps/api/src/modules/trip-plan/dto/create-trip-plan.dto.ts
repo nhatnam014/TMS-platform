@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsNotEmpty,
@@ -7,20 +8,28 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  ValidateNested,
 } from "class-validator";
-import type { CreateTripPlanDto as ICreateTripPlanDto } from "@tms/shared";
+import { Type } from "class-transformer";
+import type { CreateTripPlanDto as ICreateTripPlanDto, OtherCostItem } from "@tms/shared";
 
-const SERVICE_TYPES = ["SEA_EXPORT", "SEA_IMPORT", "NEO_EXPORT", "NEO_IMPORT"] as const;
 const TRIP_MODES = ["STANDARD", "DROP_AND_HOOK"] as const;
+
+class OtherCostItemDto implements OtherCostItem {
+  @ApiPropertyOptional() @IsOptional() @IsString() costName?: string;
+  @ApiProperty() @IsNumber() @IsPositive() amount!: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() invoiceNumber?: string;
+}
 
 export class CreateTripPlanDto implements ICreateTripPlanDto {
   @ApiProperty({ example: "2026-05-19" })
   @IsDateString()
   tripDate!: string;
 
-  @ApiProperty({ enum: SERVICE_TYPES })
-  @IsEnum(SERVICE_TYPES)
-  serviceType!: (typeof SERVICE_TYPES)[number];
+  @ApiProperty({ example: "clxxx..." })
+  @IsString()
+  @IsNotEmpty()
+  serviceTypeId!: string;
 
   @ApiPropertyOptional({ enum: TRIP_MODES, default: "STANDARD" })
   @IsOptional()
@@ -42,10 +51,10 @@ export class CreateTripPlanDto implements ICreateTripPlanDto {
   @IsString()
   carrierId?: string;
 
-  @ApiPropertyOptional({ example: "40HC", description: "SIZE CONT — container size code" })
+  @ApiPropertyOptional({ example: "clxxx...", description: "Container size ID" })
   @IsOptional()
   @IsString()
-  containerSize?: string;
+  containerSizeId?: string;
 
   @ApiPropertyOptional({ example: "OOLU8990993" })
   @IsOptional()
@@ -57,20 +66,20 @@ export class CreateTripPlanDto implements ICreateTripPlanDto {
   @IsString()
   inboundContainerNumber?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: "Cảng Cát Lái" })
   @IsOptional()
   @IsString()
-  pickupLocationId?: string;
+  pickupLocationName?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: "KCN Sóng Thần" })
   @IsOptional()
   @IsString()
-  loadUnloadLocationId?: string;
+  loadUnloadLocationName?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: "ICD Phước Long" })
   @IsOptional()
   @IsString()
-  dropoffLocationId?: string;
+  dropoffLocationName?: string;
 
   @ApiPropertyOptional({ description: "NGÀY GỬI CT — document sent date" })
   @IsOptional()
@@ -117,6 +126,12 @@ export class CreateTripPlanDto implements ICreateTripPlanDto {
   @ApiPropertyOptional() @IsOptional() @IsString() cauDuongName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() cauDuongAmount?: number;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() chiPhiPhatSinhName?: string;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() chiPhiPhatSinhAmount?: number;
+  // ── Other costs (multiple rows) ────────────────────────────────
+
+  @ApiPropertyOptional({ type: [OtherCostItemDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OtherCostItemDto)
+  otherCosts?: OtherCostItemDto[];
 }
