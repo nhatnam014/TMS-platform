@@ -14,6 +14,9 @@ const BASE_NAV_ITEMS = [
   { href: "/customers", label: "Khách hàng" },
   { href: "/carriers", label: "VENDOR" },
   { href: "/locations", label: "Địa điểm" },
+  { href: "/service-types", label: "Loại dịch vụ" },
+  { href: "/container-sizes", label: "Size cont" },
+  { href: "/cost-templates", label: "Danh mục chi phí" },
 ];
 
 export function NavSidebar() {

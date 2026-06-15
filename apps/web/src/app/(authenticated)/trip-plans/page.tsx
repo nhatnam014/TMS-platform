@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState, Fragment } from "react";
-import type { PaginatedResponse, TripStatus, ServiceType, TripPlanCostItem } from "@tms/shared";
-import { SERVICE_TYPE_LABELS } from "@tms/shared";
+import { useEffect, useRef, useState, Fragment } from "react";
+import { createPortal } from "react-dom";
+import type { PaginatedResponse, TripStatus, TripPlanCostItem } from "@tms/shared";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
+import { Combobox, type ComboboxOption } from "@/components/Combobox";
+import { SelectInput } from "@/components/SelectInput";
 
-interface LocationRef {
-  id: string;
-  code: string;
-  name: string;
-}
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+
 interface VehicleOption {
   id: string;
   licensePlate: string;
@@ -21,26 +20,35 @@ interface NamedOption {
   code: string;
   name: string;
 }
+interface ServiceTypeOption {
+  id: string;
+  code: string;
+  description: string;
+}
+interface ContainerSizeOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface TripPlanRow {
   id: string;
   tripDate: string;
   tripNumber: number | null;
-  serviceType: string;
+  serviceType: { id: string; code: string; description: string } | null;
+  containerSize: { id: string; code: string; name: string } | null;
   status: TripStatus;
   vehicle: { id: string; licensePlate: string; vehicleType: string } | null;
   customer: { id: string; name: string } | null;
   carrier: { id: string; name: string } | null;
-  containerSize: string | null;
   outboundContainerNumber: string | null;
   inboundContainerNumber: string | null;
-  pickupLocation: LocationRef | null;
-  loadUnloadLocation: LocationRef | null;
-  dropoffLocation: LocationRef | null;
+  pickupLocationName: string | null;
+  loadUnloadLocationName: string | null;
+  dropoffLocationName: string | null;
   documentSentDate: string | null;
   description: string | null;
   notes: string | null;
-  tripCostName: string | null;
-  tripCostAmount: number | null;
   costs: TripPlanCostItem[];
   // Fixed cost slots
   phiNangName: string | null;
@@ -63,8 +71,6 @@ interface TripPlanRow {
   chiPhiTraiTuyenAmount: number | null;
   cauDuongName: string | null;
   cauDuongAmount: number | null;
-  chiPhiPhatSinhName: string | null;
-  chiPhiPhatSinhAmount: number | null;
 }
 
 interface FilterState {
@@ -73,7 +79,7 @@ interface FilterState {
   status: TripStatus | "";
   customerId: string;
   carrierId: string;
-  serviceType: ServiceType | "";
+  serviceTypeCode: string;
   search: string;
   page: number;
 }
@@ -84,7 +90,7 @@ const DEFAULT_FILTERS: FilterState = {
   status: "",
   customerId: "",
   carrierId: "",
-  serviceType: "",
+  serviceTypeCode: "",
   search: "",
   page: 1,
 };
@@ -103,12 +109,6 @@ const STATUS_COLORS: Record<TripStatus, string> = {
   COMPLETED: "#10b981",
   CANCELLED: "#ef4444",
 };
-const NEXT_STATUS: Partial<Record<TripStatus, { status: TripStatus; label: string }>> = {
-  PLANNED: { status: "DISPATCHED", label: "Điều xe" },
-  DISPATCHED: { status: "IN_TRANSIT", label: "Xuất phát" },
-  IN_TRANSIT: { status: "COMPLETED", label: "Hoàn thành" },
-};
-const TERMINAL: TripStatus[] = ["COMPLETED", "CANCELLED"];
 const ALL_STATUSES: TripStatus[] = [
   "PLANNED",
   "DISPATCHED",
@@ -116,7 +116,6 @@ const ALL_STATUSES: TripStatus[] = [
   "COMPLETED",
   "CANCELLED",
 ];
-const ALL_SERVICE_TYPES: ServiceType[] = ["SEA_EXPORT", "SEA_IMPORT", "NEO_EXPORT", "NEO_IMPORT"];
 
 const COST_COLUMNS: Array<{
   label: string;
@@ -163,6 +162,17 @@ const COST_COLUMNS: Array<{
   { label: "CẦU ĐƯỜNG", amountKey: "cauDuongAmount", nameKey: "cauDuongName" },
 ];
 
+const FIXED_SLOT_DEFAULTS = [
+  { key: "phiNang", defaultName: "PHÍ NÂNG", hasShd: true },
+  { key: "phiHa", defaultName: "PHÍ HẠ", hasShd: true },
+  { key: "phiVeSinh", defaultName: "PHÍ VỆ SINH", hasShd: true },
+  { key: "phiCuoc", defaultName: "PHÍ CƯỢC", hasShd: false },
+  { key: "veCong", defaultName: "VÉ CỔNG", hasShd: true },
+  { key: "chiPhiKhac", defaultName: "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM", hasShd: false },
+  { key: "chiPhiTraiTuyen", defaultName: "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM", hasShd: false },
+  { key: "cauDuong", defaultName: "CẦU ĐƯỜNG", hasShd: false },
+] as const;
+
 function fmt(n: number | string | null | undefined): string {
   if (n === null || n === undefined || n === "") return "";
   const num = typeof n === "number" ? n : Number(n);
@@ -170,12 +180,18 @@ function fmt(n: number | string | null | undefined): string {
   return num.toLocaleString("vi-VN");
 }
 
-function sizeTick(containerSize: string | null | undefined, prefix: string): string {
-  if (!containerSize) return "";
-  return containerSize.startsWith(prefix) ? "X" : "";
+function fmtInput(raw: string): string {
+  if (!raw) return "";
+  const n = Number(raw);
+  if (isNaN(n)) return raw;
+  return n.toLocaleString("vi-VN");
 }
 
-// ─── MODAL OVERLAY ──────────────────────────────────────────────────────────
+function stripNonDigits(v: string): string {
+  return v.replace(/\D/g, "");
+}
+
+// ─── Modal wrapper ────────────────────────────────────────────────────────────
 
 function Modal({
   title,
@@ -188,6 +204,14 @@ function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
     <div
       style={{
@@ -201,6 +225,7 @@ function Modal({
         paddingTop: 40,
         overflowY: "auto",
       }}
+      onWheel={(e) => e.stopPropagation()}
     >
       <div
         style={{
@@ -241,6 +266,137 @@ function Modal({
   );
 }
 
+// ─── 3-dot action menu ────────────────────────────────────────────────────────
+
+function ActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const open = pos !== null;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  function openMenu() {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }
+
+  function closeMenu() {
+    setPos(null);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (
+        !btnRef.current?.contains(e.target as Node) &&
+        !menuRef.current?.contains(e.target as Node)
+      ) {
+        closeMenu();
+      }
+    }
+    function onScroll() {
+      closeMenu();
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  const itemStyle: React.CSSProperties = {
+    display: "block",
+    width: "100%",
+    padding: "9px 16px",
+    textAlign: "left",
+    background: "none",
+    border: "none",
+    fontSize: 13,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+
+  const menu = (
+    <div
+      ref={menuRef}
+      style={{
+        position: "fixed",
+        top: pos?.top,
+        right: pos?.right,
+        zIndex: 9999,
+        background: "#fff",
+        border: "1px solid #e2e8f0",
+        borderRadius: 8,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        minWidth: 120,
+        overflow: "hidden",
+      }}
+    >
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onEdit();
+          closeMenu();
+        }}
+        style={{ ...itemStyle, color: "#0369a1" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "#f0f9ff";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "none";
+        }}
+      >
+        Sửa
+      </button>
+      <div style={{ height: 1, background: "#f1f5f9" }} />
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          onDelete();
+          closeMenu();
+        }}
+        style={{ ...itemStyle, color: "#ef4444" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "#fef2f2";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = "none";
+        }}
+      >
+        Xóa
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={open ? closeMenu : openMenu}
+        style={{
+          padding: "3px 9px",
+          background: open ? "#f1f5f9" : "transparent",
+          border: "1px solid #e2e8f0",
+          borderRadius: 4,
+          cursor: "pointer",
+          fontSize: 16,
+          color: "#475569",
+          lineHeight: 1.2,
+        }}
+      >
+        ⋮
+      </button>
+      {mounted && open && createPortal(menu, document.body)}
+    </>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "block", marginBottom: 14, width: "100%" }}>
@@ -268,6 +424,12 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   boxSizing: "border-box",
 };
+const inputLocked: React.CSSProperties = {
+  ...inputStyle,
+  background: "#f0fdf4",
+  border: "1px solid #86efac",
+  color: "#166534",
+};
 const btnPrimary: React.CSSProperties = {
   padding: "8px 18px",
   background: "#2563eb",
@@ -287,26 +449,6 @@ const btnSecondary: React.CSSProperties = {
   fontSize: 13,
   cursor: "pointer",
 };
-
-// ─── CREATE TRIP MODAL ───────────────────────────────────────────────────────
-
-interface CostSlotState {
-  amount: string;
-  shd: string;
-}
-const emptyCostSlot = (): CostSlotState => ({ amount: "", shd: "" });
-
-function fmtInput(raw: string): string {
-  if (!raw) return "";
-  const n = Number(raw);
-  if (isNaN(n)) return raw;
-  return n.toLocaleString("vi-VN");
-}
-
-function stripNonDigits(v: string): string {
-  return v.replace(/\D/g, "");
-}
-
 const colHeaderStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
@@ -330,121 +472,782 @@ const costLabelStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const toast = useToast();
+// ─── Fixed cost slot state helpers ───────────────────────────────────────────
+
+interface FixedSlotState {
+  name: string;
+  amount: string;
+  amountLocked: boolean;
+  shd: string;
+}
+type FixedSlotsState = Record<string, FixedSlotState>;
+
+function emptySlot(): FixedSlotState {
+  return { name: "", amount: "", amountLocked: false, shd: "" };
+}
+
+function initSlotsFromTrip(trip: TripPlanRow): FixedSlotsState {
+  return {
+    phiNang: {
+      name: trip.phiNangName ?? "",
+      amount: trip.phiNangAmount != null ? String(trip.phiNangAmount) : "",
+      amountLocked: false,
+      shd: trip.shdNang ?? "",
+    },
+    phiHa: {
+      name: trip.phiHaName ?? "",
+      amount: trip.phiHaAmount != null ? String(trip.phiHaAmount) : "",
+      amountLocked: false,
+      shd: trip.shdHa ?? "",
+    },
+    phiVeSinh: {
+      name: trip.phiVeSinhName ?? "",
+      amount: trip.phiVeSinhAmount != null ? String(trip.phiVeSinhAmount) : "",
+      amountLocked: false,
+      shd: trip.shdVeSinh ?? "",
+    },
+    phiCuoc: {
+      name: trip.phiCuocName ?? "",
+      amount: trip.phiCuocAmount != null ? String(trip.phiCuocAmount) : "",
+      amountLocked: false,
+      shd: "",
+    },
+    veCong: {
+      name: trip.veCongName ?? "",
+      amount: trip.veCongAmount != null ? String(trip.veCongAmount) : "",
+      amountLocked: false,
+      shd: trip.shdVeCong ?? "",
+    },
+    chiPhiKhac: {
+      name: trip.chiPhiKhacName ?? "",
+      amount: trip.chiPhiKhacAmount != null ? String(trip.chiPhiKhacAmount) : "",
+      amountLocked: false,
+      shd: "",
+    },
+    chiPhiTraiTuyen: {
+      name: trip.chiPhiTraiTuyenName ?? "",
+      amount: trip.chiPhiTraiTuyenAmount != null ? String(trip.chiPhiTraiTuyenAmount) : "",
+      amountLocked: false,
+      shd: "",
+    },
+    cauDuong: {
+      name: trip.cauDuongName ?? "",
+      amount: trip.cauDuongAmount != null ? String(trip.cauDuongAmount) : "",
+      amountLocked: false,
+      shd: "",
+    },
+  };
+}
+
+function defaultSlots(): FixedSlotsState {
+  const result: FixedSlotsState = {};
+  for (const _s of FIXED_SLOT_DEFAULTS) result[_s.key] = emptySlot();
+  return result;
+}
+
+function slotsToPayload(slots: FixedSlotsState) {
+  const toNum = (s: string) => {
+    const n = Number(s);
+    return s && !isNaN(n) && n > 0 ? n : undefined;
+  };
+  const toStr = (s: string) => s.trim() || undefined;
+  return {
+    phiNangName: toStr(slots.phiNang.name),
+    phiNangAmount: toNum(slots.phiNang.amount),
+    shdNang: toStr(slots.phiNang.shd),
+    phiHaName: toStr(slots.phiHa.name),
+    phiHaAmount: toNum(slots.phiHa.amount),
+    shdHa: toStr(slots.phiHa.shd),
+    phiVeSinhName: toStr(slots.phiVeSinh.name),
+    phiVeSinhAmount: toNum(slots.phiVeSinh.amount),
+    shdVeSinh: toStr(slots.phiVeSinh.shd),
+    phiCuocName: toStr(slots.phiCuoc.name),
+    phiCuocAmount: toNum(slots.phiCuoc.amount),
+    veCongName: toStr(slots.veCong.name),
+    veCongAmount: toNum(slots.veCong.amount),
+    shdVeCong: toStr(slots.veCong.shd),
+    chiPhiKhacName: toStr(slots.chiPhiKhac.name),
+    chiPhiKhacAmount: toNum(slots.chiPhiKhac.amount),
+    chiPhiTraiTuyenName: toStr(slots.chiPhiTraiTuyen.name),
+    chiPhiTraiTuyenAmount: toNum(slots.chiPhiTraiTuyen.amount),
+    cauDuongName: toStr(slots.cauDuong.name),
+    cauDuongAmount: toNum(slots.cauDuong.amount),
+  };
+}
+
+// ─── Other cost row ───────────────────────────────────────────────────────────
+
+interface OtherCostRow {
+  key: string;
+  name: string;
+  amount: string;
+  amountLocked: boolean;
+  invoiceNumber: string;
+}
+
+function newOtherCostRow(): OtherCostRow {
+  return {
+    key: String(Date.now() + Math.random()),
+    name: "",
+    amount: "",
+    amountLocked: false,
+    invoiceNumber: "",
+  };
+}
+
+// ─── CostSlotInput ────────────────────────────────────────────────────────────
+
+function CostSlotInput({
+  slotKey,
+  label,
+  slot,
+  onChange,
+  costOptions,
+  hasShd,
+}: {
+  slotKey: string;
+  label: string;
+  slot: FixedSlotState;
+  onChange: (key: string, patch: Partial<FixedSlotState>) => void;
+  costOptions: ComboboxOption[];
+  hasShd: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: "8px 12px",
+        borderBottom: "1px solid #e2e8f0",
+        borderRight: "1px solid #e2e8f0",
+      }}
+    >
+      <span style={costLabelStyle}>{label}</span>
+      <Combobox
+        options={costOptions}
+        value={slot.name}
+        onChange={(v) =>
+          onChange(slotKey, {
+            name: v,
+            amount: slot.amountLocked ? "" : slot.amount,
+            amountLocked: false,
+          })
+        }
+        onAmountAutofill={(amt) => {
+          if (amt != null) {
+            onChange(slotKey, { amount: String(amt), amountLocked: true });
+          } else {
+            onChange(slotKey, { amount: "", amountLocked: false });
+          }
+        }}
+        placeholder="Chọn hoặc nhập tên chi phí..."
+      />
+      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+        <input
+          type="text"
+          value={fmtInput(slot.amount)}
+          onChange={(e) =>
+            !slot.amountLocked && onChange(slotKey, { amount: stripNonDigits(e.target.value) })
+          }
+          style={slot.amountLocked ? { ...inputLocked, flex: 1 } : { ...inputStyle, flex: 1 }}
+          readOnly={slot.amountLocked}
+          placeholder="Số tiền"
+        />
+        {hasShd && (
+          <input
+            type="text"
+            value={slot.shd}
+            onChange={(e) => onChange(slotKey, { shd: e.target.value })}
+            style={{ ...inputStyle, flex: 1 }}
+            placeholder="SHĐ"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared form body ─────────────────────────────────────────────────────────
+
+function TripFormBody({
+  mode,
+  // Core fields
+  tripDate,
+  setTripDate,
+  serviceTypeId,
+  setServiceTypeId,
+  vehicleId,
+  setVehicleId,
+  customerId,
+  setCustomerId,
+  carrierId,
+  setCarrierId,
+  containerSizeId,
+  setContainerSizeId,
+  outboundContainerNumber,
+  setOutboundContainerNumber,
+  inboundContainerNumber,
+  setInboundContainerNumber,
+  pickupLocationName,
+  setPickupLocationName,
+  loadUnloadLocationName,
+  setLoadUnloadLocationName,
+  dropoffLocationName,
+  setDropoffLocationName,
+  documentSentDate,
+  setDocumentSentDate,
+  description,
+  setDescription,
+  notes,
+  setNotes,
+  // Status (edit only)
+  status,
+  setStatus,
+  // Fixed cost slots
+  slots,
+  setSlot,
+  // Other costs
+  otherCosts,
+  setOtherCosts,
+  // Reference data
+  vehicles,
+  customers,
+  carriers,
+  serviceTypes,
+  containerSizes,
+  locationOptions,
+  costTemplateOptions,
+  // Submit
+  onSubmit,
+  onClose,
+  loading,
+  error,
+}: {
+  mode: "create" | "edit";
+  tripDate: string;
+  setTripDate: (v: string) => void;
+  serviceTypeId: string;
+  setServiceTypeId: (v: string) => void;
+  vehicleId: string;
+  setVehicleId: (v: string) => void;
+  customerId: string;
+  setCustomerId: (v: string) => void;
+  carrierId: string;
+  setCarrierId: (v: string) => void;
+  containerSizeId: string;
+  setContainerSizeId: (v: string) => void;
+  outboundContainerNumber: string;
+  setOutboundContainerNumber: (v: string) => void;
+  inboundContainerNumber: string;
+  setInboundContainerNumber: (v: string) => void;
+  pickupLocationName: string;
+  setPickupLocationName: (v: string) => void;
+  loadUnloadLocationName: string;
+  setLoadUnloadLocationName: (v: string) => void;
+  dropoffLocationName: string;
+  setDropoffLocationName: (v: string) => void;
+  documentSentDate: string;
+  setDocumentSentDate: (v: string) => void;
+  description: string;
+  setDescription: (v: string) => void;
+  notes: string;
+  setNotes: (v: string) => void;
+  status?: TripStatus;
+  setStatus?: (v: TripStatus) => void;
+  slots: FixedSlotsState;
+  setSlot: (key: string, patch: Partial<FixedSlotState>) => void;
+  otherCosts: OtherCostRow[];
+  setOtherCosts: (rows: OtherCostRow[]) => void;
+  vehicles: VehicleOption[];
+  customers: NamedOption[];
+  carriers: NamedOption[];
+  serviceTypes: ServiceTypeOption[];
+  containerSizes: ContainerSizeOption[];
+  locationOptions: ComboboxOption[];
+  costTemplateOptions: ComboboxOption[];
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  onClose: () => void;
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <form onSubmit={onSubmit}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr 1fr 1fr",
+          alignItems: "start",
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          marginBottom: 14,
+          overflow: "hidden",
+        }}
+      >
+        {/* Chuyến đi */}
+        <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
+          <div style={colHeaderStyle}>Chuyến đi</div>
+          <Field label="Ngày chuyến *">
+            <input
+              type="date"
+              value={tripDate}
+              onChange={(e) => setTripDate(e.target.value)}
+              style={inputStyle}
+              required
+            />
+          </Field>
+          <Field label="Loại dịch vụ *">
+            <SelectInput
+              value={serviceTypeId}
+              onChange={setServiceTypeId}
+              options={serviceTypes.map((s) => ({
+                value: s.id,
+                label: `${s.code} — ${s.description}`,
+              }))}
+              placeholder="— Chọn loại dịch vụ —"
+              required
+            />
+          </Field>
+          {mode === "edit" && status && setStatus && (
+            <Field label="Trạng thái">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as TripStatus)}
+                style={inputStyle}
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <Field label="Xe *">
+            <SelectInput
+              value={vehicleId}
+              onChange={setVehicleId}
+              options={vehicles.map((v) => ({ value: v.id, label: v.licensePlate }))}
+              placeholder="— Chọn xe —"
+              required
+            />
+          </Field>
+          <Field label="Khách hàng *">
+            <SelectInput
+              value={customerId}
+              onChange={setCustomerId}
+              options={customers.map((c) => ({ value: c.id, label: c.name }))}
+              placeholder="— Chọn khách hàng —"
+              required
+            />
+          </Field>
+          <Field label="Đơn vị vận chuyển">
+            <SelectInput
+              value={carrierId}
+              onChange={setCarrierId}
+              options={[
+                { value: "", label: "— Không chọn —" },
+                ...carriers.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              placeholder="— Không chọn —"
+            />
+          </Field>
+        </div>
+        {/* Container */}
+        <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
+          <div style={colHeaderStyle}>Container</div>
+          <Field label="Size Cont">
+            <SelectInput
+              value={containerSizeId}
+              onChange={setContainerSizeId}
+              options={[
+                { value: "", label: "— Không chọn —" },
+                ...containerSizes.map((cs) => ({ value: cs.id, label: cs.code })),
+              ]}
+              placeholder="— Không chọn —"
+            />
+          </Field>
+          <Field label="CONT ĐI">
+            <input
+              type="text"
+              value={outboundContainerNumber}
+              onChange={(e) => setOutboundContainerNumber(e.target.value)}
+              style={inputStyle}
+              placeholder="OOLU8990993"
+            />
+          </Field>
+          <Field label="CONT VỀ">
+            <input
+              type="text"
+              value={inboundContainerNumber}
+              onChange={(e) => setInboundContainerNumber(e.target.value)}
+              style={inputStyle}
+              placeholder="OOLU8990993"
+            />
+          </Field>
+        </div>
+        {/* Địa điểm */}
+        <div style={{ padding: "14px 16px" }}>
+          <div style={colHeaderStyle}>Địa điểm</div>
+          <Field label="Điểm Lấy (R/H)">
+            <Combobox
+              options={locationOptions}
+              value={pickupLocationName}
+              onChange={setPickupLocationName}
+              placeholder="Nhập hoặc chọn địa điểm..."
+            />
+          </Field>
+          <Field label="Điểm Đóng/Rút">
+            <Combobox
+              options={locationOptions}
+              value={loadUnloadLocationName}
+              onChange={setLoadUnloadLocationName}
+              placeholder="Nhập hoặc chọn địa điểm..."
+            />
+          </Field>
+          <Field label="Điểm Hạ (R/H)">
+            <Combobox
+              options={locationOptions}
+              value={dropoffLocationName}
+              onChange={setDropoffLocationName}
+              placeholder="Nhập hoặc chọn địa điểm..."
+            />
+          </Field>
+        </div>
+      </div>
+
+      {/* Fixed cost slots */}
+      <div
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          marginBottom: 14,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#6366f1",
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            padding: "8px 12px",
+            borderBottom: "1px solid #e2e8f0",
+            background: "#f8f7ff",
+          }}
+        >
+          Chi phí chuyến
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+          {FIXED_SLOT_DEFAULTS.map((s) => (
+            <CostSlotInput
+              key={s.key}
+              slotKey={s.key}
+              label={s.defaultName}
+              slot={slots[s.key]}
+              onChange={setSlot}
+              costOptions={costTemplateOptions}
+              hasShd={s.hasShd}
+            />
+          ))}
+        </div>
+
+        {/* Other costs - multi row */}
+        <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <span style={costLabelStyle}>CHI PHÍ PHÁT SINH KHÁC</span>
+            <button
+              type="button"
+              onClick={() => setOtherCosts([...otherCosts, newOtherCostRow()])}
+              style={{
+                padding: "3px 10px",
+                fontSize: 11,
+                background: "#eff6ff",
+                color: "#2563eb",
+                border: "1px solid #bfdbfe",
+                borderRadius: 4,
+                cursor: "pointer",
+              }}
+            >
+              + Thêm chi phí
+            </button>
+          </div>
+          {otherCosts.length === 0 && (
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>Chưa có chi phí phát sinh</p>
+          )}
+          {otherCosts.map((row, idx) => (
+            <div
+              key={row.key}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto auto auto",
+                gap: 6,
+                marginBottom: 6,
+                alignItems: "center",
+              }}
+            >
+              <Combobox
+                options={costTemplateOptions}
+                value={row.name}
+                onChange={(v) =>
+                  setOtherCosts(
+                    otherCosts.map((r, i) =>
+                      i === idx
+                        ? {
+                            ...r,
+                            name: v,
+                            amount: r.amountLocked ? "" : r.amount,
+                            amountLocked: false,
+                          }
+                        : r,
+                    ),
+                  )
+                }
+                onAmountAutofill={(amt) => {
+                  if (amt != null) {
+                    setOtherCosts(
+                      otherCosts.map((r, i) =>
+                        i === idx ? { ...r, amount: String(amt), amountLocked: true } : r,
+                      ),
+                    );
+                  } else {
+                    setOtherCosts(
+                      otherCosts.map((r, i) =>
+                        i === idx ? { ...r, amount: "", amountLocked: false } : r,
+                      ),
+                    );
+                  }
+                }}
+                placeholder="Tên chi phí..."
+              />
+              <input
+                type="text"
+                value={fmtInput(row.amount)}
+                onChange={(e) =>
+                  !row.amountLocked &&
+                  setOtherCosts(
+                    otherCosts.map((r, i) =>
+                      i === idx ? { ...r, amount: stripNonDigits(e.target.value) } : r,
+                    ),
+                  )
+                }
+                style={
+                  row.amountLocked ? { ...inputLocked, width: 120 } : { ...inputStyle, width: 120 }
+                }
+                readOnly={row.amountLocked}
+                placeholder="Số tiền"
+              />
+              <input
+                type="text"
+                value={row.invoiceNumber}
+                onChange={(e) =>
+                  setOtherCosts(
+                    otherCosts.map((r, i) =>
+                      i === idx ? { ...r, invoiceNumber: e.target.value } : r,
+                    ),
+                  )
+                }
+                style={{ ...inputStyle, width: 90 }}
+                placeholder="SHĐ"
+              />
+              <button
+                type="button"
+                onClick={() => setOtherCosts(otherCosts.filter((_, i) => i !== idx))}
+                style={{
+                  padding: "5px 8px",
+                  background: "#fef2f2",
+                  color: "#ef4444",
+                  border: "1px solid #fecaca",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Supplemental row */}
+      <div
+        style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: 12, marginBottom: 12 }}
+      >
+        <Field label="Ngày gửi CT">
+          <input
+            type="date"
+            value={documentSentDate}
+            onChange={(e) => setDocumentSentDate(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+        <Field label="Nội dung">
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+        <Field label="Ghi chú">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+      </div>
+
+      {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+        <button type="button" onClick={onClose} style={btnSecondary}>
+          Hủy
+        </button>
+        <button type="submit" disabled={loading} style={btnPrimary}>
+          {loading
+            ? mode === "create"
+              ? "Đang tạo..."
+              : "Đang lưu..."
+            : mode === "create"
+              ? "Tạo chuyến"
+              : "Lưu"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Shared ref data loader ───────────────────────────────────────────────────
+
+function useRefData() {
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [customers, setCustomers] = useState<NamedOption[]>([]);
   const [carriers, setCarriers] = useState<NamedOption[]>([]);
-  const [locations, setLocations] = useState<NamedOption[]>([]);
-  const [loadingRefs, setLoadingRefs] = useState(true);
-
-  const [tripDate, setTripDate] = useState(new Date().toISOString().slice(0, 10));
-  const [serviceType, setServiceType] = useState<ServiceType>("SEA_EXPORT");
-  const [vehicleId, setVehicleId] = useState("");
-  const [customerId, setCustomerId] = useState("");
-  const [carrierId, setCarrierId] = useState("");
-  const [containerSize, setContainerSize] = useState("");
-  const [outboundContainerNumber, setOutboundContainerNumber] = useState("");
-  const [inboundContainerNumber, setInboundContainerNumber] = useState("");
-  const [pickupLocationId, setPickupLocationId] = useState("");
-  const [loadUnloadLocationId, setLoadUnloadLocationId] = useState("");
-  const [dropoffLocationId, setDropoffLocationId] = useState("");
-  const [documentSentDate, setDocumentSentDate] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Cost slots state
-  const [phiNang, setPhiNang] = useState<CostSlotState>(emptyCostSlot());
-  const [phiHa, setPhiHa] = useState<CostSlotState>(emptyCostSlot());
-  const [phiVeSinh, setPhiVeSinh] = useState<CostSlotState>(emptyCostSlot());
-  const [phiCuoc, setPhiCuoc] = useState<CostSlotState>(emptyCostSlot());
-  const [veCong, setVeCong] = useState<CostSlotState>(emptyCostSlot());
-  const [chiPhiKhac, setChiPhiKhac] = useState<CostSlotState>(emptyCostSlot());
-  const [chiPhiTraiTuyen, setChiPhiTraiTuyen] = useState<CostSlotState>(emptyCostSlot());
-  const [cauDuong, setCauDuong] = useState<CostSlotState>(emptyCostSlot());
-  const [chiPhiPhatSinh, setChiPhiPhatSinh] = useState<CostSlotState>(emptyCostSlot());
-  const [chiPhiPhatSinhName, setChiPhiPhatSinhName] = useState("");
+  const [serviceTypes, setServiceTypes] = useState<ServiceTypeOption[]>([]);
+  const [containerSizes, setContainerSizes] = useState<ContainerSizeOption[]>([]);
+  const [locationOptions, setLocationOptions] = useState<ComboboxOption[]>([]);
+  const [costTemplateOptions, setCostTemplateOptions] = useState<ComboboxOption[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/vehicles").then((r) => r.json()),
       fetch("/api/customers").then((r) => r.json()),
       fetch("/api/carriers").then((r) => r.json()),
+      fetch("/api/service-types").then((r) => r.json()),
+      fetch("/api/container-sizes").then((r) => r.json()),
       fetch("/api/locations").then((r) => r.json()),
+      fetch("/api/cost-templates").then((r) => r.json()),
     ])
-      .then(([v, c, ca, l]) => {
+      .then(([v, c, ca, st, cs, locs, ct]) => {
         setVehicles(v);
         setCustomers(c);
         setCarriers(ca);
-        setLocations(l);
-        if (v.length) setVehicleId(v[0].id);
-        if (c.length) setCustomerId(c[0].id);
+        setServiceTypes(st);
+        setContainerSizes(cs);
+        setLocationOptions((locs as NamedOption[]).map((l) => ({ value: l.id, label: l.name })));
+        setCostTemplateOptions(
+          (ct as { id: string; name: string; defaultAmount: number | null }[]).map((t) => ({
+            value: t.id,
+            label: t.name,
+            amount: t.defaultAmount,
+          })),
+        );
       })
       .catch(() => {})
-      .finally(() => setLoadingRefs(false));
+      .finally(() => setLoading(false));
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  return {
+    vehicles,
+    customers,
+    carriers,
+    serviceTypes,
+    containerSizes,
+    locationOptions,
+    costTemplateOptions,
+    loading,
+  };
+}
+
+// ─── Create Trip Modal ────────────────────────────────────────────────────────
+
+function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const refs = useRefData();
+
+  const [tripDate, setTripDate] = useState(new Date().toISOString().slice(0, 10));
+  const [serviceTypeId, setServiceTypeId] = useState("");
+  const [vehicleId, setVehicleId] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [carrierId, setCarrierId] = useState("");
+  const [containerSizeId, setContainerSizeId] = useState("");
+  const [outboundContainerNumber, setOutboundContainerNumber] = useState("");
+  const [inboundContainerNumber, setInboundContainerNumber] = useState("");
+  const [pickupLocationName, setPickupLocationName] = useState("");
+  const [loadUnloadLocationName, setLoadUnloadLocationName] = useState("");
+  const [dropoffLocationName, setDropoffLocationName] = useState("");
+  const [documentSentDate, setDocumentSentDate] = useState("");
+  const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
+  const [slots, setSlots] = useState<FixedSlotsState>(defaultSlots());
+  const [otherCosts, setOtherCosts] = useState<OtherCostRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Pre-select first vehicle and customer once loaded
+  useEffect(() => {
+    if (refs.vehicles.length && !vehicleId) setVehicleId(refs.vehicles[0].id);
+    if (refs.customers.length && !customerId) setCustomerId(refs.customers[0].id);
+    if (refs.serviceTypes.length && !serviceTypeId) setServiceTypeId(refs.serviceTypes[0].id);
+  }, [refs.vehicles, refs.customers, refs.serviceTypes]);
+
+  function patchSlot(key: string, patch: Partial<FixedSlotState>) {
+    setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!vehicleId || !customerId) {
-      setError("Vui lòng chọn xe và khách hàng");
+    if (!vehicleId || !customerId || !serviceTypeId) {
+      setError("Vui lòng chọn xe, khách hàng và loại dịch vụ");
       return;
     }
     setError(null);
     setLoading(true);
-
-    const toNum = (s: string) => {
-      const n = Number(s);
-      return s && !isNaN(n) && n > 0 ? n : undefined;
-    };
-    const toStr = (s: string) => s.trim() || undefined;
-
     try {
       const res = await fetch("/api/trip-plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tripDate,
-          serviceType,
+          serviceTypeId,
           vehicleId,
           customerId,
           carrierId: carrierId || undefined,
-          containerSize: containerSize || undefined,
+          containerSizeId: containerSizeId || undefined,
           outboundContainerNumber: outboundContainerNumber || undefined,
           inboundContainerNumber: inboundContainerNumber || undefined,
-          pickupLocationId: pickupLocationId || undefined,
-          loadUnloadLocationId: loadUnloadLocationId || undefined,
-          dropoffLocationId: dropoffLocationId || undefined,
+          pickupLocationName: pickupLocationName || undefined,
+          loadUnloadLocationName: loadUnloadLocationName || undefined,
+          dropoffLocationName: dropoffLocationName || undefined,
           documentSentDate: documentSentDate || undefined,
           description: description || undefined,
           notes: notes || undefined,
-          // cost slots
-          phiNangName: phiNang.amount ? "PHÍ NÂNG" : undefined,
-          phiNangAmount: toNum(phiNang.amount),
-          shdNang: toStr(phiNang.shd),
-          phiHaName: phiHa.amount ? "PHÍ HẠ" : undefined,
-          phiHaAmount: toNum(phiHa.amount),
-          shdHa: toStr(phiHa.shd),
-          phiVeSinhName: phiVeSinh.amount ? "PHÍ VỆ SINH" : undefined,
-          phiVeSinhAmount: toNum(phiVeSinh.amount),
-          shdVeSinh: toStr(phiVeSinh.shd),
-          phiCuocName: phiCuoc.amount ? "PHÍ CƯỢC" : undefined,
-          phiCuocAmount: toNum(phiCuoc.amount),
-          veCongName: veCong.amount ? "VÉ CỔNG" : undefined,
-          veCongAmount: toNum(veCong.amount),
-          shdVeCong: toStr(veCong.shd),
-          chiPhiKhacName: chiPhiKhac.amount ? "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM" : undefined,
-          chiPhiKhacAmount: toNum(chiPhiKhac.amount),
-          chiPhiTraiTuyenName: chiPhiTraiTuyen.amount
-            ? "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM"
-            : undefined,
-          chiPhiTraiTuyenAmount: toNum(chiPhiTraiTuyen.amount),
-          cauDuongName: cauDuong.amount ? "CẦU ĐƯỜNG" : undefined,
-          cauDuongAmount: toNum(cauDuong.amount),
-          chiPhiPhatSinhName: chiPhiPhatSinhName.trim() || undefined,
-          chiPhiPhatSinhAmount: toNum(chiPhiPhatSinh.amount),
+          ...slotsToPayload(slots),
+          otherCosts: otherCosts
+            .filter((r) => r.amount)
+            .map((r) => ({
+              costName: r.name || undefined,
+              amount: Number(r.amount),
+              invoiceNumber: r.invoiceNumber || undefined,
+            })),
         }),
       });
       if (!res.ok) {
@@ -462,414 +1265,66 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     }
   }
 
-  if (loadingRefs) {
+  if (refs.loading)
     return (
       <Modal title="Tạo chuyến mới" onClose={onClose}>
-        <p style={{ color: "#64748b", fontSize: 13 }}>Đang tải dữ liệu...</p>
+        <p style={{ color: "#64748b" }}>Đang tải dữ liệu...</p>
       </Modal>
     );
-  }
-
-  const locationOptions = [
-    <option key="" value="">
-      — Không chọn —
-    </option>,
-    ...locations.map((l) => (
-      <option key={l.id} value={l.id}>
-        {l.name}
-      </option>
-    )),
-  ];
 
   return (
     <Modal title="Tạo chuyến mới" onClose={onClose} wide>
-      <form onSubmit={handleSubmit}>
-        {/* Row 1: 3-column top section */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.4fr 1fr 1fr",
-            alignItems: "start",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            marginBottom: 14,
-            overflow: "hidden",
-          }}
-        >
-          {/* Chuyến đi */}
-          <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
-            <div style={colHeaderStyle}>Chuyến đi</div>
-            <Field label="Ngày chuyến *">
-              <input
-                type="date"
-                value={tripDate}
-                onChange={(e) => setTripDate(e.target.value)}
-                style={inputStyle}
-                required
-              />
-            </Field>
-            <Field label="Loại dịch vụ *">
-              <select
-                value={serviceType}
-                onChange={(e) => setServiceType(e.target.value as ServiceType)}
-                style={inputStyle}
-              >
-                {ALL_SERVICE_TYPES.map((k) => (
-                  <option key={k} value={k}>
-                    {SERVICE_TYPE_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Xe *">
-              <select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                style={inputStyle}
-                required
-              >
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.licensePlate}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Khách hàng *">
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                style={inputStyle}
-                required
-              >
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Đơn vị vận chuyển">
-              <select
-                value={carrierId}
-                onChange={(e) => setCarrierId(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">— Không chọn —</option>
-                {carriers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          {/* Container */}
-          <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
-            <div style={colHeaderStyle}>Container</div>
-            <Field label="Size Cont">
-              <input
-                type="text"
-                value={containerSize}
-                onChange={(e) => setContainerSize(e.target.value)}
-                style={inputStyle}
-                placeholder="40HC, 20GP..."
-              />
-            </Field>
-            <Field label="CONT ĐI">
-              <input
-                type="text"
-                value={outboundContainerNumber}
-                onChange={(e) => setOutboundContainerNumber(e.target.value)}
-                style={inputStyle}
-                placeholder="OOLU8990993"
-              />
-            </Field>
-            <Field label="CONT VỀ">
-              <input
-                type="text"
-                value={inboundContainerNumber}
-                onChange={(e) => setInboundContainerNumber(e.target.value)}
-                style={inputStyle}
-                placeholder="OOLU8990993"
-              />
-            </Field>
-          </div>
-          {/* Địa điểm */}
-          <div style={{ padding: "14px 16px" }}>
-            <div style={colHeaderStyle}>Địa điểm</div>
-            <Field label="Điểm Lấy (R/H)">
-              <select
-                value={pickupLocationId}
-                onChange={(e) => setPickupLocationId(e.target.value)}
-                style={inputStyle}
-              >
-                {locationOptions}
-              </select>
-            </Field>
-            <Field label="Điểm Đóng/Rút">
-              <select
-                value={loadUnloadLocationId}
-                onChange={(e) => setLoadUnloadLocationId(e.target.value)}
-                style={inputStyle}
-              >
-                {locationOptions}
-              </select>
-            </Field>
-            <Field label="Điểm Hạ (R/H)">
-              <select
-                value={dropoffLocationId}
-                onChange={(e) => setDropoffLocationId(e.target.value)}
-                style={inputStyle}
-              >
-                {locationOptions}
-              </select>
-            </Field>
-          </div>
-        </div>
-
-        {/* Row 2: 2×4 cost grid */}
-        <div
-          style={{
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            marginBottom: 14,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "#6366f1",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              padding: "8px 12px",
-              borderBottom: "1px solid #e2e8f0",
-              background: "#f8f7ff",
-            }}
-          >
-            Chi phí chuyến
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #e2e8f0",
-                borderRight: "1px solid #e2e8f0",
-              }}
-            >
-              <span style={costLabelStyle}>PHÍ NÂNG</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(phiNang.amount)}
-                  onChange={(e) =>
-                    setPhiNang({ ...phiNang, amount: stripNonDigits(e.target.value) })
-                  }
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={phiNang.shd}
-                  onChange={(e) => setPhiNang({ ...phiNang, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>PHÍ HẠ</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(phiHa.amount)}
-                  onChange={(e) => setPhiHa({ ...phiHa, amount: stripNonDigits(e.target.value) })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={phiHa.shd}
-                  onChange={(e) => setPhiHa({ ...phiHa, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #e2e8f0",
-                borderRight: "1px solid #e2e8f0",
-              }}
-            >
-              <span style={costLabelStyle}>PHÍ VỆ SINH</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(phiVeSinh.amount)}
-                  onChange={(e) =>
-                    setPhiVeSinh({ ...phiVeSinh, amount: stripNonDigits(e.target.value) })
-                  }
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={phiVeSinh.shd}
-                  onChange={(e) => setPhiVeSinh({ ...phiVeSinh, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>PHÍ CƯỢC</span>
-              <input
-                type="text"
-                value={fmtInput(phiCuoc.amount)}
-                onChange={(e) => setPhiCuoc({ ...phiCuoc, amount: stripNonDigits(e.target.value) })}
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #e2e8f0",
-                borderRight: "1px solid #e2e8f0",
-              }}
-            >
-              <span style={costLabelStyle}>VÉ CỔNG</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(veCong.amount)}
-                  onChange={(e) => setVeCong({ ...veCong, amount: stripNonDigits(e.target.value) })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={veCong.shd}
-                  onChange={(e) => setVeCong({ ...veCong, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>CHI PHÍ KHÁC / PHÍ ĐỨT TEM</span>
-              <input
-                type="text"
-                value={fmtInput(chiPhiKhac.amount)}
-                onChange={(e) =>
-                  setChiPhiKhac({ ...chiPhiKhac, amount: stripNonDigits(e.target.value) })
-                }
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-            <div style={{ padding: "8px 12px", borderRight: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>TRÁI TUYẾN / CHỈ ĐỊNH / BP CAM</span>
-              <input
-                type="text"
-                value={fmtInput(chiPhiTraiTuyen.amount)}
-                onChange={(e) =>
-                  setChiPhiTraiTuyen({ ...chiPhiTraiTuyen, amount: stripNonDigits(e.target.value) })
-                }
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-            <div style={{ padding: "8px 12px" }}>
-              <span style={costLabelStyle}>CẦU ĐƯỜNG</span>
-              <input
-                type="text"
-                value={fmtInput(cauDuong.amount)}
-                onChange={(e) =>
-                  setCauDuong({ ...cauDuong, amount: stripNonDigits(e.target.value) })
-                }
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px" }}>
-            <span style={costLabelStyle}>CHI PHÍ PHÁT SINH KHÁC (THANH LÝ - CHI HỘ)</span>
-            <div style={{ display: "flex", gap: 4 }}>
-              <input
-                type="text"
-                value={chiPhiPhatSinhName}
-                onChange={(e) => setChiPhiPhatSinhName(e.target.value)}
-                style={{ ...inputStyle, flex: 2 }}
-                placeholder="Mô tả chi phí..."
-              />
-              <input
-                type="text"
-                value={fmtInput(chiPhiPhatSinh.amount)}
-                onChange={(e) =>
-                  setChiPhiPhatSinh({ ...chiPhiPhatSinh, amount: stripNonDigits(e.target.value) })
-                }
-                style={{ ...inputStyle, flex: 1 }}
-                placeholder="0"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Row 3: Supplemental row */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "auto 1fr 1fr",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <Field label="Ngày gửi CT">
-            <input
-              type="date"
-              value={documentSentDate}
-              onChange={(e) => setDocumentSentDate(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Nội dung">
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Ghi chú">
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-        </div>
-
-        {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>
-            Hủy
-          </button>
-          <button type="submit" disabled={loading} style={btnPrimary}>
-            {loading ? "Đang tạo..." : "Tạo chuyến"}
-          </button>
-        </div>
-      </form>
+      <TripFormBody
+        mode="create"
+        tripDate={tripDate}
+        setTripDate={setTripDate}
+        serviceTypeId={serviceTypeId}
+        setServiceTypeId={setServiceTypeId}
+        vehicleId={vehicleId}
+        setVehicleId={setVehicleId}
+        customerId={customerId}
+        setCustomerId={setCustomerId}
+        carrierId={carrierId}
+        setCarrierId={setCarrierId}
+        containerSizeId={containerSizeId}
+        setContainerSizeId={setContainerSizeId}
+        outboundContainerNumber={outboundContainerNumber}
+        setOutboundContainerNumber={setOutboundContainerNumber}
+        inboundContainerNumber={inboundContainerNumber}
+        setInboundContainerNumber={setInboundContainerNumber}
+        pickupLocationName={pickupLocationName}
+        setPickupLocationName={setPickupLocationName}
+        loadUnloadLocationName={loadUnloadLocationName}
+        setLoadUnloadLocationName={setLoadUnloadLocationName}
+        dropoffLocationName={dropoffLocationName}
+        setDropoffLocationName={setDropoffLocationName}
+        documentSentDate={documentSentDate}
+        setDocumentSentDate={setDocumentSentDate}
+        description={description}
+        setDescription={setDescription}
+        notes={notes}
+        setNotes={setNotes}
+        slots={slots}
+        setSlot={patchSlot}
+        otherCosts={otherCosts}
+        setOtherCosts={setOtherCosts}
+        vehicles={refs.vehicles}
+        customers={refs.customers}
+        carriers={refs.carriers}
+        serviceTypes={refs.serviceTypes}
+        containerSizes={refs.containerSizes}
+        locationOptions={refs.locationOptions}
+        costTemplateOptions={refs.costTemplateOptions}
+        onSubmit={handleSubmit}
+        onClose={onClose}
+        loading={loading}
+        error={error}
+      />
     </Modal>
   );
 }
 
-// ─── EDIT TRIP MODAL ────────────────────────────────────────────────────────
+// ─── Edit Trip Modal ──────────────────────────────────────────────────────────
 
 function EditTripModal({
   trip,
@@ -881,154 +1336,84 @@ function EditTripModal({
   onDone: () => void;
 }) {
   const toast = useToast();
-  const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
-  const [customers, setCustomers] = useState<NamedOption[]>([]);
-  const [carriers, setCarriers] = useState<NamedOption[]>([]);
-  const [locations, setLocations] = useState<NamedOption[]>([]);
-  const [loadingRefs, setLoadingRefs] = useState(true);
+  const refs = useRefData();
 
-  const [tripDate, setTripDate] = useState(trip.tripDate ? trip.tripDate.slice(0, 10) : "");
-  const [serviceType, setServiceType] = useState<ServiceType>(
-    (trip.serviceType as ServiceType) ?? "SEA_EXPORT",
-  );
+  const [tripDate, setTripDate] = useState(trip.tripDate?.slice(0, 10) ?? "");
+  const [serviceTypeId, setServiceTypeId] = useState(trip.serviceType?.id ?? "");
   const [status, setStatus] = useState<TripStatus>(trip.status);
   const [vehicleId, setVehicleId] = useState(trip.vehicle?.id ?? "");
   const [customerId, setCustomerId] = useState(trip.customer?.id ?? "");
   const [carrierId, setCarrierId] = useState(trip.carrier?.id ?? "");
-  const [containerSize, setContainerSize] = useState(trip.containerSize ?? "");
+  const [containerSizeId, setContainerSizeId] = useState(trip.containerSize?.id ?? "");
   const [outboundContainerNumber, setOutboundContainerNumber] = useState(
     trip.outboundContainerNumber ?? "",
   );
   const [inboundContainerNumber, setInboundContainerNumber] = useState(
     trip.inboundContainerNumber ?? "",
   );
-  const [pickupLocationId, setPickupLocationId] = useState(trip.pickupLocation?.id ?? "");
-  const [loadUnloadLocationId, setLoadUnloadLocationId] = useState(
-    trip.loadUnloadLocation?.id ?? "",
+  const [pickupLocationName, setPickupLocationName] = useState(trip.pickupLocationName ?? "");
+  const [loadUnloadLocationName, setLoadUnloadLocationName] = useState(
+    trip.loadUnloadLocationName ?? "",
   );
-  const [dropoffLocationId, setDropoffLocationId] = useState(trip.dropoffLocation?.id ?? "");
+  const [dropoffLocationName, setDropoffLocationName] = useState(trip.dropoffLocationName ?? "");
   const [documentSentDate, setDocumentSentDate] = useState(
-    trip.documentSentDate ? trip.documentSentDate.slice(0, 10) : "",
+    trip.documentSentDate?.slice(0, 10) ?? "",
   );
   const [description, setDescription] = useState(trip.description ?? "");
   const [notes, setNotes] = useState(trip.notes ?? "");
+  const [slots, setSlots] = useState<FixedSlotsState>(() => initSlotsFromTrip(trip));
+  const [otherCosts, setOtherCosts] = useState<OtherCostRow[]>(() =>
+    (trip.costs ?? []).map((c) => ({
+      key: c.id,
+      name: c.costName ?? "",
+      amount: String(c.amount),
+      amountLocked: false,
+      invoiceNumber: c.invoiceNumber ?? "",
+    })),
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [phiNang, setPhiNang] = useState<CostSlotState>({
-    amount: trip.phiNangAmount != null ? String(trip.phiNangAmount) : "",
-    shd: trip.shdNang ?? "",
-  });
-  const [phiHa, setPhiHa] = useState<CostSlotState>({
-    amount: trip.phiHaAmount != null ? String(trip.phiHaAmount) : "",
-    shd: trip.shdHa ?? "",
-  });
-  const [phiVeSinh, setPhiVeSinh] = useState<CostSlotState>({
-    amount: trip.phiVeSinhAmount != null ? String(trip.phiVeSinhAmount) : "",
-    shd: trip.shdVeSinh ?? "",
-  });
-  const [phiCuoc, setPhiCuoc] = useState<CostSlotState>({
-    amount: trip.phiCuocAmount != null ? String(trip.phiCuocAmount) : "",
-    shd: "",
-  });
-  const [veCong, setVeCong] = useState<CostSlotState>({
-    amount: trip.veCongAmount != null ? String(trip.veCongAmount) : "",
-    shd: trip.shdVeCong ?? "",
-  });
-  const [chiPhiKhac, setChiPhiKhac] = useState<CostSlotState>({
-    amount: trip.chiPhiKhacAmount != null ? String(trip.chiPhiKhacAmount) : "",
-    shd: "",
-  });
-  const [chiPhiTraiTuyen, setChiPhiTraiTuyen] = useState<CostSlotState>({
-    amount: trip.chiPhiTraiTuyenAmount != null ? String(trip.chiPhiTraiTuyenAmount) : "",
-    shd: "",
-  });
-  const [cauDuong, setCauDuong] = useState<CostSlotState>({
-    amount: trip.cauDuongAmount != null ? String(trip.cauDuongAmount) : "",
-    shd: "",
-  });
-  const [chiPhiPhatSinh, setChiPhiPhatSinh] = useState<CostSlotState>({
-    amount: trip.chiPhiPhatSinhAmount != null ? String(trip.chiPhiPhatSinhAmount) : "",
-    shd: "",
-  });
-  const [chiPhiPhatSinhName, setChiPhiPhatSinhName] = useState(trip.chiPhiPhatSinhName ?? "");
+  function patchSlot(key: string, patch: Partial<FixedSlotState>) {
+    setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
+  }
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/vehicles").then((r) => r.json()),
-      fetch("/api/customers").then((r) => r.json()),
-      fetch("/api/carriers").then((r) => r.json()),
-      fetch("/api/locations").then((r) => r.json()),
-    ])
-      .then(([v, c, ca, l]) => {
-        setVehicles(v);
-        setCustomers(c);
-        setCarriers(ca);
-        setLocations(l);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingRefs(false));
-  }, []);
-
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!vehicleId || !customerId) {
-      setError("Vui lòng chọn xe và khách hàng");
+    if (!vehicleId || !customerId || !serviceTypeId) {
+      setError("Vui lòng chọn xe, khách hàng và loại dịch vụ");
       return;
     }
     setError(null);
     setLoading(true);
-
-    const toNum = (s: string) => {
-      const n = Number(s);
-      return s && !isNaN(n) && n > 0 ? n : undefined;
-    };
-    const toStr = (s: string) => s.trim() || undefined;
-
     try {
       const res = await fetch(`/api/trip-plans/${trip.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tripDate,
-          serviceType,
+          serviceTypeId,
           status,
           vehicleId,
           customerId,
           carrierId: carrierId || undefined,
-          containerSize: containerSize || undefined,
+          containerSizeId: containerSizeId || undefined,
           outboundContainerNumber: outboundContainerNumber || undefined,
           inboundContainerNumber: inboundContainerNumber || undefined,
-          pickupLocationId: pickupLocationId || undefined,
-          loadUnloadLocationId: loadUnloadLocationId || undefined,
-          dropoffLocationId: dropoffLocationId || undefined,
+          pickupLocationName: pickupLocationName || undefined,
+          loadUnloadLocationName: loadUnloadLocationName || undefined,
+          dropoffLocationName: dropoffLocationName || undefined,
           documentSentDate: documentSentDate || undefined,
           description: description || undefined,
           notes: notes || undefined,
-          phiNangName: phiNang.amount ? "PHÍ NÂNG" : undefined,
-          phiNangAmount: toNum(phiNang.amount),
-          shdNang: toStr(phiNang.shd),
-          phiHaName: phiHa.amount ? "PHÍ HẠ" : undefined,
-          phiHaAmount: toNum(phiHa.amount),
-          shdHa: toStr(phiHa.shd),
-          phiVeSinhName: phiVeSinh.amount ? "PHÍ VỆ SINH" : undefined,
-          phiVeSinhAmount: toNum(phiVeSinh.amount),
-          shdVeSinh: toStr(phiVeSinh.shd),
-          phiCuocName: phiCuoc.amount ? "PHÍ CƯỢC" : undefined,
-          phiCuocAmount: toNum(phiCuoc.amount),
-          veCongName: veCong.amount ? "VÉ CỔNG" : undefined,
-          veCongAmount: toNum(veCong.amount),
-          shdVeCong: toStr(veCong.shd),
-          chiPhiKhacName: chiPhiKhac.amount ? "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM" : undefined,
-          chiPhiKhacAmount: toNum(chiPhiKhac.amount),
-          chiPhiTraiTuyenName: chiPhiTraiTuyen.amount
-            ? "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM"
-            : undefined,
-          chiPhiTraiTuyenAmount: toNum(chiPhiTraiTuyen.amount),
-          cauDuongName: cauDuong.amount ? "CẦU ĐƯỜNG" : undefined,
-          cauDuongAmount: toNum(cauDuong.amount),
-          chiPhiPhatSinhName: chiPhiPhatSinhName.trim() || undefined,
-          chiPhiPhatSinhAmount: toNum(chiPhiPhatSinh.amount),
+          ...slotsToPayload(slots),
+          otherCosts: otherCosts
+            .filter((r) => r.amount)
+            .map((r) => ({
+              costName: r.name || undefined,
+              amount: Number(r.amount),
+              invoiceNumber: r.invoiceNumber || undefined,
+            })),
         }),
       });
       if (!res.ok) {
@@ -1046,419 +1431,68 @@ function EditTripModal({
     }
   }
 
-  if (loadingRefs) {
+  if (refs.loading)
     return (
       <Modal title="Sửa chuyến" onClose={onClose}>
-        <p style={{ color: "#64748b", fontSize: 13 }}>Đang tải dữ liệu...</p>
+        <p style={{ color: "#64748b" }}>Đang tải dữ liệu...</p>
       </Modal>
     );
-  }
-
-  const locationOptions = [
-    <option key="" value="">
-      — Không chọn —
-    </option>,
-    ...locations.map((l) => (
-      <option key={l.id} value={l.id}>
-        {l.name}
-      </option>
-    )),
-  ];
 
   return (
     <Modal title="Sửa chuyến" onClose={onClose} wide>
-      <form onSubmit={handleSubmit}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.4fr 1fr 1fr",
-            alignItems: "start",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            marginBottom: 14,
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
-            <div style={colHeaderStyle}>Chuyến đi</div>
-            <Field label="Ngày chuyến *">
-              <input
-                type="date"
-                value={tripDate}
-                onChange={(e) => setTripDate(e.target.value)}
-                style={inputStyle}
-                required
-              />
-            </Field>
-            <Field label="Loại dịch vụ *">
-              <select
-                value={serviceType}
-                onChange={(e) => setServiceType(e.target.value as ServiceType)}
-                style={inputStyle}
-              >
-                {ALL_SERVICE_TYPES.map((k) => (
-                  <option key={k} value={k}>
-                    {SERVICE_TYPE_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Trạng thái">
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TripStatus)}
-                style={inputStyle}
-              >
-                {ALL_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Xe *">
-              <select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                style={inputStyle}
-                required
-              >
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.licensePlate}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Khách hàng *">
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                style={inputStyle}
-                required
-              >
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Đơn vị vận chuyển">
-              <select
-                value={carrierId}
-                onChange={(e) => setCarrierId(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">— Không chọn —</option>
-                {carriers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
-            <div style={colHeaderStyle}>Container</div>
-            <Field label="Size Cont">
-              <input
-                type="text"
-                value={containerSize}
-                onChange={(e) => setContainerSize(e.target.value)}
-                style={inputStyle}
-                placeholder="40HC, 20GP..."
-              />
-            </Field>
-            <Field label="CONT ĐI">
-              <input
-                type="text"
-                value={outboundContainerNumber}
-                onChange={(e) => setOutboundContainerNumber(e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="CONT VỀ">
-              <input
-                type="text"
-                value={inboundContainerNumber}
-                onChange={(e) => setInboundContainerNumber(e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-          </div>
-          <div style={{ padding: "14px 16px" }}>
-            <div style={colHeaderStyle}>Địa điểm</div>
-            <Field label="Điểm Lấy (R/H)">
-              <select
-                value={pickupLocationId}
-                onChange={(e) => setPickupLocationId(e.target.value)}
-                style={inputStyle}
-              >
-                {locationOptions}
-              </select>
-            </Field>
-            <Field label="Điểm Đóng/Rút">
-              <select
-                value={loadUnloadLocationId}
-                onChange={(e) => setLoadUnloadLocationId(e.target.value)}
-                style={inputStyle}
-              >
-                {locationOptions}
-              </select>
-            </Field>
-            <Field label="Điểm Hạ (R/H)">
-              <select
-                value={dropoffLocationId}
-                onChange={(e) => setDropoffLocationId(e.target.value)}
-                style={inputStyle}
-              >
-                {locationOptions}
-              </select>
-            </Field>
-          </div>
-        </div>
-
-        <div
-          style={{
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            marginBottom: 14,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "#6366f1",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              padding: "8px 12px",
-              borderBottom: "1px solid #e2e8f0",
-              background: "#f8f7ff",
-            }}
-          >
-            Chi phí chuyến
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #e2e8f0",
-                borderRight: "1px solid #e2e8f0",
-              }}
-            >
-              <span style={costLabelStyle}>PHÍ NÂNG</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(phiNang.amount)}
-                  onChange={(e) =>
-                    setPhiNang({ ...phiNang, amount: stripNonDigits(e.target.value) })
-                  }
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={phiNang.shd}
-                  onChange={(e) => setPhiNang({ ...phiNang, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>PHÍ HẠ</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(phiHa.amount)}
-                  onChange={(e) => setPhiHa({ ...phiHa, amount: stripNonDigits(e.target.value) })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={phiHa.shd}
-                  onChange={(e) => setPhiHa({ ...phiHa, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #e2e8f0",
-                borderRight: "1px solid #e2e8f0",
-              }}
-            >
-              <span style={costLabelStyle}>PHÍ VỆ SINH</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(phiVeSinh.amount)}
-                  onChange={(e) =>
-                    setPhiVeSinh({ ...phiVeSinh, amount: stripNonDigits(e.target.value) })
-                  }
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={phiVeSinh.shd}
-                  onChange={(e) => setPhiVeSinh({ ...phiVeSinh, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>PHÍ CƯỢC</span>
-              <input
-                type="text"
-                value={fmtInput(phiCuoc.amount)}
-                onChange={(e) => setPhiCuoc({ ...phiCuoc, amount: stripNonDigits(e.target.value) })}
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-            <div
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #e2e8f0",
-                borderRight: "1px solid #e2e8f0",
-              }}
-            >
-              <span style={costLabelStyle}>VÉ CỔNG</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <input
-                  type="text"
-                  value={fmtInput(veCong.amount)}
-                  onChange={(e) => setVeCong({ ...veCong, amount: stripNonDigits(e.target.value) })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="0"
-                />
-                <input
-                  type="text"
-                  value={veCong.shd}
-                  onChange={(e) => setVeCong({ ...veCong, shd: e.target.value })}
-                  style={{ ...inputStyle, flex: 1 }}
-                  placeholder="SHĐ"
-                />
-              </div>
-            </div>
-            <div style={{ padding: "8px 12px", borderBottom: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>CHI PHÍ KHÁC / PHÍ ĐỨT TEM</span>
-              <input
-                type="text"
-                value={fmtInput(chiPhiKhac.amount)}
-                onChange={(e) =>
-                  setChiPhiKhac({ ...chiPhiKhac, amount: stripNonDigits(e.target.value) })
-                }
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-            <div style={{ padding: "8px 12px", borderRight: "1px solid #e2e8f0" }}>
-              <span style={costLabelStyle}>TRÁI TUYẾN / CHỈ ĐỊNH / BP CAM</span>
-              <input
-                type="text"
-                value={fmtInput(chiPhiTraiTuyen.amount)}
-                onChange={(e) =>
-                  setChiPhiTraiTuyen({ ...chiPhiTraiTuyen, amount: stripNonDigits(e.target.value) })
-                }
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-            <div style={{ padding: "8px 12px" }}>
-              <span style={costLabelStyle}>CẦU ĐƯỜNG</span>
-              <input
-                type="text"
-                value={fmtInput(cauDuong.amount)}
-                onChange={(e) =>
-                  setCauDuong({ ...cauDuong, amount: stripNonDigits(e.target.value) })
-                }
-                style={inputStyle}
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px" }}>
-            <span style={costLabelStyle}>CHI PHÍ PHÁT SINH KHÁC (THANH LÝ - CHI HỘ)</span>
-            <div style={{ display: "flex", gap: 4 }}>
-              <input
-                type="text"
-                value={chiPhiPhatSinhName}
-                onChange={(e) => setChiPhiPhatSinhName(e.target.value)}
-                style={{ ...inputStyle, flex: 2 }}
-                placeholder="Mô tả chi phí..."
-              />
-              <input
-                type="text"
-                value={fmtInput(chiPhiPhatSinh.amount)}
-                onChange={(e) =>
-                  setChiPhiPhatSinh({ ...chiPhiPhatSinh, amount: stripNonDigits(e.target.value) })
-                }
-                style={{ ...inputStyle, flex: 1 }}
-                placeholder="0"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "auto 1fr 1fr",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <Field label="Ngày gửi CT">
-            <input
-              type="date"
-              value={documentSentDate}
-              onChange={(e) => setDocumentSentDate(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Nội dung">
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="Ghi chú">
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-        </div>
-
-        {error && <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" onClick={onClose} style={btnSecondary}>
-            Hủy
-          </button>
-          <button type="submit" disabled={loading} style={btnPrimary}>
-            {loading ? "Đang lưu..." : "Lưu"}
-          </button>
-        </div>
-      </form>
+      <TripFormBody
+        mode="edit"
+        tripDate={tripDate}
+        setTripDate={setTripDate}
+        serviceTypeId={serviceTypeId}
+        setServiceTypeId={setServiceTypeId}
+        vehicleId={vehicleId}
+        setVehicleId={setVehicleId}
+        customerId={customerId}
+        setCustomerId={setCustomerId}
+        carrierId={carrierId}
+        setCarrierId={setCarrierId}
+        containerSizeId={containerSizeId}
+        setContainerSizeId={setContainerSizeId}
+        outboundContainerNumber={outboundContainerNumber}
+        setOutboundContainerNumber={setOutboundContainerNumber}
+        inboundContainerNumber={inboundContainerNumber}
+        setInboundContainerNumber={setInboundContainerNumber}
+        pickupLocationName={pickupLocationName}
+        setPickupLocationName={setPickupLocationName}
+        loadUnloadLocationName={loadUnloadLocationName}
+        setLoadUnloadLocationName={setLoadUnloadLocationName}
+        dropoffLocationName={dropoffLocationName}
+        setDropoffLocationName={setDropoffLocationName}
+        documentSentDate={documentSentDate}
+        setDocumentSentDate={setDocumentSentDate}
+        description={description}
+        setDescription={setDescription}
+        notes={notes}
+        setNotes={setNotes}
+        status={status}
+        setStatus={setStatus}
+        slots={slots}
+        setSlot={patchSlot}
+        otherCosts={otherCosts}
+        setOtherCosts={setOtherCosts}
+        vehicles={refs.vehicles}
+        customers={refs.customers}
+        carriers={refs.carriers}
+        serviceTypes={refs.serviceTypes}
+        containerSizes={refs.containerSizes}
+        locationOptions={refs.locationOptions}
+        costTemplateOptions={refs.costTemplateOptions}
+        onSubmit={handleSubmit}
+        onClose={onClose}
+        loading={loading}
+        error={error}
+      />
     </Modal>
   );
 }
 
-// ─── PAGINATION ───────────────────────────────────────────────────────────────
+// ─── Pagination helper ────────────────────────────────────────────────────────
 
 function getPageNumbers(current: number, total: number): number[] {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
@@ -1467,7 +1501,7 @@ function getPageNumbers(current: number, total: number): number[] {
   return [current - 2, current - 1, current, current + 1, current + 2];
 }
 
-// ─── MAIN PAGE ───────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TripPlansPage() {
   const toast = useToast();
@@ -1481,6 +1515,7 @@ export default function TripPlansPage() {
   const [rawSearch, setRawSearch] = useState("");
   const [filterCustomers, setFilterCustomers] = useState<NamedOption[]>([]);
   const [filterCarriers, setFilterCarriers] = useState<NamedOption[]>([]);
+  const [filterServiceTypes, setFilterServiceTypes] = useState<ServiceTypeOption[]>([]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTrip, setEditingTrip] = useState<TripPlanRow | null>(null);
@@ -1489,10 +1524,12 @@ export default function TripPlansPage() {
     Promise.all([
       fetch("/api/customers").then((r) => r.json()),
       fetch("/api/carriers").then((r) => r.json()),
+      fetch("/api/service-types").then((r) => r.json()),
     ])
-      .then(([c, ca]) => {
+      .then(([c, ca, st]) => {
         setFilterCustomers(c);
         setFilterCarriers(ca);
+        setFilterServiceTypes(st);
       })
       .catch(() => {});
   }, []);
@@ -1513,7 +1550,7 @@ export default function TripPlansPage() {
       if (filters.status) params.set("status", filters.status);
       if (filters.customerId) params.set("customerId", filters.customerId);
       if (filters.carrierId) params.set("carrierId", filters.carrierId);
-      if (filters.serviceType) params.set("serviceType", filters.serviceType);
+      if (filters.serviceTypeCode) params.set("serviceTypeCode", filters.serviceTypeCode);
       if (filters.search) params.set("search", filters.search);
       try {
         const res = await fetch(`/api/trip-plans?${params}`);
@@ -1569,7 +1606,7 @@ export default function TripPlansPage() {
     filters.status ||
     filters.customerId ||
     filters.carrierId ||
-    filters.serviceType ||
+    filters.serviceTypeCode ||
     filters.search ||
     rawSearch;
   const startItem = total === 0 ? 0 : (filters.page - 1) * 20 + 1;
@@ -1593,7 +1630,51 @@ export default function TripPlansPage() {
     borderBottom: "1px solid #f1f5f9",
   };
   const tdMono: React.CSSProperties = { ...tdStyle, fontFamily: "monospace" };
-  const tdCenter: React.CSSProperties = { ...tdStyle, textAlign: "center" };
+
+  // Sticky column widths (px) — left columns STT→SIZE CONT, right columns Trạng thái + Thao tác
+  const LW = [50, 88, 100, 128, 96, 108, 72]; // STT, NGÀY, SỐ XE, KH, LOẠI HÌNH, ĐƠN VỊ, SIZE CONT
+  const LL = LW.reduce<number[]>((acc, _w, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + LW[i - 1]);
+    return acc;
+  }, []);
+  const LSHADOW = "2px 0 5px rgba(0,0,0,0.07)";
+  const RSHADOW = "-2px 0 5px rgba(0,0,0,0.07)";
+  const thL = (i: number): React.CSSProperties => ({
+    ...thStyle,
+    position: "sticky",
+    left: LL[i],
+    zIndex: 4,
+    background: "#f8fafc",
+    minWidth: LW[i],
+    width: LW[i],
+    ...(i === LW.length - 1 ? { boxShadow: LSHADOW } : {}),
+  });
+  const thR = (right: number): React.CSSProperties => ({
+    ...thStyle,
+    position: "sticky",
+    right,
+    zIndex: 4,
+    background: "#f8fafc",
+    ...(right === 120 ? { boxShadow: RSHADOW } : {}),
+  });
+  const tdL = (i: number, bg: string): React.CSSProperties => ({
+    ...tdStyle,
+    position: "sticky",
+    left: LL[i],
+    zIndex: 2,
+    background: bg,
+    minWidth: LW[i],
+    width: LW[i],
+    ...(i === LW.length - 1 ? { boxShadow: LSHADOW } : {}),
+  });
+  const tdR = (right: number, bg: string): React.CSSProperties => ({
+    ...tdStyle,
+    position: "sticky",
+    right,
+    zIndex: 2,
+    background: bg,
+    ...(right === 120 ? { boxShadow: RSHADOW } : {}),
+  });
 
   return (
     <div>
@@ -1651,17 +1732,15 @@ export default function TripPlansPage() {
         {[
           {
             label: "Từ ngày",
-            type: "date" as const,
             val: filters.dateFrom,
             set: (v: string) => setFilterField("dateFrom", v),
           },
           {
             label: "Đến ngày",
-            type: "date" as const,
             val: filters.dateTo,
             set: (v: string) => setFilterField("dateTo", v),
           },
-        ].map(({ label, type, val, set }) => (
+        ].map(({ label, val, set }) => (
           <div key={label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span
               style={{
@@ -1674,7 +1753,7 @@ export default function TripPlansPage() {
               {label}
             </span>
             <input
-              type={type}
+              type="date"
               value={val}
               onChange={(e) => set(e.target.value)}
               style={{ ...selectStyle, padding: "5px 8px" }}
@@ -1745,14 +1824,14 @@ export default function TripPlansPage() {
             Dịch vụ
           </span>
           <select
-            value={filters.serviceType}
-            onChange={(e) => setFilterField("serviceType", e.target.value as ServiceType | "")}
+            value={filters.serviceTypeCode}
+            onChange={(e) => setFilterField("serviceTypeCode", e.target.value)}
             style={selectStyle}
           >
             <option value="">Tất cả</option>
-            {ALL_SERVICE_TYPES.map((s) => (
-              <option key={s} value={s}>
-                {SERVICE_TYPE_LABELS[s] ?? s}
+            {filterServiceTypes.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.code}
               </option>
             ))}
           </select>
@@ -1803,21 +1882,20 @@ export default function TripPlansPage() {
               overflowX: "auto",
             }}
           >
-            <table style={{ borderCollapse: "collapse", minWidth: 2800 }}>
+            <table style={{ borderCollapse: "collapse", minWidth: 2400 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  <th style={thStyle}>STT</th>
-                  <th style={thStyle}>NGÀY</th>
-                  <th style={thStyle}>SỐ XE</th>
-                  <th style={thStyle}>KHÁCH HÀNG</th>
-                  <th style={thStyle}>LOẠI HÌNH</th>
-                  <th style={thStyle}>ĐƠN VỊ</th>
-                  <th style={thStyle}>SIZE CONT</th>
+                  {/* Left sticky */}
+                  <th style={thL(0)}>STT</th>
+                  <th style={thL(1)}>NGÀY</th>
+                  <th style={thL(2)}>SỐ XE</th>
+                  <th style={thL(3)}>KHÁCH HÀNG</th>
+                  <th style={thL(4)}>LOẠI HÌNH</th>
+                  <th style={thL(5)}>ĐƠN VỊ</th>
+                  <th style={thL(6)}>SIZE CONT</th>
+                  {/* Scrollable */}
                   <th style={thStyle}>CONT ĐI</th>
                   <th style={thStyle}>CONT VỀ</th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>20'</th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>40'</th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>45'</th>
                   <th style={thStyle}>Điểm Lấy (R/H)</th>
                   <th style={thStyle}>Điểm (Đóng/Rút)</th>
                   <th style={thStyle}>Điểm hạ (R/H)</th>
@@ -1828,11 +1906,12 @@ export default function TripPlansPage() {
                     </Fragment>
                   ))}
                   <th style={thStyle}>NGÀY GỬI CT</th>
-                  <th style={{ ...thStyle, minWidth: 100 }}>CHI PHÍ PHÁT SINH KHÁC</th>
+                  <th style={{ ...thStyle, minWidth: 100 }}>CHI PHÍ PHÁT SINH</th>
                   <th style={thStyle}>NỘI DUNG</th>
                   <th style={thStyle}>GHI CHÚ</th>
-                  <th style={thStyle}>Trạng thái</th>
-                  <th style={{ ...thStyle, minWidth: 160 }}>Thao tác</th>
+                  {/* Right sticky */}
+                  <th style={thR(44)}>Trạng thái</th>
+                  <th style={{ ...thR(0), width: 44, minWidth: 44, textAlign: "center" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -1845,26 +1924,30 @@ export default function TripPlansPage() {
                 ) : (
                   trips.map((trip, i) => {
                     const rowBg = i % 2 === 0 ? "#fff" : "#fafafa";
-
+                    const totalOtherCosts =
+                      trip.costs?.reduce((sum, c) => sum + Number(c.amount), 0) ?? 0;
                     return (
                       <tr key={trip.id} style={{ background: rowBg }}>
-                        <td style={tdStyle}>{trip.tripNumber ?? "—"}</td>
-                        <td style={tdStyle}>{formatDate(trip.tripDate)}</td>
-                        <td style={tdMono}>{trip.vehicle?.licensePlate ?? "—"}</td>
-                        <td style={tdStyle}>{trip.customer?.name ?? "—"}</td>
-                        <td style={tdStyle}>
-                          {SERVICE_TYPE_LABELS[trip.serviceType as ServiceType] ?? trip.serviceType}
+                        {/* Left sticky */}
+                        <td style={tdL(0, rowBg)}>{trip.tripNumber ?? "—"}</td>
+                        <td style={tdL(1, rowBg)}>{formatDate(trip.tripDate)}</td>
+                        <td style={{ ...tdL(2, rowBg), fontFamily: "monospace" }}>
+                          {trip.vehicle?.licensePlate ?? "—"}
                         </td>
-                        <td style={tdStyle}>{trip.carrier?.name ?? "—"}</td>
-                        <td style={tdMono}>{trip.containerSize ?? ""}</td>
+                        <td style={tdL(3, rowBg)}>{trip.customer?.name ?? "—"}</td>
+                        <td style={tdL(4, rowBg)}>
+                          {trip.serviceType ? trip.serviceType.code : "—"}
+                        </td>
+                        <td style={tdL(5, rowBg)}>{trip.carrier?.name ?? "—"}</td>
+                        <td style={{ ...tdL(6, rowBg), fontFamily: "monospace" }}>
+                          {trip.containerSize?.code ?? ""}
+                        </td>
+                        {/* Scrollable */}
                         <td style={tdMono}>{trip.outboundContainerNumber ?? ""}</td>
                         <td style={tdMono}>{trip.inboundContainerNumber ?? ""}</td>
-                        <td style={tdCenter}>{sizeTick(trip.containerSize, "20")}</td>
-                        <td style={tdCenter}>{sizeTick(trip.containerSize, "40")}</td>
-                        <td style={tdCenter}>{sizeTick(trip.containerSize, "45")}</td>
-                        <td style={tdStyle}>{trip.pickupLocation?.name ?? ""}</td>
-                        <td style={tdStyle}>{trip.loadUnloadLocation?.name ?? ""}</td>
-                        <td style={tdStyle}>{trip.dropoffLocation?.name ?? ""}</td>
+                        <td style={tdStyle}>{trip.pickupLocationName ?? ""}</td>
+                        <td style={tdStyle}>{trip.loadUnloadLocationName ?? ""}</td>
+                        <td style={tdStyle}>{trip.dropoffLocationName ?? ""}</td>
                         {COST_COLUMNS.map((cc) => (
                           <Fragment key={cc.label}>
                             <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -1877,11 +1960,12 @@ export default function TripPlansPage() {
                         ))}
                         <td style={tdStyle}>{formatDate(trip.documentSentDate)}</td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
-                          {fmt(trip.chiPhiPhatSinhAmount)}
+                          {totalOtherCosts > 0 ? fmt(totalOtherCosts) : ""}
                         </td>
                         <td style={tdStyle}>{trip.description ?? ""}</td>
                         <td style={tdStyle}>{trip.notes ?? ""}</td>
-                        <td style={tdStyle}>
+                        {/* Right sticky */}
+                        <td style={tdR(44, rowBg)}>
                           <span
                             style={{
                               display: "inline-block",
@@ -1896,38 +1980,18 @@ export default function TripPlansPage() {
                             {STATUS_LABELS[trip.status]}
                           </span>
                         </td>
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <button
-                              onClick={() => setEditingTrip(trip)}
-                              style={{
-                                padding: "3px 8px",
-                                fontSize: 11,
-                                fontWeight: 500,
-                                background: "#f0f9ff",
-                                color: "#0369a1",
-                                border: "1px solid #bae6fd",
-                                borderRadius: 4,
-                                cursor: "pointer",
-                              }}
-                            >
-                              Sửa
-                            </button>
-                            <button
-                              onClick={() => handleDelete(trip.id)}
-                              style={{
-                                padding: "3px 8px",
-                                fontSize: 11,
-                                background: "#fef2f2",
-                                color: "#ef4444",
-                                border: "1px solid #fecaca",
-                                borderRadius: 4,
-                                cursor: "pointer",
-                              }}
-                            >
-                              Xóa
-                            </button>
-                          </div>
+                        <td
+                          style={{
+                            ...tdR(0, rowBg),
+                            textAlign: "center",
+                            width: 44,
+                            padding: "4px 6px",
+                          }}
+                        >
+                          <ActionMenu
+                            onEdit={() => setEditingTrip(trip)}
+                            onDelete={() => handleDelete(trip.id)}
+                          />
                         </td>
                       </tr>
                     );

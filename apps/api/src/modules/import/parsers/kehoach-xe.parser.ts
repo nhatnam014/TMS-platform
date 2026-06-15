@@ -1,5 +1,4 @@
 import * as ExcelJS from "exceljs";
-import type { ServiceType } from "@tms/shared";
 import { parseExcelDate } from "../utils/excel-date";
 
 export interface ParsedCostItem {
@@ -17,13 +16,13 @@ export interface ParsedTripPlanRow {
   vehiclePlate?: string;
   customerName?: string;
   carrierName?: string;
-  serviceType?: ServiceType;
-  containerSize?: string;
+  serviceTypeCode?: string;
+  containerSizeCode?: string;
   outboundContainerNumber?: string;
   inboundContainerNumber?: string;
-  pickupLocation?: string;
-  loadUnloadLocation?: string;
-  dropoffLocation?: string;
+  pickupLocationName?: string;
+  loadUnloadLocationName?: string;
+  dropoffLocationName?: string;
   documentSentDate?: Date;
   description?: string;
   notes?: string;
@@ -53,14 +52,9 @@ function findSheetByPartialName(
   return workbook.worksheets.find((ws) => ws.name.toLowerCase().includes(lower));
 }
 
-function parseServiceType(raw: string, warnings: string[]): ServiceType {
-  const norm = raw.replace(/\s+/g, " ").toUpperCase().trim();
-  if (norm === "SEA - EX" || norm === "SEA-EX") return "SEA_EXPORT";
-  if (norm === "SEA - IM" || norm === "SEA-IM") return "SEA_IMPORT";
-  if (norm === "NEO - EX" || norm === "NEO-EX") return "NEO_EXPORT";
-  if (norm === "NEO - IM" || norm === "NEO-IM") return "NEO_IMPORT";
-  warnings.push(`Loại hình không nhận dạng được: "${raw}", mặc định SEA_EXPORT`);
-  return "SEA_EXPORT";
+// Normalize "SEA - EX" → "SEA-EX", "NEO - IM" → "NEO-IM", etc.
+function normalizeServiceTypeCode(raw: string): string {
+  return raw.replace(/\s+/g, " ").toUpperCase().trim().replace(" - ", "-");
 }
 
 // Column indices matching the actual "kế hoạch xe" template (1-based)
@@ -118,7 +112,6 @@ export function parseKeHoachXe(
     workbook.worksheets[0];
   if (!ws) return [];
 
-  // Find header row: look for a row whose first non-empty cell contains "stt"
   let headerRowNum = 1;
   ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
     if (rowNum > 15) return;
@@ -139,7 +132,6 @@ export function parseKeHoachXe(
     if (rowNum <= headerRowNum) return;
 
     const sttRaw = cellText(row, COL.STT);
-    // Skip rows without a date (continuation rows, totals, etc.)
     const tripDate = parseExcelDate(row.getCell(COL.NGAY).value) ?? undefined;
     if (!tripDate) return;
 
@@ -150,7 +142,10 @@ export function parseKeHoachXe(
     }
 
     const loaiHinh = cellText(row, COL.LOAI_HINH);
-    const serviceType = loaiHinh ? parseServiceType(loaiHinh, warnings) : "SEA_EXPORT";
+    const serviceTypeCode = loaiHinh ? normalizeServiceTypeCode(loaiHinh) : undefined;
+
+    const sizeCont = cellText(row, COL.SIZE_CONT);
+    const containerSizeCode = sizeCont ? sizeCont.toUpperCase().trim() : undefined;
 
     const costs: ParsedCostItem[] = [];
     for (const cc of COST_COLUMNS) {
@@ -171,13 +166,13 @@ export function parseKeHoachXe(
       vehiclePlate,
       customerName: cellText(row, COL.KHACH_HANG) || undefined,
       carrierName: cellText(row, COL.DON_VI) || undefined,
-      serviceType,
-      containerSize: cellText(row, COL.SIZE_CONT) || undefined,
+      serviceTypeCode,
+      containerSizeCode,
       outboundContainerNumber: cellText(row, COL.CONT_DI) || undefined,
       inboundContainerNumber: cellText(row, COL.CONT_VE) || undefined,
-      pickupLocation: cellText(row, COL.DIEM_LAY) || undefined,
-      loadUnloadLocation: cellText(row, COL.DIEM_DONG_RUT) || undefined,
-      dropoffLocation: cellText(row, COL.DIEM_HA) || undefined,
+      pickupLocationName: cellText(row, COL.DIEM_LAY) || undefined,
+      loadUnloadLocationName: cellText(row, COL.DIEM_DONG_RUT) || undefined,
+      dropoffLocationName: cellText(row, COL.DIEM_HA) || undefined,
       documentSentDate: parseExcelDate(row.getCell(COL.NGAY_GUI_CT).value) ?? undefined,
       description: cellText(row, COL.NOI_DUNG) || undefined,
       notes: cellText(row, COL.GHI_CHU) || undefined,

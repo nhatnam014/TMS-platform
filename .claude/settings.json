@@ -28,7 +28,11 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'Progress: {d[\\\\\"progress\\\\\"][\\\\\"complete\\\\\"]}/{d[\\\\\"progress\\\\\"][\\\\\"total\\\\\"]}'\\); [print\\(f'[{\\\\\"x\\\\\" if t[\\\\\"done\\\\\"] else \\\\\" \\\\\"}] {t[\\\\\"description\\\\\"][:80]}'\\) for t in d['tasks']]\")",
       "Bash(git -C /Users/admin/Downloads/tms-platform status)",
       "Bash(git -C /Users/admin/Downloads/tms-platform diff --stat HEAD)",
-      "Bash(git -C /Users/admin/Downloads/tms-platform commit -m ' *)"
+      "Bash(git -C /Users/admin/Downloads/tms-platform commit -m ' *)",
+      "Bash(pnpm prisma *)",
+      "Bash(yes)",
+      "Bash(PGPASSWORD=tms_secret psql -h localhost -U tms -d tms_dev -c \"SELECT 'service_types' as t, count\\(*\\) FROM service_types UNION ALL SELECT 'container_sizes', count\\(*\\) FROM container_sizes UNION ALL SELECT 'trip_plans_migrated', count\\(*\\) FROM trip_plans WHERE service_type_id IS NOT NULL;\")",
+      "Bash(pnpm --filter web exec tsc --noEmit)"
     ]
   }
 }

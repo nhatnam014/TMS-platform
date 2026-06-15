@@ -30,7 +30,7 @@ export class TripPlanController {
   @ApiQuery({ name: "dateFrom", required: false })
   @ApiQuery({ name: "dateTo", required: false })
   @ApiQuery({ name: "customerId", required: false })
-  @ApiQuery({ name: "serviceType", required: false })
+  @ApiQuery({ name: "serviceTypeCode", required: false })
   @ApiQuery({ name: "status", required: false })
   @ApiQuery({ name: "search", required: false })
   findAll(@Query() filters: TripPlanFilters, @Query() pagination: PaginationQuery) {

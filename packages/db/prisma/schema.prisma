@@ -146,16 +146,62 @@ model Location {
   longitude     Decimal?      @db.Decimal(10, 7)
   isActive      Boolean       @default(true) @map("is_active")
 
-  // Reverse relations for trip routing
-  tripsAsPickup     TripPlan[] @relation("PickupLocation")
-  tripsAsLoadUnload TripPlan[] @relation("LoadUnloadLocation")
-  tripsAsDropoff    TripPlan[] @relation("DropoffLocation")
-  yardMoves         YardMove[]
+  yardMoves     YardMove[]
 
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
   @@map("locations")
+}
+
+// ============================================================
+// SERVICE TYPE MASTER — Managed lookup table replacing enum
+// ============================================================
+
+model ServiceTypeMaster {
+  id          String     @id @default(cuid())
+  code        String     @unique                                // "SEA-EX", "SEA-IM", "NEO-EX", "NEO-IM"
+  description String                                            // "SEA - EXPORT", "SEA - IMPORT"
+  isActive    Boolean    @default(true) @map("is_active")
+  tripPlans   TripPlan[]
+
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("service_types")
+}
+
+// ============================================================
+// CONTAINER SIZE MASTER — Managed lookup table
+// ============================================================
+
+model ContainerSize {
+  id        String     @id @default(cuid())
+  code      String     @unique                                  // "20GP", "40HC", "45HC"
+  name      String                                              // "20ft General Purpose"
+  isActive  Boolean    @default(true) @map("is_active")
+  tripPlans TripPlan[]
+
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("container_sizes")
+}
+
+// ============================================================
+// COST TEMPLATE — Suggestion-only catalog for cost comboboxes
+// ============================================================
+
+model CostTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  defaultAmount Decimal? @db.Decimal(15, 2) @map("default_amount")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("cost_templates")
 }
 
 // ============================================================
@@ -167,8 +213,9 @@ model TripPlan {
   tripDate        DateTime        @map("trip_date") @db.Date
   tripNumber      Int?            @map("trip_number")              // STT
 
-  // Service classification
-  serviceType     ServiceType     @map("service_type")             // SEA_EX, SEA_IM, NEO_EX, NEO_IM
+  // Service classification — FK to ServiceTypeMaster
+  serviceTypeId   String?         @map("service_type_id")
+  serviceTypeMaster ServiceTypeMaster? @relation(fields: [serviceTypeId], references: [id])
   tripMode        TripMode        @default(STANDARD) @map("trip_mode")
   status          TripStatus      @default(PLANNED)
 
@@ -182,29 +229,25 @@ model TripPlan {
   carrierId       String?         @map("carrier_id")
   carrier         Carrier?        @relation(fields: [carrierId], references: [id])
 
-  // Container tracking (outbound = CONT ĐI, inbound = CONT VỀ) — plain strings, no FK
-  containerSize           String?  @map("container_size")           // SIZE CONT: "20GP", "40HC", "45HC"
+  // Container tracking — FK to ContainerSize + plain strings
+  containerSizeId         String?  @map("container_size_id")
+  containerSize           ContainerSize? @relation(fields: [containerSizeId], references: [id])
   outboundContainerNumber String?  @map("outbound_container_number")
   inboundContainerNumber  String?  @map("inbound_container_number")
 
-  // 3-point route
-  pickupLocationId      String?   @map("pickup_location_id")       // Điểm Lấy (R/H)
-  pickupLocation        Location? @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+  // 3-point route — denormalized name strings (no FK)
+  pickupLocationName      String?  @map("pickup_location_name")     // Điểm Lấy (R/H)
+  loadUnloadLocationName  String?  @map("load_unload_location_name") // Điểm Đóng/Rút
+  dropoffLocationName     String?  @map("dropoff_location_name")    // Điểm hạ (R/H)
 
-  loadUnloadLocationId  String?   @map("load_unload_location_id")  // Điểm Đóng/Rút
-  loadUnloadLocation    Location? @relation("LoadUnloadLocation", fields: [loadUnloadLocationId], references: [id])
-
-  dropoffLocationId     String?   @map("dropoff_location_id")      // Điểm hạ (R/H)
-  dropoffLocation       Location? @relation("DropoffLocation", fields: [dropoffLocationId], references: [id])
-
-  // Cost breakdown (M:N via TripPlanCost)
+  // Cost breakdown (M:N via TripPlanCost) — used for "chi phí phát sinh"
   costs           TripPlanCost[]
 
   // Denormalized last-added cost (customer requirement)
   tripCostName    String?         @map("trip_cost_name")
   tripCostAmount  Decimal?        @db.Decimal(15, 2) @map("trip_cost_amount")
 
-  // Fixed cost slots — name+amount snapshot
+  // Fixed cost slots — name+amount snapshot (8 slots)
   phiNangName           String?   @map("phi_nang_name")
   phiNangAmount         Decimal?  @db.Decimal(15, 2) @map("phi_nang_amount")
   shdNang               String?   @map("shd_nang")
@@ -233,9 +276,6 @@ model TripPlan {
   cauDuongName          String?   @map("cau_duong_name")
   cauDuongAmount        Decimal?  @db.Decimal(15, 2) @map("cau_duong_amount")
 
-  chiPhiPhatSinhName    String?   @map("chi_phi_phat_sinh_name")
-  chiPhiPhatSinhAmount  Decimal?  @db.Decimal(15, 2) @map("chi_phi_phat_sinh_amount")
-
   // Document tracking
   documentSentDate DateTime?     @map("document_sent_date") @db.Date  // Ngày gửi CT
   description     String?                                              // NỘI DUNG
@@ -248,6 +288,7 @@ model TripPlan {
   @@index([customerId])
   @@index([vehicleId])
   @@index([status])
+  @@index([serviceTypeId])
   @@map("trip_plans")
 }
 
@@ -344,13 +385,6 @@ enum LocationType {
   INDUSTRIAL_ZONE   // KCN: KCN Qilu, CVT
   WAREHOUSE
   OTHER
-}
-
-enum ServiceType {
-  SEA_EXPORT        // SEA - EX
-  SEA_IMPORT        // SEA - IM
-  NEO_EXPORT        // NEO - EX (nội địa xuất?)
-  NEO_IMPORT        // NEO - IM
 }
 
 enum TripStatus {
