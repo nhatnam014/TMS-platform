@@ -1,4 +1,6 @@
 import * as ExcelJS from "exceljs";
+import * as fs from "fs";
+import * as path from "path";
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -7,11 +9,6 @@ function formatDate(d: Date | string | null | undefined): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}/${date.getFullYear()}`;
-}
-
-function sizeToTick(containerSizeCode: string | null | undefined, prefix: string): string {
-  if (!containerSizeCode) return "";
-  return containerSizeCode.startsWith(prefix) ? "X" : "";
 }
 
 const HEADERS = [
@@ -24,9 +21,6 @@ const HEADERS = [
   "SIZE CONT",
   "CONT ĐI",
   "CONT VỀ",
-  "20'",
-  "40'",
-  "45'",
   "Điểm Lấy (R/H)",
   "Điểm (Đóng/Rút)",
   "Điểm hạ (R/H)",
@@ -49,24 +43,93 @@ const HEADERS = [
 ] as const;
 
 const COL_WIDTHS = [
-  6, 12, 14, 22, 12, 18, 10, 16, 16, 5, 5, 5, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20,
-  30, 14, 14, 24, 24, 24,
+  6, 12, 14, 22, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12,
+  12, 16, 20, 30, 14, 14, 24, 24, 24,
 ];
 
-export async function buildKeHoachXe(tripPlans: any[]): Promise<Buffer> {
+const LOGO_PATH = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "..",
+  "img",
+  "LogisticCompany.png",
+);
+
+const HEADER_ROWS = 5;
+const TITLE_ROW = 4;
+const DATE_ROW = 5;
+const TITLE_COL_START = 9;  // column I (1-based)
+const TITLE_COL_END = 19;   // column S (1-based)
+
+export async function buildKeHoachXe(
+  tripPlans: any[],
+  from?: string,
+  to?: string,
+): Promise<Buffer> {
+  // Date fallback logic
+  let headerFrom = from ? formatDate(new Date(from)) : "";
+  let headerTo = to ? formatDate(new Date(to)) : "";
+
+  if (!headerFrom && tripPlans.length > 0) {
+    const timestamps = tripPlans
+      .map((t) => new Date(t.tripDate).getTime())
+      .filter((n) => !isNaN(n));
+    if (timestamps.length > 0) {
+      headerFrom = formatDate(new Date(Math.min(...timestamps)));
+    }
+  }
+  if (!headerTo) {
+    headerTo = formatDate(new Date());
+  }
+
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("kế hoạch xe");
 
-  ws.addRow(HEADERS as unknown as any[]);
-  const headerRow = ws.getRow(1);
-  headerRow.font = { bold: true };
-  headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
-  headerRow.alignment = { horizontal: "center", wrapText: true };
-
+  // ── Column widths ──────────────────────────────────────────────────────────
   HEADERS.forEach((_, i) => {
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
+  // Logo image
+  let logoBuffer: Buffer | null = null;
+  try {
+    logoBuffer = fs.readFileSync(LOGO_PATH) as unknown as Buffer;
+  } catch {
+    // Logo file missing — skip image, still render title
+  }
+
+  if (logoBuffer) {
+    const imageId = wb.addImage({ buffer: logoBuffer as any, extension: "png" });
+    ws.addImage(imageId, {
+      tl: { col: 0, row: 0 },
+      br: { col: 5, row: 7 },
+    } as any);
+  }
+
+  // Title: row 4, I4:S4
+  ws.mergeCells(TITLE_ROW, TITLE_COL_START, TITLE_ROW, TITLE_COL_END);
+  const titleCell = ws.getCell(TITLE_ROW, TITLE_COL_START);
+  titleCell.value = "KẾ HOẠCH XE";
+  titleCell.font = { bold: true, size: 18, color: { argb: "FF003399" } };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  // Date range: row 5, I5:S5
+  ws.mergeCells(DATE_ROW, TITLE_COL_START, DATE_ROW, TITLE_COL_END);
+  const dateCell = ws.getCell(DATE_ROW, TITLE_COL_START);
+  dateCell.value = `From: ${headerFrom}  To: ${headerTo}`;
+  dateCell.font = { size: 11 };
+  dateCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  // ── Column header row (row 6) ──────────────────────────────────────────────
+  const headerRowObj = ws.addRow(HEADERS as unknown as any[]);
+  headerRowObj.font = { bold: true };
+  headerRowObj.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
+  headerRowObj.alignment = { horizontal: "center", wrapText: true };
+
+  // ── Data rows ──────────────────────────────────────────────────────────────
   tripPlans.forEach((tp, idx) => {
     const sizeCode = tp.containerSize?.code ?? null;
     const serviceTypeLabel = tp.serviceType?.code ?? "";
@@ -78,16 +141,13 @@ export async function buildKeHoachXe(tripPlans: any[]): Promise<Buffer> {
     ws.addRow([
       idx + 1, // STT
       formatDate(tp.tripDate), // NGÀY
-      tp.vehicle?.licensePlate ?? "", // SỐ XE
+      tp.vehiclePlate ?? "", // SỐ XE
       tp.customer?.name ?? "", // KHÁCH HÀNG
       serviceTypeLabel, // LOẠI HÌNH
       tp.carrier?.name ?? "", // ĐƠN VỊ
       sizeCode ?? "", // SIZE CONT
       tp.outboundContainerNumber ?? "", // CONT ĐI
       tp.inboundContainerNumber ?? "", // CONT VỀ
-      sizeToTick(sizeCode, "20"), // 20'
-      sizeToTick(sizeCode, "40"), // 40'
-      sizeToTick(sizeCode, "45"), // 45'
       tp.pickupLocationName ?? "", // Điểm Lấy
       tp.loadUnloadLocationName ?? "", // Điểm Đóng/Rút
       tp.dropoffLocationName ?? "", // Điểm Hạ
@@ -110,8 +170,9 @@ export async function buildKeHoachXe(tripPlans: any[]): Promise<Buffer> {
     ]);
   });
 
+  // ── Borders on data rows ───────────────────────────────────────────────────
   ws.eachRow((row, rowNum) => {
-    if (rowNum === 1) return;
+    if (rowNum <= HEADER_ROWS) return;
     row.eachCell((cell) => {
       cell.border = {
         top: { style: "thin" },

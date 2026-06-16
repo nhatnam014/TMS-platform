@@ -36,10 +36,10 @@ export class CreateTripPlanDto implements ICreateTripPlanDto {
   @IsEnum(TRIP_MODES)
   tripMode?: (typeof TRIP_MODES)[number];
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  vehicleId!: string;
+  vehiclePlate?: string;
 
   @ApiProperty()
   @IsString()

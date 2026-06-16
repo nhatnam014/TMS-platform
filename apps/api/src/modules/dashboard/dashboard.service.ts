@@ -15,20 +15,18 @@ export class DashboardService {
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    const [totalTrips, completed, inTransit, activeVehicles, maintenance, expiring] =
+    const [totalTrips, completed, inTransit, totalVehicleRecords, expiring] =
       await Promise.all([
         this.prisma.tripPlan.count({ where: { tripDate: { gte: today, lt: tomorrow } } }),
         this.prisma.tripPlan.count({ where: { tripDate: { gte: today, lt: tomorrow }, status: "COMPLETED" } }),
         this.prisma.tripPlan.count({ where: { tripDate: { gte: today, lt: tomorrow }, status: "IN_TRANSIT" } }),
-        this.prisma.vehicle.count({ where: { status: "ACTIVE" } }),
-        this.prisma.vehicle.count({ where: { status: "MAINTENANCE" } }),
-        this.prisma.vehicle.count({
+        this.prisma.vehicleRecord.count(),
+        this.prisma.vehicleRecord.count({
           where: {
-            status: "ACTIVE",
             OR: [
-              { inspectionExpiry: { lte: thirtyDaysFromNow } },
-              { insuranceExpiry: { lte: thirtyDaysFromNow } },
-              { registrationExpiry: { lte: thirtyDaysFromNow } },
+              { hanDangKiem: { gte: today, lte: thirtyDaysFromNow } },
+              { hanBaoHiem: { gte: today, lte: thirtyDaysFromNow } },
+              { hanCaVet: { gte: today, lte: thirtyDaysFromNow } },
             ],
           },
         }),
@@ -38,8 +36,8 @@ export class DashboardService {
       totalTripsToday: totalTrips,
       tripsCompleted: completed,
       tripsInTransit: inTransit,
-      vehiclesActive: activeVehicles,
-      vehiclesInMaintenance: maintenance,
+      vehiclesActive: totalVehicleRecords,
+      vehiclesInMaintenance: 0,
       expiringCompliance: expiring,
     };
   }
