@@ -10,11 +10,6 @@ import { SelectInput } from "@/components/SelectInput";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
-interface VehicleOption {
-  id: string;
-  licensePlate: string;
-  vehicleType: string;
-}
 interface NamedOption {
   id: string;
   code: string;
@@ -38,7 +33,7 @@ interface TripPlanRow {
   serviceType: { id: string; code: string; description: string } | null;
   containerSize: { id: string; code: string; name: string } | null;
   status: TripStatus;
-  vehicle: { id: string; licensePlate: string; vehicleType: string } | null;
+  vehiclePlate: string | null;
   customer: { id: string; name: string } | null;
   carrier: { id: string; name: string } | null;
   outboundContainerNumber: string | null;
@@ -674,8 +669,8 @@ function TripFormBody({
   setTripDate,
   serviceTypeId,
   setServiceTypeId,
-  vehicleId,
-  setVehicleId,
+  vehiclePlate,
+  setVehiclePlate,
   customerId,
   setCustomerId,
   carrierId,
@@ -708,7 +703,6 @@ function TripFormBody({
   otherCosts,
   setOtherCosts,
   // Reference data
-  vehicles,
   customers,
   carriers,
   serviceTypes,
@@ -726,8 +720,8 @@ function TripFormBody({
   setTripDate: (v: string) => void;
   serviceTypeId: string;
   setServiceTypeId: (v: string) => void;
-  vehicleId: string;
-  setVehicleId: (v: string) => void;
+  vehiclePlate: string;
+  setVehiclePlate: (v: string) => void;
   customerId: string;
   setCustomerId: (v: string) => void;
   carrierId: string;
@@ -756,7 +750,6 @@ function TripFormBody({
   setSlot: (key: string, patch: Partial<FixedSlotState>) => void;
   otherCosts: OtherCostRow[];
   setOtherCosts: (rows: OtherCostRow[]) => void;
-  vehicles: VehicleOption[];
   customers: NamedOption[];
   carriers: NamedOption[];
   serviceTypes: ServiceTypeOption[];
@@ -820,13 +813,13 @@ function TripFormBody({
               </select>
             </Field>
           )}
-          <Field label="Xe *">
-            <SelectInput
-              value={vehicleId}
-              onChange={setVehicleId}
-              options={vehicles.map((v) => ({ value: v.id, label: v.licensePlate }))}
-              placeholder="— Chọn xe —"
-              required
+          <Field label="Số xe">
+            <input
+              type="text"
+              value={vehiclePlate}
+              onChange={(e) => setVehiclePlate(e.target.value)}
+              style={inputStyle}
+              placeholder="Nhập biển số xe..."
             />
           </Field>
           <Field label="Khách hàng *">
@@ -1127,7 +1120,6 @@ function TripFormBody({
 // ─── Shared ref data loader ───────────────────────────────────────────────────
 
 function useRefData() {
-  const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [customers, setCustomers] = useState<NamedOption[]>([]);
   const [carriers, setCarriers] = useState<NamedOption[]>([]);
   const [serviceTypes, setServiceTypes] = useState<ServiceTypeOption[]>([]);
@@ -1138,7 +1130,6 @@ function useRefData() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/vehicles").then((r) => r.json()),
       fetch("/api/customers").then((r) => r.json()),
       fetch("/api/carriers").then((r) => r.json()),
       fetch("/api/service-types").then((r) => r.json()),
@@ -1146,8 +1137,7 @@ function useRefData() {
       fetch("/api/locations").then((r) => r.json()),
       fetch("/api/cost-templates").then((r) => r.json()),
     ])
-      .then(([v, c, ca, st, cs, locs, ct]) => {
-        setVehicles(v);
+      .then(([c, ca, st, cs, locs, ct]) => {
         setCustomers(c);
         setCarriers(ca);
         setServiceTypes(st);
@@ -1166,7 +1156,6 @@ function useRefData() {
   }, []);
 
   return {
-    vehicles,
     customers,
     carriers,
     serviceTypes,
@@ -1185,7 +1174,7 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
   const [tripDate, setTripDate] = useState(new Date().toISOString().slice(0, 10));
   const [serviceTypeId, setServiceTypeId] = useState("");
-  const [vehicleId, setVehicleId] = useState("");
+  const [vehiclePlate, setVehiclePlate] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [carrierId, setCarrierId] = useState("");
   const [containerSizeId, setContainerSizeId] = useState("");
@@ -1202,12 +1191,10 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Pre-select first vehicle and customer once loaded
   useEffect(() => {
-    if (refs.vehicles.length && !vehicleId) setVehicleId(refs.vehicles[0].id);
     if (refs.customers.length && !customerId) setCustomerId(refs.customers[0].id);
     if (refs.serviceTypes.length && !serviceTypeId) setServiceTypeId(refs.serviceTypes[0].id);
-  }, [refs.vehicles, refs.customers, refs.serviceTypes]);
+  }, [refs.customers, refs.serviceTypes]);
 
   function patchSlot(key: string, patch: Partial<FixedSlotState>) {
     setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
@@ -1215,8 +1202,8 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!vehicleId || !customerId || !serviceTypeId) {
-      setError("Vui lòng chọn xe, khách hàng và loại dịch vụ");
+    if (!customerId || !serviceTypeId) {
+      setError("Vui lòng chọn khách hàng và loại dịch vụ");
       return;
     }
     setError(null);
@@ -1228,7 +1215,7 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         body: JSON.stringify({
           tripDate,
           serviceTypeId,
-          vehicleId,
+          vehiclePlate: vehiclePlate || undefined,
           customerId,
           carrierId: carrierId || undefined,
           containerSizeId: containerSizeId || undefined,
@@ -1280,8 +1267,8 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         setTripDate={setTripDate}
         serviceTypeId={serviceTypeId}
         setServiceTypeId={setServiceTypeId}
-        vehicleId={vehicleId}
-        setVehicleId={setVehicleId}
+        vehiclePlate={vehiclePlate}
+        setVehiclePlate={setVehiclePlate}
         customerId={customerId}
         setCustomerId={setCustomerId}
         carrierId={carrierId}
@@ -1308,7 +1295,6 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         setSlot={patchSlot}
         otherCosts={otherCosts}
         setOtherCosts={setOtherCosts}
-        vehicles={refs.vehicles}
         customers={refs.customers}
         carriers={refs.carriers}
         serviceTypes={refs.serviceTypes}
@@ -1341,7 +1327,7 @@ function EditTripModal({
   const [tripDate, setTripDate] = useState(trip.tripDate?.slice(0, 10) ?? "");
   const [serviceTypeId, setServiceTypeId] = useState(trip.serviceType?.id ?? "");
   const [status, setStatus] = useState<TripStatus>(trip.status);
-  const [vehicleId, setVehicleId] = useState(trip.vehicle?.id ?? "");
+  const [vehiclePlate, setVehiclePlate] = useState(trip.vehiclePlate ?? "");
   const [customerId, setCustomerId] = useState(trip.customer?.id ?? "");
   const [carrierId, setCarrierId] = useState(trip.carrier?.id ?? "");
   const [containerSizeId, setContainerSizeId] = useState(trip.containerSize?.id ?? "");
@@ -1380,8 +1366,8 @@ function EditTripModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!vehicleId || !customerId || !serviceTypeId) {
-      setError("Vui lòng chọn xe, khách hàng và loại dịch vụ");
+    if (!customerId || !serviceTypeId) {
+      setError("Vui lòng chọn khách hàng và loại dịch vụ");
       return;
     }
     setError(null);
@@ -1394,7 +1380,7 @@ function EditTripModal({
           tripDate,
           serviceTypeId,
           status,
-          vehicleId,
+          vehiclePlate: vehiclePlate || undefined,
           customerId,
           carrierId: carrierId || undefined,
           containerSizeId: containerSizeId || undefined,
@@ -1446,8 +1432,8 @@ function EditTripModal({
         setTripDate={setTripDate}
         serviceTypeId={serviceTypeId}
         setServiceTypeId={setServiceTypeId}
-        vehicleId={vehicleId}
-        setVehicleId={setVehicleId}
+        vehiclePlate={vehiclePlate}
+        setVehiclePlate={setVehiclePlate}
         customerId={customerId}
         setCustomerId={setCustomerId}
         carrierId={carrierId}
@@ -1476,7 +1462,6 @@ function EditTripModal({
         setSlot={patchSlot}
         otherCosts={otherCosts}
         setOtherCosts={setOtherCosts}
-        vehicles={refs.vehicles}
         customers={refs.customers}
         carriers={refs.carriers}
         serviceTypes={refs.serviceTypes}
@@ -1932,7 +1917,7 @@ export default function TripPlansPage() {
                         <td style={tdL(0, rowBg)}>{trip.tripNumber ?? "—"}</td>
                         <td style={tdL(1, rowBg)}>{formatDate(trip.tripDate)}</td>
                         <td style={{ ...tdL(2, rowBg), fontFamily: "monospace" }}>
-                          {trip.vehicle?.licensePlate ?? "—"}
+                          {trip.vehiclePlate ?? "—"}
                         </td>
                         <td style={tdL(3, rowBg)}>{trip.customer?.name ?? "—"}</td>
                         <td style={tdL(4, rowBg)}>

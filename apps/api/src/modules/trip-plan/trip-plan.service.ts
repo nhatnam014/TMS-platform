@@ -12,7 +12,6 @@ import { ENTITY_TYPES } from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 
 const TRIP_PLAN_INCLUDE = {
-  vehicle: { select: { id: true, licensePlate: true, vehicleType: true } },
   customer: { select: { id: true, code: true, name: true } },
   carrier: { select: { id: true, code: true, name: true } },
   serviceTypeMaster: { select: { id: true, code: true, description: true } },
@@ -64,7 +63,7 @@ export class TripPlanService {
     }
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.carrierId) where.carrierId = filters.carrierId;
-    if (filters.vehicleId) where.vehicleId = filters.vehicleId;
+    if (filters.vehiclePlate) where.vehiclePlate = { contains: filters.vehiclePlate, mode: Prisma.QueryMode.insensitive };
     if (filters.serviceTypeCode) {
       (where as any).serviceTypeMaster = { code: filters.serviceTypeCode };
     }
@@ -75,7 +74,7 @@ export class TripPlanService {
       const num = parseInt(s, 10);
       where.OR = [
         ...(isNaN(num) ? [] : [{ tripNumber: num }]),
-        { vehicle: { licensePlate: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { vehiclePlate: { contains: s, mode: Prisma.QueryMode.insensitive } },
         { customer: { name: { contains: s, mode: Prisma.QueryMode.insensitive } } },
         { outboundContainerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
         { inboundContainerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
@@ -144,7 +143,7 @@ export class TripPlanService {
           tripDate: new Date(dto.tripDate),
           serviceTypeId: dto.serviceTypeId,
           tripMode,
-          vehicleId: dto.vehicleId,
+          vehiclePlate: dto.vehiclePlate ?? null,
           customerId: dto.customerId,
           carrierId: dto.carrierId ?? null,
           containerSizeId: dto.containerSizeId ?? null,
@@ -179,7 +178,6 @@ export class TripPlanService {
           cauDuongAmount: dto.cauDuongAmount ?? null,
         },
         include: {
-          vehicle: true,
           customer: true,
           carrier: true,
         },
@@ -246,7 +244,7 @@ export class TripPlanService {
           ...(dto.tripDate !== undefined && { tripDate: new Date(dto.tripDate) }),
           ...(dto.serviceTypeId !== undefined && { serviceTypeId: dto.serviceTypeId }),
           ...(dto.tripMode !== undefined && { tripMode: dto.tripMode as any }),
-          ...(dto.vehicleId !== undefined && { vehicleId: dto.vehicleId }),
+          ...(dto.vehiclePlate !== undefined && { vehiclePlate: dto.vehiclePlate }),
           ...(dto.customerId !== undefined && { customerId: dto.customerId }),
           ...(dto.carrierId !== undefined && { carrierId: dto.carrierId }),
           ...(dto.containerSizeId !== undefined && { containerSizeId: dto.containerSizeId }),

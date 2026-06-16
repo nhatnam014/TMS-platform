@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import type { ImportResult, VehicleConflictEntry, VehicleImportPreviewResult } from "@tms/shared";
+import type { ImportResult } from "@tms/shared";
 import { parseQuanLyXe } from "./parsers/quanly-xe.parser";
 import { parseKeHoachXe } from "./parsers/kehoach-xe.parser";
 
@@ -16,7 +16,7 @@ export class ImportService {
   async importVehicles(
     buffer: Buffer,
     confirm: boolean,
-  ): Promise<ImportResult | VehicleImportPreviewResult> {
+  ): Promise<ImportResult | { toCreate: number; warnings: string[]; errors: string[] }> {
     let rows: ReturnType<typeof parseQuanLyXe>;
     try {
       const workbook = new ExcelJS.Workbook();
@@ -31,21 +31,12 @@ export class ImportService {
 
     // ── Phase 1: Preview (no writes) ──────────────────────────────────────────
     if (!confirm) {
-      const conflicts: VehicleConflictEntry[] = [];
       let toCreate = 0;
-
       for (const row of rows) {
-        if (row.type !== "record") continue;
-
-        toCreate++;
-
-        if (row.bienSo) {
-          const conflict = await this.detectVehicleConflict(row.bienSo, row);
-          if (conflict) conflicts.push(conflict);
-        }
+        if (row.type === "record") toCreate++;
       }
 
-      // Collect structural errors (mooc_continuation with no preceding record)
+      // Collect structural errors
       let hasRecord = false;
       for (const row of rows) {
         if (row.type === "record") {
@@ -57,27 +48,16 @@ export class ImportService {
         }
       }
 
-      return { toCreate, conflicts, errors };
+      return { toCreate, warnings: [], errors };
     }
 
     // ── Phase 2: Execute (writes) ─────────────────────────────────────────────
-    const warnings: string[] = [];
     let imported = 0;
     let currentRecordId: string | null = null;
 
     for (const row of rows) {
       try {
         if (row.type === "record") {
-          // Driver upsert — only when both name and phone are present
-          if (row.tenTaiXe && row.sdt) {
-            await this.findOrCreateDriver(row.tenTaiXe, row.sdt);
-          }
-
-          // Vehicle upsert (create or update on conflict)
-          if (row.bienSo) {
-            await this.upsertVehicle(row.bienSo, row);
-          }
-
           const record = await this.prisma.vehicleRecord.create({
             data: {
               tenTaiXe: row.tenTaiXe ?? null,
@@ -136,87 +116,7 @@ export class ImportService {
       console.error("Audit log failed (non-fatal):", err);
     }
 
-    return { imported, warnings, errors };
-  }
-
-  private async findOrCreateDriver(fullName: string, phone: string) {
-    if (!fullName && !phone) return null;
-    const existing = await this.prisma.driver.findFirst({
-      where: { fullName, phone: phone || null },
-    });
-    if (existing) return existing;
-    return this.prisma.driver.create({
-      data: { fullName, phone: phone || null, status: "ACTIVE" },
-    });
-  }
-
-  private async detectVehicleConflict(
-    licensePlate: string,
-    row: ReturnType<typeof parseQuanLyXe>[number],
-  ): Promise<VehicleConflictEntry | null> {
-    const vehicle = await this.prisma.vehicle.findUnique({ where: { licensePlate } });
-    if (!vehicle) return null;
-
-    const fields: VehicleConflictEntry["fields"] = {};
-
-    if (row.loaiXe && vehicle.vehicleType !== row.loaiXe) {
-      fields["vehicleType"] = { current: vehicle.vehicleType, incoming: row.loaiXe };
-    }
-
-    const toDateStr = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
-
-    const incomingInspection = toDateStr(row.hanDangKiem);
-    const currentInspection = toDateStr(vehicle.inspectionExpiry);
-    if (incomingInspection !== currentInspection) {
-      fields["inspectionExpiry"] = { current: currentInspection, incoming: incomingInspection };
-    }
-
-    const incomingInsurance = toDateStr(row.hanBaoHiem);
-    const currentInsurance = toDateStr(vehicle.insuranceExpiry);
-    if (incomingInsurance !== currentInsurance) {
-      fields["insuranceExpiry"] = { current: currentInsurance, incoming: incomingInsurance };
-    }
-
-    const incomingRegistration = toDateStr(row.hanCaVet);
-    const currentRegistration = toDateStr(vehicle.registrationExpiry);
-    if (incomingRegistration !== currentRegistration) {
-      fields["registrationExpiry"] = {
-        current: currentRegistration,
-        incoming: incomingRegistration,
-      };
-    }
-
-    if (Object.keys(fields).length === 0) return null;
-    return { licensePlate, fields };
-  }
-
-  private async upsertVehicle(licensePlate: string, row: ReturnType<typeof parseQuanLyXe>[number]) {
-    const existing = await this.prisma.vehicle.findUnique({ where: { licensePlate } });
-    const KNOWN_VEHICLE_TYPES = ["SHACMAN", "CHENGLONG", "HOWO", "FREIGHTLINER", "FAW", "OTHER"];
-    const vehicleType =
-      row.loaiXe && KNOWN_VEHICLE_TYPES.includes(row.loaiXe) ? (row.loaiXe as any) : "OTHER";
-
-    if (existing) {
-      await this.prisma.vehicle.update({
-        where: { licensePlate },
-        data: {
-          vehicleType,
-          inspectionExpiry: row.hanDangKiem ?? null,
-          insuranceExpiry: row.hanBaoHiem ?? null,
-          registrationExpiry: row.hanCaVet ?? null,
-        },
-      });
-    } else {
-      await this.prisma.vehicle.create({
-        data: {
-          licensePlate,
-          vehicleType,
-          inspectionExpiry: row.hanDangKiem ?? null,
-          insuranceExpiry: row.hanBaoHiem ?? null,
-          registrationExpiry: row.hanCaVet ?? null,
-        },
-      });
-    }
+    return { imported, warnings: [], errors };
   }
 
   async importTripPlans(buffer: Buffer): Promise<ImportResult> {
@@ -240,16 +140,11 @@ export class ImportService {
           continue;
         }
 
-        if (!row.vehiclePlate) {
-          errors.push(`Hàng ${row.rowNum}: thiếu số xe, bỏ qua`);
-          continue;
-        }
         if (!row.tripDate) {
           errors.push(`Hàng ${row.rowNum}: thiếu ngày, bỏ qua`);
           continue;
         }
 
-        const vehicle = await this.findOrCreateVehicle(row.vehiclePlate, warnings);
         const customer = await this.findOrCreateCustomer(row.customerName, warnings);
 
         let carrierId: string | undefined;
@@ -279,7 +174,7 @@ export class ImportService {
               tripDate: row.tripDate!,
               tripNumber: row.tripNumber ?? null,
               serviceTypeId,
-              vehicleId: vehicle.id,
+              vehiclePlate: row.vehiclePlate ?? null,
               customerId: customer.id,
               carrierId: carrierId ?? null,
               containerSizeId,
@@ -341,13 +236,6 @@ export class ImportService {
     if (existing) return existing;
     warnings.push(`Tạo mới size cont: ${code}`);
     return tx.containerSize.create({ data: { code, name: code } });
-  }
-
-  private async findOrCreateVehicle(licensePlate: string, warnings: string[]) {
-    const existing = await this.prisma.vehicle.findUnique({ where: { licensePlate } });
-    if (existing) return existing;
-    warnings.push(`Xe mới tự tạo: ${licensePlate}`);
-    return this.prisma.vehicle.create({ data: { licensePlate, vehicleType: "OTHER" } });
   }
 
   private async findOrCreateCustomer(name: string | undefined, warnings: string[]) {

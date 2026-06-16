@@ -16,40 +16,6 @@ export interface UpdateUserDto {
   isActive?: boolean;
 }
 
-// ---------- Vehicle & Driver DTOs ----------
-export interface CreateVehicleDto {
-  licensePlate: string;
-  vehicleType: VehicleType;
-  inspectionExpiry?: string;
-  insuranceExpiry?: string;
-  registrationExpiry?: string;
-  notes?: string;
-}
-
-export interface UpdateVehicleDto {
-  licensePlate?: string;
-  vehicleType?: VehicleType;
-  status?: VehicleStatus;
-  inspectionExpiry?: string;
-  insuranceExpiry?: string;
-  registrationExpiry?: string;
-  notes?: string;
-}
-
-export interface CreateDriverDto {
-  fullName: string;
-  phone?: string;
-  notes?: string;
-}
-
-export interface UpdateDriverDto {
-  fullName?: string;
-  phone?: string;
-  status?: DriverStatus;
-  notes?: string;
-  vehicleId?: string | null;
-}
-
 // ---------- Reference Data DTOs ----------
 export interface CreateCustomerDto {
   code: string;
@@ -176,7 +142,7 @@ export interface CreateTripPlanDto {
   tripDate: string;
   serviceTypeId: string;
   tripMode?: TripMode;
-  vehicleId: string;
+  vehiclePlate?: string;
   customerId: string;
   carrierId?: string;
   containerSizeId?: string;
@@ -223,7 +189,7 @@ export interface UpdateTripPlanDto {
   tripDate?: string;
   serviceTypeId?: string;
   tripMode?: TripMode;
-  vehicleId?: string;
+  vehiclePlate?: string;
   customerId?: string;
   carrierId?: string;
   containerSizeId?: string;
@@ -264,7 +230,7 @@ export interface TripPlanFilters {
   dateTo?: string;
   customerId?: string;
   carrierId?: string;
-  vehicleId?: string;
+  vehiclePlate?: string;
   serviceTypeCode?: string;
   status?: TripStatus;
   search?: string;
@@ -303,9 +269,6 @@ export interface DashboardStats {
 // ---------- Enums (mirrored from Prisma for frontend use) ----------
 export type TripStatus = "PLANNED" | "DISPATCHED" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
 export type TripMode = "STANDARD" | "DROP_AND_HOOK";
-export type VehicleType = "SHACMAN" | "CHENGLONG" | "HOWO" | "FREIGHTLINER" | "FAW" | "OTHER";
-export type VehicleStatus = "ACTIVE" | "MAINTENANCE" | "DECOMMISSIONED" | "WAITING_DRIVER";
-export type DriverStatus = "ACTIVE" | "ON_LEAVE" | "TERMINATED";
 export type LocationType = "PORT" | "DEPOT" | "ICD" | "INDUSTRIAL_ZONE" | "WAREHOUSE" | "OTHER";
 export type YardMoveStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type YardCostType = "YARD_HANDLING" | "FORKLIFT" | "OVERTIME" | "OTHER";
@@ -326,8 +289,6 @@ export const ENTITY_TYPES = {
   YARD_MOVE: "YardMove",
   YARD_MOVE_COST: "YardMoveCost",
   USER: "User",
-  VEHICLE: "Vehicle",
-  DRIVER: "Driver",
   CUSTOMER: "Customer",
   CARRIER: "Carrier",
   LOCATION: "Location",
@@ -371,17 +332,6 @@ export interface YardMoveFilters {
 export interface ImportResult {
   imported: number;
   warnings: string[];
-  errors: string[];
-}
-
-export interface VehicleConflictEntry {
-  licensePlate: string;
-  fields: Record<string, { current: unknown; incoming: unknown }>;
-}
-
-export interface VehicleImportPreviewResult {
-  toCreate: number;
-  conflicts: VehicleConflictEntry[];
   errors: string[];
 }
 

@@ -32,7 +32,12 @@
       "Bash(pnpm prisma *)",
       "Bash(yes)",
       "Bash(PGPASSWORD=tms_secret psql -h localhost -U tms -d tms_dev -c \"SELECT 'service_types' as t, count\\(*\\) FROM service_types UNION ALL SELECT 'container_sizes', count\\(*\\) FROM container_sizes UNION ALL SELECT 'trip_plans_migrated', count\\(*\\) FROM trip_plans WHERE service_type_id IS NOT NULL;\")",
-      "Bash(pnpm --filter web exec tsc --noEmit)"
+      "Bash(pnpm --filter web exec tsc --noEmit)",
+      "Bash(pnpm --filter @tms/db exec prisma migrate deploy)",
+      "Bash(pnpm -w -r exec tsc --noEmit)",
+      "Bash(awk '/^const HEADERS = \\\\[/,/^\\\\] as const;/' /Users/admin/Downloads/tms-platform/apps/api/src/modules/export/builders/kehoach-xe.builder.ts)",
+      "Bash(node -e \"const a=[6,12,14,22,12,18,10,16,16,22,22,22,12,16,12,16,14,16,12,12,16,20,30,14,14,24,24,24]; console.log\\('COL_WIDTHS length:', a.length\\);\")",
+      "Bash(awk '/ws.addRow\\\\\\(\\\\[$/,/^    \\\\]\\\\\\);$/' /Users/admin/Downloads/tms-platform/apps/api/src/modules/export/builders/kehoach-xe.builder.ts)"
     ]
   }
 }

@@ -16,22 +16,14 @@ export class ExportService {
       { dateFrom: from, dateTo: to },
       { page: 1, limit: 10000 },
     );
-    return buildKeHoachXe(result.data);
+    return buildKeHoachXe(result.data, from, to);
   }
 
   async exportVehicles(): Promise<Buffer> {
-    const vehicles = await this.prisma.vehicle.findMany({
-      include: {
-        driver: true,
-        trailers: {
-          include: { trailer: true },
-          where: { releasedAt: null },
-          orderBy: { assignedAt: "desc" },
-          take: 1,
-        },
-      },
-      orderBy: { licensePlate: "asc" },
+    const records = await this.prisma.vehicleRecord.findMany({
+      include: { moocs: true },
+      orderBy: { createdAt: "asc" },
     });
-    return buildQuanLyXe(vehicles);
+    return buildQuanLyXe(records);
   }
 }

@@ -7,9 +7,7 @@ import { usePathname } from "next/navigation";
 const BASE_NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trip-plans", label: "Kế hoạch chuyến" },
-  { href: "/vehicles", label: "Phương tiện" },
   { href: "/vehicle-records", label: "Quản lý xe" },
-  { href: "/drivers", label: "Tài xế" },
   { href: "/yard-moves", label: "Lệnh bãi" },
   { href: "/customers", label: "Khách hàng" },
   { href: "/carriers", label: "VENDOR" },
