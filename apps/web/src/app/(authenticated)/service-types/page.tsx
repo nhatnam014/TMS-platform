@@ -164,12 +164,17 @@ function Modal({
 
 const EMPTY = { code: "", description: "" };
 
+const PAGE_SIZE_ST = 10;
+
 export default function ServiceTypesPage() {
   const toast = useToast();
   const [rows, setRows] = useState<ServiceTypeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY);
@@ -181,15 +186,24 @@ export default function ServiceTypesPage() {
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [isActiveFilter, setIsActiveFilter] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch("/api/service-types")
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE_ST));
+    if (search.trim()) params.set("search", search.trim());
+    if (isActiveFilter) params.set("isActive", isActiveFilter);
+    fetch(`/api/service-types?${params.toString()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data) => {
         if (!cancelled) {
-          setRows(data);
+          setRows(data.data);
+          setTotal(data.meta.total);
+          setTotalPages(data.meta.totalPages);
           setError(null);
         }
       })
@@ -202,7 +216,7 @@ export default function ServiceTypesPage() {
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refresh, page, search, isActiveFilter]);
 
   async function handleCreate() {
     setCreateError(null);
@@ -288,6 +302,51 @@ export default function ServiceTypesPage() {
         >
           + Thêm loại dịch vụ
         </button>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Tìm mã, mô tả..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+            minWidth: 220,
+            flex: "1 1 220px",
+          }}
+        />
+        <select
+          value={isActiveFilter}
+          onChange={(e) => {
+            setIsActiveFilter(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        >
+          <option value="">Tất cả trạng thái</option>
+          <option value="true">Đang hoạt động</option>
+          <option value="false">Ngừng hoạt động</option>
+        </select>
       </div>
 
       {loading && <p style={{ color: "#64748b" }}>Đang tải...</p>}
@@ -397,8 +456,86 @@ export default function ServiceTypesPage() {
               ))}
             </tbody>
           </table>
-          <div style={{ padding: "10px 14px", color: "#94a3b8", fontSize: 13 }}>
-            {rows.length} loại dịch vụ
+          <div
+            style={{
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <span style={{ color: "#94a3b8", fontSize: 13 }}>
+              {total === 0
+                ? "0 loại dịch vụ"
+                : `Hiển thị ${(page - 1) * PAGE_SIZE_ST + 1}–${Math.min(page * PAGE_SIZE_ST, total)} / ${total}`}
+            </span>
+            {totalPages > 1 && (
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  style={{
+                    padding: "4px 10px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 5,
+                    background: page === 1 ? "#f1f5f9" : "#fff",
+                    cursor: page === 1 ? "default" : "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  ‹
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                  .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                    if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === "…" ? (
+                      <span
+                        key={`e${i}`}
+                        style={{ padding: "4px 6px", fontSize: 13, color: "#94a3b8" }}
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p as number)}
+                        style={{
+                          padding: "4px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: 5,
+                          background: p === page ? "#3b82f6" : "#fff",
+                          color: p === page ? "#fff" : "#374151",
+                          cursor: "pointer",
+                          fontSize: 13,
+                        }}
+                      >
+                        {p}
+                      </button>
+                    ),
+                  )}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  style={{
+                    padding: "4px 10px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 5,
+                    background: page === totalPages ? "#f1f5f9" : "#fff",
+                    cursor: page === totalPages ? "default" : "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

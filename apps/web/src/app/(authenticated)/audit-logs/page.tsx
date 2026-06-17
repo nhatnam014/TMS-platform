@@ -14,15 +14,26 @@ interface AuditLogRow {
   summary: string;
 }
 
+const PAGE_SIZE_AL = 10;
+
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
-    fetch("/api/audit-logs?limit=50")
+    const params = new URLSearchParams();
+    params.set("limit", String(PAGE_SIZE_AL));
+    params.set("page", String(page));
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    fetch(`/api/audit-logs?${params.toString()}`)
       .then(async (res) => {
         if (res.status === 403) {
           setForbidden(true);
@@ -32,10 +43,11 @@ export default function AuditLogsPage() {
         const data: PaginatedResponse<AuditLogRow> = await res.json();
         setLogs(data.data);
         setTotal(data.meta.total);
+        setTotalPages(data.meta.totalPages);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Lỗi không xác định"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, dateFrom, dateTo]);
 
   if (loading)
     return (
@@ -81,7 +93,52 @@ export default function AuditLogsPage() {
         }}
       >
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Nhật ký kiểm tra</h1>
-        <span style={{ fontSize: 13, color: "#64748b" }}>{total} bản ghi</span>
+        <span style={{ fontSize: 13, color: "#64748b" }}>
+          {total === 0
+            ? "0 bản ghi"
+            : `${(page - 1) * PAGE_SIZE_AL + 1}–${Math.min(page * PAGE_SIZE_AL, total)} / ${total}`}
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontSize: 13, color: "#64748b", whiteSpace: "nowrap" }}>Từ ngày</span>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => {
+            setDateFrom(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        />
+        <span style={{ fontSize: 13, color: "#64748b", whiteSpace: "nowrap" }}>Đến ngày</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => {
+            setDateTo(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        />
       </div>
 
       <div
@@ -186,6 +243,73 @@ export default function AuditLogsPage() {
             )}
           </tbody>
         </table>
+        {totalPages > 1 && (
+          <div
+            style={{ padding: "10px 14px", display: "flex", justifyContent: "flex-end", gap: 4 }}
+          >
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                padding: "4px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 5,
+                background: page === 1 ? "#f1f5f9" : "#fff",
+                cursor: page === 1 ? "default" : "pointer",
+                fontSize: 13,
+              }}
+            >
+              ‹
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+              .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === "…" ? (
+                  <span
+                    key={`e${i}`}
+                    style={{ padding: "4px 6px", fontSize: 13, color: "#94a3b8" }}
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p as number)}
+                    style={{
+                      padding: "4px 10px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: 5,
+                      background: p === page ? "#3b82f6" : "#fff",
+                      color: p === page ? "#fff" : "#374151",
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              style={{
+                padding: "4px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 5,
+                background: page === totalPages ? "#f1f5f9" : "#fff",
+                cursor: page === totalPages ? "default" : "pointer",
+                fontSize: 13,
+              }}
+            >
+              ›
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

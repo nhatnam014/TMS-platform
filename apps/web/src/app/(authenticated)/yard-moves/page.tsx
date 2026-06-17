@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
+import { SelectInput } from "@/components/SelectInput";
 
 type YardMoveStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 type YardCostType = "YARD_HANDLING" | "FORKLIFT" | "OVERTIME" | "OTHER";
@@ -75,11 +76,21 @@ function Modal({
   title,
   onClose,
   children,
+  wide,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
     <div
       style={{
@@ -88,18 +99,21 @@ function Modal({
         background: "rgba(0,0,0,0.4)",
         zIndex: 50,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
+        paddingTop: 40,
+        overflowY: "auto",
       }}
+      onWheel={(e) => e.stopPropagation()}
     >
       <div
         style={{
           background: "#fff",
           borderRadius: 12,
           padding: 28,
-          width: 500,
-          maxHeight: "90vh",
-          overflowY: "auto",
+          width: wide ? "min(95vw, 760px)" : 520,
+          maxWidth: wide ? "unset" : "95vw",
+          marginBottom: 40,
           boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
         }}
       >
@@ -131,6 +145,57 @@ function Modal({
   );
 }
 
+// ─── Shared form styles ───────────────────────────────────────────────────────
+
+const ymInputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
+  fontSize: 13,
+  boxSizing: "border-box",
+};
+
+const ymBtnPrimary: React.CSSProperties = {
+  padding: "8px 18px",
+  background: "#2563eb",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const ymBtnSecondary: React.CSSProperties = {
+  padding: "8px 18px",
+  background: "#f1f5f9",
+  color: "#374151",
+  border: "1px solid #e2e8f0",
+  borderRadius: 6,
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+function YmField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: "block", marginBottom: 14, width: "100%" }}>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: "#374151",
+          display: "block",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 // ─── CREATE MODAL ─────────────────────────────────────────────────────────────
 
 function CreateYardMoveModal({
@@ -149,15 +214,21 @@ function CreateYardMoveModal({
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   const [containerNumber, setContainerNumber] = useState("");
-  const [fromZone, setFromZone] = useState<FactoryZone | "">("");
-  const [toZone, setToZone] = useState<FactoryZone | "">("");
+  const [fromZone, setFromZone] = useState("");
+  const [toZone, setToZone] = useState("");
   const [locationId, setLocationId] = useState("");
   const [notes, setNotes] = useState("");
 
+  const zoneOptions = FACTORY_ZONES.map((z) => ({ value: z, label: ZONE_LABELS[z] }));
+  const locationSelectOptions = locations.map((l) => ({
+    value: l.id,
+    label: `${l.name} (${l.code})`,
+  }));
+
   useEffect(() => {
-    fetch("/api/locations")
+    fetch("/api/locations?limit=500")
       .then((r) => r.json())
-      .then((locs) => setLocations(locs))
+      .then((res) => setLocations(res.data ?? res))
       .catch(() => {})
       .finally(() => setLoadingOptions(false));
   }, []);
@@ -198,126 +269,100 @@ function CreateYardMoveModal({
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #e2e8f0",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#475569",
-    marginBottom: 4,
-  };
-
   return (
-    <Modal title="Tạo lệnh bãi mới" onClose={onClose}>
+    <Modal title="Tạo lệnh bãi mới" onClose={onClose} wide>
       {loadingOptions ? (
-        <p style={{ textAlign: "center", color: "#94a3b8" }}>Đang tải dữ liệu...</p>
+        <p style={{ textAlign: "center", color: "#94a3b8", padding: "24px 0" }}>
+          Đang tải dữ liệu...
+        </p>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <label style={labelStyle}>Ngày *</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={inputStyle}
-              required
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Số Container * (VD: ABCD1234567)</label>
-            <input
-              type="text"
-              value={containerNumber}
-              onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
-              pattern="[A-Z]{4}[0-9]{7}"
-              placeholder="ABCD1234567"
-              style={inputStyle}
-              required
-            />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Từ khu vực *</label>
-              <select
-                value={fromZone}
-                onChange={(e) => setFromZone(e.target.value as FactoryZone)}
-                style={inputStyle}
-                required
-              >
-                <option value="">-- Chọn --</option>
-                {FACTORY_ZONES.map((z) => (
-                  <option key={z} value={z}>
-                    {ZONE_LABELS[z]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Đến khu vực *</label>
-              <select
-                value={toZone}
-                onChange={(e) => setToZone(e.target.value as FactoryZone)}
-                style={inputStyle}
-                required
-              >
-                <option value="">-- Chọn --</option>
-                {FACTORY_ZONES.map((z) => (
-                  <option key={z} value={z}>
-                    {ZONE_LABELS[z]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>Địa điểm *</label>
-            <select
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-              style={inputStyle}
-              required
-            >
-              <option value="">-- Chọn địa điểm --</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name} ({l.code})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Ghi chú</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </div>
-          {formError && <p style={{ color: "#dc2626", fontSize: 13 }}>{formError}</p>}
-          <button
-            type="submit"
-            disabled={submitting}
+        <form onSubmit={handleSubmit}>
+          <div
             style={{
-              padding: "9px 18px",
-              background: "#3b82f6",
-              color: "#fff",
-              border: "none",
-              borderRadius: 7,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: "pointer",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "0 20px",
+              border: "1px solid #e2e8f0",
+              borderRadius: 8,
+              padding: "16px 20px",
+              marginBottom: 16,
             }}
           >
-            {submitting ? "Đang tạo..." : "Tạo lệnh bãi"}
-          </button>
+            <YmField label="Ngày *">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={ymInputStyle}
+                required
+              />
+            </YmField>
+            <YmField label="Số Container * (VD: ABCD1234567)">
+              <input
+                type="text"
+                value={containerNumber}
+                onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
+                pattern="[A-Z]{4}[0-9]{7}"
+                placeholder="ABCD1234567"
+                style={ymInputStyle}
+                required
+              />
+            </YmField>
+            <YmField label="Từ khu vực *">
+              <SelectInput
+                options={zoneOptions}
+                value={fromZone}
+                onChange={setFromZone}
+                placeholder="— Chọn khu vực —"
+                required
+              />
+            </YmField>
+            <YmField label="Đến khu vực *">
+              <SelectInput
+                options={zoneOptions}
+                value={toZone}
+                onChange={setToZone}
+                placeholder="— Chọn khu vực —"
+                required
+              />
+            </YmField>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <YmField label="Địa điểm *">
+                <SelectInput
+                  options={locationSelectOptions}
+                  value={locationId}
+                  onChange={setLocationId}
+                  placeholder="— Chọn địa điểm —"
+                  required
+                />
+              </YmField>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <YmField label="Ghi chú">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  style={{ ...ymInputStyle, resize: "vertical" }}
+                />
+              </YmField>
+            </div>
+          </div>
+          {formError && (
+            <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button type="button" onClick={onClose} style={ymBtnSecondary}>
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{ ...ymBtnPrimary, opacity: submitting ? 0.7 : 1 }}
+            >
+              {submitting ? "Đang tạo..." : "Tạo lệnh bãi"}
+            </button>
+          </div>
         </form>
       )}
     </Modal>
@@ -466,15 +511,21 @@ function EditYardMoveModal({
 
   const [date, setDate] = useState(move.date.slice(0, 10));
   const [containerNumber, setContainerNumber] = useState(move.containerNumber);
-  const [fromZone, setFromZone] = useState<FactoryZone>(move.fromZone);
-  const [toZone, setToZone] = useState<FactoryZone>(move.toZone);
+  const [fromZone, setFromZone] = useState(move.fromZone as string);
+  const [toZone, setToZone] = useState(move.toZone as string);
   const [locationId, setLocationId] = useState(move.location?.id ?? "");
   const [notes, setNotes] = useState(move.notes ?? "");
 
+  const zoneOptions = FACTORY_ZONES.map((z) => ({ value: z, label: ZONE_LABELS[z] }));
+  const locationSelectOptions = locations.map((l) => ({
+    value: l.id,
+    label: `${l.name} (${l.code})`,
+  }));
+
   useEffect(() => {
-    fetch("/api/locations")
+    fetch("/api/locations?limit=500")
       .then((r) => r.json())
-      .then((locs) => setLocations(locs))
+      .then((res) => setLocations(res.data ?? res))
       .catch(() => {});
   }, []);
 
@@ -510,133 +561,91 @@ function EditYardMoveModal({
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #e2e8f0",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#475569",
-    marginBottom: 4,
-  };
-
   return (
-    <Modal title="Sửa lệnh bãi" onClose={onClose}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <label style={labelStyle}>Ngày *</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={inputStyle}
-            required
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Số Container * (VD: ABCD1234567)</label>
-          <input
-            type="text"
-            value={containerNumber}
-            onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
-            pattern="[A-Z]{4}[0-9]{7}"
-            placeholder="ABCD1234567"
-            style={inputStyle}
-            required
-          />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label style={labelStyle}>Từ khu vực *</label>
-            <select
+    <Modal title="Sửa lệnh bãi" onClose={onClose} wide>
+      <form onSubmit={handleSubmit}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "0 20px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 8,
+            padding: "16px 20px",
+            marginBottom: 16,
+          }}
+        >
+          <YmField label="Ngày *">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={ymInputStyle}
+              required
+            />
+          </YmField>
+          <YmField label="Số Container * (VD: ABCD1234567)">
+            <input
+              type="text"
+              value={containerNumber}
+              onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
+              pattern="[A-Z]{4}[0-9]{7}"
+              placeholder="ABCD1234567"
+              style={ymInputStyle}
+              required
+            />
+          </YmField>
+          <YmField label="Từ khu vực *">
+            <SelectInput
+              options={zoneOptions}
               value={fromZone}
-              onChange={(e) => setFromZone(e.target.value as FactoryZone)}
-              style={inputStyle}
+              onChange={setFromZone}
+              placeholder="— Chọn khu vực —"
               required
-            >
-              {FACTORY_ZONES.map((z) => (
-                <option key={z} value={z}>
-                  {ZONE_LABELS[z]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Đến khu vực *</label>
-            <select
+            />
+          </YmField>
+          <YmField label="Đến khu vực *">
+            <SelectInput
+              options={zoneOptions}
               value={toZone}
-              onChange={(e) => setToZone(e.target.value as FactoryZone)}
-              style={inputStyle}
+              onChange={setToZone}
+              placeholder="— Chọn khu vực —"
               required
-            >
-              {FACTORY_ZONES.map((z) => (
-                <option key={z} value={z}>
-                  {ZONE_LABELS[z]}
-                </option>
-              ))}
-            </select>
+            />
+          </YmField>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <YmField label="Địa điểm *">
+              <SelectInput
+                options={locationSelectOptions}
+                value={locationId}
+                onChange={setLocationId}
+                placeholder="— Chọn địa điểm —"
+                required
+              />
+            </YmField>
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <YmField label="Ghi chú">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                style={{ ...ymInputStyle, resize: "vertical" }}
+              />
+            </YmField>
           </div>
         </div>
-        <div>
-          <label style={labelStyle}>Địa điểm *</label>
-          <select
-            value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
-            style={inputStyle}
-            required
-          >
-            <option value="">-- Chọn địa điểm --</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.code})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>Ghi chú</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </div>
-        {formError && <p style={{ color: "#dc2626", fontSize: 13 }}>{formError}</p>}
+        {formError && (
+          <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>
+        )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              padding: "8px 16px",
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              background: "#fff",
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
+          <button type="button" onClick={onClose} style={ymBtnSecondary}>
             Hủy
           </button>
           <button
             type="submit"
             disabled={submitting}
-            style={{
-              padding: "8px 16px",
-              background: "#3b82f6",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 14,
-              cursor: "pointer",
-              opacity: submitting ? 0.7 : 1,
-            }}
+            style={{ ...ymBtnPrimary, opacity: submitting ? 0.7 : 1 }}
           >
             {submitting ? "Đang lưu..." : "Lưu"}
           </button>
@@ -648,10 +657,14 @@ function EditYardMoveModal({
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE_YARD = 10;
+
 export default function YardMovesPage() {
   const toast = useToast();
   const [moves, setMoves] = useState<YardMoveRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -659,14 +672,26 @@ export default function YardMovesPage() {
   const [costMoveId, setCostMoveId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editMove, setEditMove] = useState<YardMoveRow | null>(null);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState<YardMoveStatus | "">("");
 
-  function fetchMoves() {
-    fetch("/api/yard-moves?limit=100")
+  function fetchMoves(currentPage = page) {
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("limit", String(PAGE_SIZE_YARD));
+    if (search.trim()) params.set("search", search.trim());
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    if (statusFilter) params.set("status", statusFilter);
+    fetch(`/api/yard-moves?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`API error ${res.status}`);
-        const data: YardMoveRow[] = await res.json();
-        setMoves(data);
-        setTotal(data.length);
+        const data = await res.json();
+        setMoves(data.data);
+        setTotal(data.meta.total);
+        setTotalPages(data.meta.totalPages);
         setActionError(null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Lỗi không xác định"))
@@ -674,8 +699,8 @@ export default function YardMovesPage() {
   }
 
   useEffect(() => {
-    fetchMoves();
-  }, []);
+    fetchMoves(page);
+  }, [page, search, dateFrom, dateTo, statusFilter]);
 
   async function handleSoftDelete(id: string) {
     setConfirmDeleteId(null);
@@ -690,7 +715,7 @@ export default function YardMovesPage() {
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
       toast.success("Đã xoá lệnh bãi");
-      fetchMoves();
+      fetchMoves(page);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Lỗi xoá lệnh bãi");
     }
@@ -709,7 +734,7 @@ export default function YardMovesPage() {
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
       toast.success("Cập nhật trạng thái lệnh bãi thành công");
-      fetchMoves();
+      fetchMoves(page);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Lỗi không xác định";
       setActionError(msg);
@@ -755,6 +780,82 @@ export default function YardMovesPage() {
             + Tạo lệnh
           </button>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Tìm container, khu vực, địa điểm..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+            minWidth: 240,
+            flex: "1 1 240px",
+          }}
+        />
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => {
+            setDateFrom(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        />
+        <span style={{ fontSize: 13, color: "#64748b" }}>—</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => {
+            setDateTo(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as YardMoveStatus | "");
+            setPage(1);
+          }}
+          style={{
+            padding: "7px 10px",
+            border: "1px solid #e2e8f0",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        >
+          <option value="">Tất cả trạng thái</option>
+          <option value="PENDING">Chờ xử lý</option>
+          <option value="IN_PROGRESS">Đang thực hiện</option>
+          <option value="COMPLETED">Hoàn thành</option>
+          <option value="CANCELLED">Đã hủy</option>
+        </select>
       </div>
 
       {error && (
@@ -950,6 +1051,87 @@ export default function YardMovesPage() {
             )}
           </tbody>
         </table>
+        <div
+          style={{
+            padding: "10px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <span style={{ color: "#94a3b8", fontSize: 13 }}>
+            {total === 0
+              ? "0 lệnh"
+              : `Hiển thị ${(page - 1) * PAGE_SIZE_YARD + 1}–${Math.min(page * PAGE_SIZE_YARD, total)} / ${total}`}
+          </span>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{
+                  padding: "4px 10px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: 5,
+                  background: page === 1 ? "#f1f5f9" : "#fff",
+                  cursor: page === 1 ? "default" : "pointer",
+                  fontSize: 13,
+                }}
+              >
+                ‹
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                  if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === "…" ? (
+                    <span
+                      key={`e${i}`}
+                      style={{ padding: "4px 6px", fontSize: 13, color: "#94a3b8" }}
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      style={{
+                        padding: "4px 10px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: 5,
+                        background: p === page ? "#3b82f6" : "#fff",
+                        color: p === page ? "#fff" : "#374151",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      {p}
+                    </button>
+                  ),
+                )}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{
+                  padding: "4px 10px",
+                  border: "1px solid #d1d5db",
+                  borderRadius: 5,
+                  background: page === totalPages ? "#f1f5f9" : "#fff",
+                  cursor: page === totalPages ? "default" : "pointer",
+                  fontSize: 13,
+                }}
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {showCreate && (
@@ -957,7 +1139,7 @@ export default function YardMovesPage() {
           onClose={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);
-            fetchMoves();
+            fetchMoves(page);
           }}
         />
       )}
@@ -967,7 +1149,7 @@ export default function YardMovesPage() {
           onClose={() => setCostMoveId(null)}
           onAdded={() => {
             setCostMoveId(null);
-            fetchMoves();
+            fetchMoves(page);
           }}
         />
       )}
@@ -978,7 +1160,7 @@ export default function YardMovesPage() {
           onClose={() => setEditMove(null)}
           onSaved={() => {
             setEditMove(null);
-            fetchMoves();
+            fetchMoves(page);
           }}
         />
       )}

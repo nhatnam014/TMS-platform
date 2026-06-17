@@ -1,7 +1,13 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import { ENTITY_TYPES } from "@tms/shared";
+import {
+  ENTITY_TYPES,
+  type VehicleRecordFilters,
+  type PaginationQuery,
+  type PaginatedResponse,
+} from "@tms/shared";
 import { CreateVehicleRecordDto } from "./dto/create-vehicle-record.dto";
 import { UpdateVehicleRecordDto } from "./dto/update-vehicle-record.dto";
 
@@ -12,11 +18,79 @@ export class VehicleRecordService {
     private readonly auditService: AuditService,
   ) {}
 
-  async findAll() {
-    return this.prisma.vehicleRecord.findMany({
-      include: { moocs: true },
-      orderBy: { createdAt: "asc" },
-    });
+  async findAll(
+    filters: VehicleRecordFilters,
+    pagination: PaginationQuery,
+  ): Promise<PaginatedResponse<any>> {
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const andConditions: Prisma.VehicleRecordWhereInput[] = [];
+
+    if (filters.search) {
+      const s = filters.search.trim();
+      andConditions.push({
+        OR: [
+          { tenTaiXe: { contains: s, mode: Prisma.QueryMode.insensitive } },
+          { sdt: { contains: s } },
+          { loaiXe: { contains: s, mode: Prisma.QueryMode.insensitive } },
+          { bienSo: { contains: s, mode: Prisma.QueryMode.insensitive } },
+          { moocs: { some: { soMooc: { contains: s, mode: Prisma.QueryMode.insensitive } } } },
+        ],
+      });
+    }
+
+    if (filters.expiryFrom || filters.expiryTo) {
+      const range: Prisma.DateTimeNullableFilter = {};
+      if (filters.expiryFrom) range.gte = new Date(filters.expiryFrom);
+      if (filters.expiryTo) {
+        const end = new Date(filters.expiryTo);
+        end.setHours(23, 59, 59, 999);
+        range.lte = end;
+      }
+
+      const expiryConditions: Prisma.VehicleRecordWhereInput[] = [];
+      const scope = filters.expiryScope ?? "all";
+      const type = filters.expiryType ?? "all";
+
+      if (scope !== "mooc") {
+        if (type !== "cavet") expiryConditions.push({ hanDangKiem: range });
+        if (type !== "dangkiem") expiryConditions.push({ hanCaVet: range });
+      }
+      if (scope !== "xe") {
+        if (type !== "cavet") expiryConditions.push({ moocs: { some: { hanDangKiem: range } } });
+        if (type !== "dangkiem") expiryConditions.push({ moocs: { some: { hanCaVet: range } } });
+      }
+
+      if (expiryConditions.length > 0) {
+        andConditions.push({ OR: expiryConditions });
+      }
+    }
+
+    const where: Prisma.VehicleRecordWhereInput =
+      andConditions.length > 0 ? { AND: andConditions } : {};
+
+    const [data, total] = await Promise.all([
+      this.prisma.vehicleRecord.findMany({
+        where,
+        include: { moocs: true },
+        skip,
+        take: limit,
+        orderBy: { createdAt: "asc" },
+      }),
+      this.prisma.vehicleRecord.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async create(dto: CreateVehicleRecordDto) {

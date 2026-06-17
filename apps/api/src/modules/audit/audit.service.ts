@@ -51,7 +51,7 @@ export class AuditService {
     pagination: PaginationQuery,
   ): Promise<PaginatedResponse<any>> {
     const page = Number(pagination.page) || 1;
-    const limit = Number(pagination.limit) || 50;
+    const limit = Number(pagination.limit) || 10;
     const skip = (page - 1) * limit;
 
     const where: Prisma.AuditLogWhereInput = {};

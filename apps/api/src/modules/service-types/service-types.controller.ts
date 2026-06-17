@@ -1,5 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreateServiceTypeDto } from "./dto/create-service-type.dto";
 import { UpdateServiceTypeDto } from "./dto/update-service-type.dto";
@@ -14,8 +25,17 @@ export class ServiceTypesController {
 
   @Get()
   @ApiOperation({ summary: "List all service types" })
-  findAll() {
-    return this.serviceTypesService.findAll();
+  @ApiQuery({ name: "search", required: false })
+  @ApiQuery({ name: "isActive", required: false })
+  @ApiQuery({ name: "page", required: false })
+  @ApiQuery({ name: "limit", required: false })
+  findAll(
+    @Query("search") search?: string,
+    @Query("isActive") isActiveStr?: string,
+    @Query() pagination?: PaginationQuery,
+  ) {
+    const isActive = isActiveStr === "true" ? true : isActiveStr === "false" ? false : undefined;
+    return this.serviceTypesService.findAll(search, isActive, pagination ?? {});
   }
 
   @Post()

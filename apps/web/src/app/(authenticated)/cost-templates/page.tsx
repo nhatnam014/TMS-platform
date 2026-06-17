@@ -3,6 +3,16 @@
 import { useToast } from "@/lib/toast-context";
 import { useEffect, useState } from "react";
 
+function fmtInput(raw: string): string {
+  const digits = raw.replace(/\./g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("vi-VN");
+}
+
+function stripNonDigits(v: string): string {
+  return v.replace(/\./g, "").replace(/[^\d]/g, "");
+}
+
 interface CostTemplateRow {
   id: string;
   name: string;
@@ -166,6 +176,8 @@ function Modal({
 
 const EMPTY = { name: "", defaultAmount: "" };
 
+const PAGE_SIZE = 10;
+
 export default function CostTemplatesPage() {
   const toast = useToast();
   const [rows, setRows] = useState<CostTemplateRow[]>([]);
@@ -173,6 +185,9 @@ export default function CostTemplatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY);
@@ -188,14 +203,17 @@ export default function CostTemplatesPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const url = search.trim()
-      ? `/api/cost-templates?q=${encodeURIComponent(search.trim())}`
-      : "/api/cost-templates";
-    fetch(url)
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE));
+    if (search.trim()) params.set("q", search.trim());
+    fetch(`/api/cost-templates?${params.toString()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data) => {
         if (!cancelled) {
-          setRows(data);
+          setRows(data.data);
+          setTotal(data.meta.total);
+          setTotalPages(data.meta.totalPages);
           setError(null);
         }
       })
@@ -208,7 +226,7 @@ export default function CostTemplatesPage() {
     return () => {
       cancelled = true;
     };
-  }, [refresh, search]);
+  }, [refresh, search, page]);
 
   function parseAmount(v: string): number | undefined {
     const n = parseFloat(v.replace(/,/g, ""));
@@ -311,7 +329,10 @@ export default function CostTemplatesPage() {
         <input
           placeholder="Tìm theo tên chi phí..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
           style={{
             padding: "8px 12px",
             border: "1px solid #d1d5db",
@@ -379,7 +400,9 @@ export default function CostTemplatesPage() {
                       color: r.defaultAmount != null ? "#111827" : "#94a3b8",
                     }}
                   >
-                    {r.defaultAmount != null ? r.defaultAmount.toLocaleString("vi-VN") + "đ" : "—"}
+                    {r.defaultAmount != null
+                      ? Number(r.defaultAmount).toLocaleString("vi-VN") + "đ"
+                      : "—"}
                   </td>
                   <td style={{ padding: "10px 14px" }}>
                     <span
@@ -439,8 +462,86 @@ export default function CostTemplatesPage() {
               ))}
             </tbody>
           </table>
-          <div style={{ padding: "10px 14px", color: "#94a3b8", fontSize: 13 }}>
-            {rows.length} danh mục
+          <div
+            style={{
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <span style={{ color: "#94a3b8", fontSize: 13 }}>
+              {total === 0
+                ? "0 danh mục"
+                : `Hiển thị ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} / ${total}`}
+            </span>
+            {totalPages > 1 && (
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  style={{
+                    padding: "4px 10px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 5,
+                    background: page === 1 ? "#f1f5f9" : "#fff",
+                    cursor: page === 1 ? "default" : "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  ‹
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                  .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                    if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) =>
+                    p === "…" ? (
+                      <span
+                        key={`e${i}`}
+                        style={{ padding: "4px 6px", fontSize: 13, color: "#94a3b8" }}
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p as number)}
+                        style={{
+                          padding: "4px 10px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: 5,
+                          background: p === page ? "#3b82f6" : "#fff",
+                          color: p === page ? "#fff" : "#374151",
+                          cursor: "pointer",
+                          fontSize: 13,
+                        }}
+                      >
+                        {p}
+                      </button>
+                    ),
+                  )}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  style={{
+                    padding: "4px 10px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 5,
+                    background: page === totalPages ? "#f1f5f9" : "#fff",
+                    cursor: page === totalPages ? "default" : "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -458,11 +559,35 @@ export default function CostTemplatesPage() {
             onChange={(v) => setCreateForm((f) => ({ ...f, name: v }))}
             required
           />
-          <Field
-            label="Số tiền mặc định (để trống nếu không có)"
-            value={createForm.defaultAmount}
-            onChange={(v) => setCreateForm((f) => ({ ...f, defaultAmount: v }))}
-          />
+          <div style={{ marginBottom: 14 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 4,
+                color: "#374151",
+              }}
+            >
+              Số tiền mặc định (để trống nếu không có)
+            </label>
+            <input
+              type="text"
+              value={fmtInput(createForm.defaultAmount)}
+              onChange={(e) =>
+                setCreateForm((f) => ({ ...f, defaultAmount: stripNonDigits(e.target.value) }))
+              }
+              placeholder="Ví dụ: 1.000.000"
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 14,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
         </Modal>
       )}
 
@@ -479,11 +604,35 @@ export default function CostTemplatesPage() {
             onChange={(v) => setEditForm((f) => ({ ...f, name: v }))}
             required
           />
-          <Field
-            label="Số tiền mặc định (để trống để xoá)"
-            value={editForm.defaultAmount}
-            onChange={(v) => setEditForm((f) => ({ ...f, defaultAmount: v }))}
-          />
+          <div style={{ marginBottom: 14 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 4,
+                color: "#374151",
+              }}
+            >
+              Số tiền mặc định (để trống để xoá)
+            </label>
+            <input
+              type="text"
+              value={fmtInput(editForm.defaultAmount)}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, defaultAmount: stripNonDigits(e.target.value) }))
+              }
+              placeholder="Ví dụ: 1.000.000"
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 14,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
         </Modal>
       )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
 
@@ -56,18 +56,164 @@ function isExpired(d: string | null) {
   return new Date(d).getTime() < Date.now();
 }
 
-function DateCell({ date, style }: { date: string | null; style?: React.CSSProperties }) {
+function DateCell({ date }: { date: string | null }) {
   const warn = isExpiring(date);
   const expired = isExpired(date);
   const color = expired ? "#dc2626" : warn ? "#d97706" : "#374151";
   const weight = expired || warn ? 600 : 400;
   return (
-    <span style={{ color, fontWeight: weight, fontSize: 12, ...style }}>
+    <span style={{ color, fontWeight: weight, fontSize: 12 }}>
       {(expired || warn) && <span style={{ marginRight: 3 }}>⚠</span>}
       {formatDate(date)}
     </span>
   );
 }
+
+// Helper: does the vehicle itself match by non-mooc fields?
+function vehicleMatchesByField(rec: VehicleRecord, search: string): boolean {
+  if (!search) return true;
+  const s = search.toLowerCase();
+  return (
+    (rec.tenTaiXe ?? "").toLowerCase().includes(s) ||
+    (rec.sdt ?? "").toLowerCase().includes(s) ||
+    (rec.loaiXe ?? "").toLowerCase().includes(s) ||
+    (rec.bienSo ?? "").toLowerCase().includes(s)
+  );
+}
+
+// ─── Filter button group ───────────────────────────────────────────────────
+
+function FilterBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "5px 12px",
+        fontSize: 12,
+        border: "1px solid",
+        borderColor: active ? "#3b82f6" : "#d1d5db",
+        borderRadius: 4,
+        background: active ? "#eff6ff" : "#fff",
+        color: active ? "#1d4ed8" : "#374151",
+        fontWeight: active ? 600 : 400,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Pagination ────────────────────────────────────────────────────────────
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  onPage,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  onPage: (p: number) => void;
+}) {
+  const pages: (number | "...")[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push("...");
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+      pages.push(i);
+    }
+    if (page < totalPages - 2) pages.push("...");
+    pages.push(totalPages);
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 14px",
+        borderTop: "1px solid #e2e8f0",
+        background: "#f8fafc",
+        borderRadius: "0 0 10px 10px",
+      }}
+    >
+      <span style={{ fontSize: 13, color: "#6b7280" }}>Tổng: {total} bản ghi</span>
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <button
+          onClick={() => onPage(page - 1)}
+          disabled={page <= 1}
+          style={{
+            padding: "4px 10px",
+            fontSize: 13,
+            border: "1px solid #d1d5db",
+            borderRadius: 4,
+            background: "#fff",
+            cursor: page <= 1 ? "not-allowed" : "pointer",
+            opacity: page <= 1 ? 0.4 : 1,
+          }}
+        >
+          ←
+        </button>
+        {pages.map((p, i) =>
+          p === "..." ? (
+            <span key={`e${i}`} style={{ padding: "0 4px", color: "#9ca3af", fontSize: 13 }}>
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPage(p as number)}
+              style={{
+                padding: "4px 10px",
+                fontSize: 13,
+                border: "1px solid",
+                borderColor: p === page ? "#3b82f6" : "#d1d5db",
+                borderRadius: 4,
+                background: p === page ? "#3b82f6" : "#fff",
+                color: p === page ? "#fff" : "#374151",
+                fontWeight: p === page ? 700 : 400,
+                cursor: "pointer",
+              }}
+            >
+              {p}
+            </button>
+          ),
+        )}
+        <button
+          onClick={() => onPage(page + 1)}
+          disabled={page >= totalPages}
+          style={{
+            padding: "4px 10px",
+            fontSize: 13,
+            border: "1px solid #d1d5db",
+            borderRadius: 4,
+            background: "#fff",
+            cursor: page >= totalPages ? "not-allowed" : "pointer",
+            opacity: page >= totalPages ? 0.4 : 1,
+          }}
+        >
+          →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal ─────────────────────────────────────────────────────────────────
 
 interface ModalProps {
   title: string;
@@ -192,6 +338,8 @@ function Modal({ title, onClose, onSubmit, error, children }: ModalProps) {
   );
 }
 
+// ─── Form components ───────────────────────────────────────────────────────
+
 function TextField({
   label,
   value,
@@ -291,7 +439,6 @@ function RecordFormFields({
           alignItems: "start",
         }}
       >
-        {/* Driver section */}
         <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
           <div
             style={{
@@ -312,14 +459,9 @@ function RecordFormFields({
             value={form.tenTaiXe}
             onChange={(v) => updateField("tenTaiXe", v)}
           />
-          <TextField
-            label="SĐT"
-            value={form.sdt}
-            onChange={(v) => updateField("sdt", v)}
-          />
+          <TextField label="SĐT" value={form.sdt} onChange={(v) => updateField("sdt", v)} />
         </div>
 
-        {/* Vehicle section */}
         <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
           <div
             style={{
@@ -505,6 +647,8 @@ function recordToForm(r: VehicleRecord): RecordForm {
   };
 }
 
+// ─── Table cells ───────────────────────────────────────────────────────────
+
 const TH = ({ children, width }: { children?: React.ReactNode; width?: number }) => (
   <th
     style={{
@@ -543,29 +687,87 @@ const TD = ({
   </td>
 );
 
+// ─── Main Page ─────────────────────────────────────────────────────────────
+
 export default function VehicleRecordsPage() {
   const toast = useToast();
+
+  // Filter state
+  const [search, setSearch] = useState("");
+  const [expiryScope, setExpiryScope] = useState<"all" | "xe" | "mooc">("all");
+  const [expiryType, setExpiryType] = useState<"all" | "dangkiem" | "cavet">("all");
+  const [expiryFrom, setExpiryFrom] = useState("");
+  const [expiryTo, setExpiryTo] = useState("");
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const PAGE_SIZE = 10;
+
+  // Data state
   const [records, setRecords] = useState<VehicleRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
 
+  // Modal state
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<RecordForm>(EMPTY_FORM);
   const [createError, setCreateError] = useState<string | null>(null);
-
   const [editTarget, setEditTarget] = useState<VehicleRecord | null>(null);
   const [editForm, setEditForm] = useState<RecordForm>(EMPTY_FORM);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Debounce search: delay fetch by 300ms after user stops typing
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSearchChange(val: string) {
+    setSearch(val);
+    setPage(1);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setRefresh((r) => r + 1), 300);
+  }
+
+  // Reset page on filter change (non-search)
+  function updateExpiryScope(v: "all" | "xe" | "mooc") {
+    setExpiryScope(v);
+    setPage(1);
+  }
+  function updateExpiryType(v: "all" | "dangkiem" | "cavet") {
+    setExpiryType(v);
+    setPage(1);
+  }
+  function updateExpiryFrom(v: string) {
+    setExpiryFrom(v);
+    setPage(1);
+  }
+  function updateExpiryTo(v: string) {
+    setExpiryTo(v);
+    setPage(1);
+  }
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch("/api/vehicle-records")
+
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE));
+    if (search.trim()) params.set("search", search.trim());
+    if (expiryScope !== "all") params.set("expiryScope", expiryScope);
+    if (expiryType !== "all") params.set("expiryType", expiryType);
+    if (expiryFrom) params.set("expiryFrom", expiryFrom);
+    if (expiryTo) params.set("expiryTo", expiryTo);
+
+    fetch(`/api/vehicle-records?${params.toString()}`)
       .then((r) => r.json())
-      .then((data) => {
+      .then((res) => {
         if (!cancelled) {
-          setRecords(data);
+          setRecords(res.data ?? []);
+          setTotal(res.meta?.total ?? 0);
+          setTotalPages(res.meta?.totalPages ?? 1);
           setFetchError(null);
         }
       })
@@ -575,10 +777,11 @@ export default function VehicleRecordsPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [page, refresh, expiryScope, expiryType, expiryFrom, expiryTo]);
 
   function openCreate() {
     setCreateForm(EMPTY_FORM);
@@ -645,12 +848,13 @@ export default function VehicleRecordsPage() {
 
   return (
     <div>
+      {/* Header */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 20,
+          marginBottom: 16,
         }}
       >
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Quản lý xe</h1>
@@ -670,6 +874,90 @@ export default function VehicleRecordsPage() {
         </button>
       </div>
 
+      {/* Search + Filter bar */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 10,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+          padding: "14px 16px",
+          marginBottom: 14,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        {/* Search input */}
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Tìm tên tài xế, SĐT, loại xe, biển số, số mooc..."
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            fontSize: 13,
+            boxSizing: "border-box",
+            color: "#111827",
+          }}
+        />
+
+        {/* Expiry filters */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500, whiteSpace: "nowrap" }}>
+            Lọc theo hạn:
+          </span>
+
+          {/* Scope */}
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["all", "xe", "mooc"] as const).map((v) => (
+              <FilterBtn key={v} active={expiryScope === v} onClick={() => updateExpiryScope(v)}>
+                {v === "all" ? "Tất cả" : v === "xe" ? "Xe" : "Mooc"}
+              </FilterBtn>
+            ))}
+          </div>
+
+          {/* Type */}
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["all", "dangkiem", "cavet"] as const).map((v) => (
+              <FilterBtn key={v} active={expiryType === v} onClick={() => updateExpiryType(v)}>
+                {v === "all" ? "Tất cả" : v === "dangkiem" ? "Đăng kiểm" : "Cà vẹt"}
+              </FilterBtn>
+            ))}
+          </div>
+
+          {/* Date range */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Từ</span>
+            <input
+              type="date"
+              value={expiryFrom}
+              onChange={(e) => updateExpiryFrom(e.target.value)}
+              style={{
+                padding: "5px 8px",
+                border: "1px solid #d1d5db",
+                borderRadius: 4,
+                fontSize: 12,
+              }}
+            />
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Đến</span>
+            <input
+              type="date"
+              value={expiryTo}
+              onChange={(e) => updateExpiryTo(e.target.value)}
+              style={{
+                padding: "5px 8px",
+                border: "1px solid #d1d5db",
+                borderRadius: 4,
+                fontSize: 12,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
       {fetchError && (
         <p
           style={{
@@ -685,6 +973,7 @@ export default function VehicleRecordsPage() {
         </p>
       )}
 
+      {/* Table */}
       <div
         style={{
           background: "#fff",
@@ -727,16 +1016,23 @@ export default function VehicleRecordsPage() {
               </tr>
             ) : (
               records.map((rec, recIdx) => {
-                const moocCount = rec.moocs.length;
+                // Determine which moocs to display (Option B logic)
+                const displayMoocs = vehicleMatchesByField(rec, search)
+                  ? rec.moocs
+                  : rec.moocs.filter((m) => m.soMooc.toLowerCase().includes(search.toLowerCase()));
+
+                const moocCount = displayMoocs.length;
                 const rows = moocCount === 0 ? 1 : moocCount;
                 const rowSpan = rows;
                 const bg = recIdx % 2 === 0 ? "#fff" : "#fafafa";
                 const borderTop = recIdx > 0 ? "2px solid #e2e8f0" : undefined;
+                // Offset for display: based on overall record position
+                const recNum = (page - 1) * PAGE_SIZE + recIdx + 1;
 
                 if (moocCount === 0) {
                   return (
                     <tr key={rec.id} style={{ background: bg, borderTop }}>
-                      <TD style={{ color: "#94a3b8" }}>{recIdx + 1}</TD>
+                      <TD style={{ color: "#94a3b8" }}>{recNum}</TD>
                       <TD style={{ fontWeight: 500 }}>
                         {rec.tenTaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}
                       </TD>
@@ -802,7 +1098,7 @@ export default function VehicleRecordsPage() {
                   );
                 }
 
-                return rec.moocs.map((mooc, mIdx) => (
+                return displayMoocs.map((mooc, mIdx) => (
                   <tr
                     key={`${rec.id}-${mIdx}`}
                     style={{ background: bg, borderTop: mIdx === 0 ? borderTop : undefined }}
@@ -813,7 +1109,7 @@ export default function VehicleRecordsPage() {
                           style={{ color: "#94a3b8" }}
                           rowSpan={rowSpan > 1 ? rowSpan : undefined}
                         >
-                          {recIdx + 1}
+                          {recNum}
                         </TD>
                         <TD
                           style={{ fontWeight: 500, verticalAlign: "top" }}
@@ -834,7 +1130,11 @@ export default function VehicleRecordsPage() {
                           {rec.loaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}
                         </TD>
                         <TD
-                          style={{ fontFamily: "monospace", fontWeight: 600, verticalAlign: "top" }}
+                          style={{
+                            fontFamily: "monospace",
+                            fontWeight: 600,
+                            verticalAlign: "top",
+                          }}
                           rowSpan={rowSpan > 1 ? rowSpan : undefined}
                         >
                           {rec.bienSo ?? <span style={{ color: "#94a3b8" }}>—</span>}
@@ -926,8 +1226,19 @@ export default function VehicleRecordsPage() {
             )}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        {!loading && (
+          <Pagination
+            page={page}
+            totalPages={totalPages || 1}
+            total={total}
+            onPage={(p) => setPage(p)}
+          />
+        )}
       </div>
 
+      {/* Modals */}
       {showCreate && (
         <Modal
           title="Thêm record quản lý xe"
