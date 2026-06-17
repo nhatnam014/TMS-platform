@@ -72,9 +72,6 @@ interface FilterState {
   dateFrom: string;
   dateTo: string;
   status: TripStatus | "";
-  customerId: string;
-  carrierId: string;
-  serviceTypeCode: string;
   search: string;
   page: number;
 }
@@ -83,9 +80,6 @@ const DEFAULT_FILTERS: FilterState = {
   dateFrom: "",
   dateTo: "",
   status: "",
-  customerId: "",
-  carrierId: "",
-  serviceTypeCode: "",
   search: "",
   page: 1,
 };
@@ -1130,25 +1124,29 @@ function useRefData() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/customers").then((r) => r.json()),
-      fetch("/api/carriers").then((r) => r.json()),
-      fetch("/api/service-types").then((r) => r.json()),
-      fetch("/api/container-sizes").then((r) => r.json()),
-      fetch("/api/locations").then((r) => r.json()),
-      fetch("/api/cost-templates").then((r) => r.json()),
+      fetch("/api/customers?limit=500").then((r) => r.json()),
+      fetch("/api/carriers?limit=500").then((r) => r.json()),
+      fetch("/api/service-types?limit=500").then((r) => r.json()),
+      fetch("/api/container-sizes?limit=500").then((r) => r.json()),
+      fetch("/api/locations?limit=500").then((r) => r.json()),
+      fetch("/api/cost-templates?limit=500").then((r) => r.json()),
     ])
       .then(([c, ca, st, cs, locs, ct]) => {
-        setCustomers(c);
-        setCarriers(ca);
-        setServiceTypes(st);
-        setContainerSizes(cs);
-        setLocationOptions((locs as NamedOption[]).map((l) => ({ value: l.id, label: l.name })));
+        setCustomers(c.data ?? c);
+        setCarriers(ca.data ?? ca);
+        setServiceTypes(st.data ?? st);
+        setContainerSizes(cs.data ?? cs);
+        setLocationOptions(
+          ((locs.data ?? locs) as NamedOption[]).map((l) => ({ value: l.id, label: l.name })),
+        );
         setCostTemplateOptions(
-          (ct as { id: string; name: string; defaultAmount: number | null }[]).map((t) => ({
-            value: t.id,
-            label: t.name,
-            amount: t.defaultAmount,
-          })),
+          ((ct.data ?? ct) as { id: string; name: string; defaultAmount: number | null }[]).map(
+            (t) => ({
+              value: t.id,
+              label: t.name,
+              amount: t.defaultAmount,
+            }),
+          ),
         );
       })
       .catch(() => {})
@@ -1498,26 +1496,8 @@ export default function TripPlansPage() {
 
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [rawSearch, setRawSearch] = useState("");
-  const [filterCustomers, setFilterCustomers] = useState<NamedOption[]>([]);
-  const [filterCarriers, setFilterCarriers] = useState<NamedOption[]>([]);
-  const [filterServiceTypes, setFilterServiceTypes] = useState<ServiceTypeOption[]>([]);
-
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTrip, setEditingTrip] = useState<TripPlanRow | null>(null);
-
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/customers").then((r) => r.json()),
-      fetch("/api/carriers").then((r) => r.json()),
-      fetch("/api/service-types").then((r) => r.json()),
-    ])
-      .then(([c, ca, st]) => {
-        setFilterCustomers(c);
-        setFilterCarriers(ca);
-        setFilterServiceTypes(st);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setFilters((f) => ({ ...f, search: rawSearch, page: 1 })), 400);
@@ -1529,13 +1509,10 @@ export default function TripPlansPage() {
     async function doFetch() {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams({ limit: "20", page: String(filters.page) });
+      const params = new URLSearchParams({ limit: "10", page: String(filters.page) });
       if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
       if (filters.status) params.set("status", filters.status);
-      if (filters.customerId) params.set("customerId", filters.customerId);
-      if (filters.carrierId) params.set("carrierId", filters.carrierId);
-      if (filters.serviceTypeCode) params.set("serviceTypeCode", filters.serviceTypeCode);
       if (filters.search) params.set("search", filters.search);
       try {
         const res = await fetch(`/api/trip-plans?${params}`);
@@ -1586,16 +1563,9 @@ export default function TripPlansPage() {
     color: "#0f172a",
   };
   const hasActiveFilter =
-    filters.dateFrom ||
-    filters.dateTo ||
-    filters.status ||
-    filters.customerId ||
-    filters.carrierId ||
-    filters.serviceTypeCode ||
-    filters.search ||
-    rawSearch;
-  const startItem = total === 0 ? 0 : (filters.page - 1) * 20 + 1;
-  const endItem = Math.min(filters.page * 20, total);
+    filters.dateFrom || filters.dateTo || filters.status || filters.search || rawSearch;
+  const startItem = total === 0 ? 0 : (filters.page - 1) * 10 + 1;
+  const endItem = Math.min(filters.page * 10, total);
 
   const thStyle: React.CSSProperties = {
     padding: "8px 10px",
@@ -1764,63 +1734,6 @@ export default function TripPlansPage() {
             ))}
           </select>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" }}
-          >
-            Khách hàng
-          </span>
-          <select
-            value={filters.customerId}
-            onChange={(e) => setFilterField("customerId", e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">Tất cả</option>
-            {filterCustomers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" }}
-          >
-            Đơn vị VC
-          </span>
-          <select
-            value={filters.carrierId}
-            onChange={(e) => setFilterField("carrierId", e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">Tất cả</option>
-            {filterCarriers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span
-            style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" }}
-          >
-            Dịch vụ
-          </span>
-          <select
-            value={filters.serviceTypeCode}
-            onChange={(e) => setFilterField("serviceTypeCode", e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">Tất cả</option>
-            {filterServiceTypes.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.code}
-              </option>
-            ))}
-          </select>
-        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 200 }}>
           <span
             style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" }}
@@ -1831,7 +1744,7 @@ export default function TripPlansPage() {
             type="text"
             value={rawSearch}
             onChange={(e) => setRawSearch(e.target.value)}
-            placeholder="Tìm xe, container, khách hàng..."
+            placeholder="Tìm xe, container, KH, đơn vị VC, dịch vụ, điểm lấy/hạ, SHĐ, phí..."
             style={{ ...selectStyle, padding: "5px 10px", width: "100%" }}
           />
         </div>

@@ -1,7 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@tms/db";
 import { ENTITY_TYPES } from "@tms/shared";
-import type { CreateCustomerDto, UpdateCustomerDto } from "@tms/shared";
+import type {
+  CreateCustomerDto,
+  UpdateCustomerDto,
+  PaginationQuery,
+  PaginatedResponse,
+} from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
 
@@ -12,12 +17,46 @@ export class CustomerService {
     private readonly auditService: AuditService,
   ) {}
 
-  findAll() {
-    return this.prisma.customer.findMany({
-      where: { isActive: true },
-      select: { id: true, code: true, name: true, address: true, phone: true, email: true, taxCode: true },
-      orderBy: { name: "asc" },
-    });
+  async findAll(
+    search: string | undefined,
+    pagination: PaginationQuery = {},
+  ): Promise<PaginatedResponse<any>> {
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.CustomerWhereInput = { isActive: true };
+    if (search?.trim()) {
+      const s = search.trim();
+      where.OR = [
+        { name: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { code: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { phone: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { email: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { taxCode: { contains: s, mode: Prisma.QueryMode.insensitive } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.customer.findMany({
+        where,
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          address: true,
+          phone: true,
+          email: true,
+          taxCode: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async create(dto: CreateCustomerDto) {

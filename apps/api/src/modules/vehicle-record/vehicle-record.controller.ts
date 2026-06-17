@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { VehicleRecordService } from "./vehicle-record.service";
@@ -13,9 +23,20 @@ export class VehicleRecordController {
   constructor(private readonly vehicleRecordService: VehicleRecordService) {}
 
   @Get()
-  @ApiOperation({ summary: "List all vehicle records with moocs" })
-  findAll() {
-    return this.vehicleRecordService.findAll();
+  @ApiOperation({ summary: "List vehicle records with search, expiry filter, and pagination" })
+  findAll(
+    @Query("search") search?: string,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+    @Query("expiryType") expiryType?: "all" | "dangkiem" | "cavet",
+    @Query("expiryScope") expiryScope?: "all" | "xe" | "mooc",
+    @Query("expiryFrom") expiryFrom?: string,
+    @Query("expiryTo") expiryTo?: string,
+  ) {
+    return this.vehicleRecordService.findAll(
+      { search, expiryType, expiryScope, expiryFrom, expiryTo },
+      { page: page ? Number(page) : undefined, limit: limit ? Number(limit) : undefined },
+    );
   }
 
   @Post()

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { YardMoveStatus } from "@tms/db";
+import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreateYardMoveCostDto } from "./dto/create-yard-move-cost.dto";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
@@ -25,8 +26,23 @@ export class YardMoveController {
   @ApiOperation({ summary: "List yard moves with optional filters" })
   @ApiQuery({ name: "locationId", required: false })
   @ApiQuery({ name: "status", required: false, enum: YardMoveStatus })
-  findAll(@Query("locationId") locationId?: string, @Query("status") status?: YardMoveStatus) {
-    return this.yardMoveService.findAll({ locationId, status });
+  @ApiQuery({ name: "search", required: false })
+  @ApiQuery({ name: "dateFrom", required: false })
+  @ApiQuery({ name: "dateTo", required: false })
+  @ApiQuery({ name: "page", required: false })
+  @ApiQuery({ name: "limit", required: false })
+  findAll(
+    @Query("locationId") locationId?: string,
+    @Query("status") status?: YardMoveStatus,
+    @Query("search") search?: string,
+    @Query("dateFrom") dateFrom?: string,
+    @Query("dateTo") dateTo?: string,
+    @Query() pagination?: PaginationQuery,
+  ) {
+    return this.yardMoveService.findAll(
+      { locationId, status, search, dateFrom, dateTo },
+      pagination ?? {},
+    );
   }
 
   @Patch(":id")

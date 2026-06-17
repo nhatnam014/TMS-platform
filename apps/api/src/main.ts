@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
+import { PrismaExceptionFilter } from "./common/filters/prisma-exception.filter";
 
 console.log("DATABASE_URL =", process.env.DATABASE_URL);
 async function bootstrap() {
@@ -14,6 +15,9 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGINS?.split(",") ?? ["http://localhost:3000"],
     credentials: true,
   });
+
+  // Global filters
+  app.useGlobalFilters(new PrismaExceptionFilter());
 
   // Global pipes
   app.useGlobalPipes(

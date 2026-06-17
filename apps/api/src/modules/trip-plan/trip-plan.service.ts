@@ -63,7 +63,8 @@ export class TripPlanService {
     }
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.carrierId) where.carrierId = filters.carrierId;
-    if (filters.vehiclePlate) where.vehiclePlate = { contains: filters.vehiclePlate, mode: Prisma.QueryMode.insensitive };
+    if (filters.vehiclePlate)
+      where.vehiclePlate = { contains: filters.vehiclePlate, mode: Prisma.QueryMode.insensitive };
     if (filters.serviceTypeCode) {
       (where as any).serviceTypeMaster = { code: filters.serviceTypeCode };
     }
@@ -79,6 +80,28 @@ export class TripPlanService {
         { outboundContainerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
         { inboundContainerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
         { notes: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        // Location names
+        { pickupLocationName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { loadUnloadLocationName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { dropoffLocationName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        // SHĐ (invoice numbers)
+        { shdNang: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { shdHa: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { shdVeSinh: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { shdVeCong: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        // Cost names
+        { phiNangName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { phiHaName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { phiVeSinhName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { phiCuocName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { veCongName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { chiPhiKhacName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { chiPhiTraiTuyenName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { cauDuongName: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        // Carrier and service type (relation fields)
+        { carrier: { name: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { serviceTypeMaster: { code: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+        { serviceTypeMaster: { description: { contains: s, mode: Prisma.QueryMode.insensitive } } },
       ];
     }
 

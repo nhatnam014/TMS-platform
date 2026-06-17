@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
@@ -14,8 +15,11 @@ export class CustomerController {
 
   @Get()
   @ApiOperation({ summary: "List all active customers" })
-  findAll() {
-    return this.customerService.findAll();
+  @ApiQuery({ name: "search", required: false })
+  @ApiQuery({ name: "page", required: false })
+  @ApiQuery({ name: "limit", required: false })
+  findAll(@Query("search") search?: string, @Query() pagination?: PaginationQuery) {
+    return this.customerService.findAll(search, pagination ?? {});
   }
 
   @Post()

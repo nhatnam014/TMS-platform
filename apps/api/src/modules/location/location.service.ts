@@ -1,7 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@tms/db";
 import { ENTITY_TYPES } from "@tms/shared";
-import type { CreateLocationDto, UpdateLocationDto } from "@tms/shared";
+import type {
+  CreateLocationDto,
+  UpdateLocationDto,
+  PaginationQuery,
+  PaginatedResponse,
+} from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
 
@@ -12,12 +17,38 @@ export class LocationService {
     private readonly auditService: AuditService,
   ) {}
 
-  findAll() {
-    return this.prisma.location.findMany({
-      where: { isActive: true },
-      select: { id: true, code: true, name: true, locationType: true, address: true },
-      orderBy: { name: "asc" },
-    });
+  async findAll(
+    search: string | undefined,
+    type: string | undefined,
+    pagination: PaginationQuery = {},
+  ): Promise<PaginatedResponse<any>> {
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.LocationWhereInput = { isActive: true };
+    if (type) where.locationType = type as any;
+    if (search?.trim()) {
+      const s = search.trim();
+      where.OR = [
+        { name: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { code: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { address: { contains: s, mode: Prisma.QueryMode.insensitive } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.location.findMany({
+        where,
+        select: { id: true, code: true, name: true, locationType: true, address: true },
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+      }),
+      this.prisma.location.count({ where }),
+    ]);
+
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async create(dto: CreateLocationDto) {

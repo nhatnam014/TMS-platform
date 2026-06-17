@@ -1,16 +1,32 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type { CreateCostTemplateDto, UpdateCostTemplateDto } from "@tms/shared";
+import type {
+  CreateCostTemplateDto,
+  UpdateCostTemplateDto,
+  PaginationQuery,
+  PaginatedResponse,
+} from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 
 @Injectable()
 export class CostTemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(q?: string) {
-    return this.prisma.costTemplate.findMany({
-      where: q ? { name: { contains: q, mode: "insensitive" } } : {},
-      orderBy: { name: "asc" },
-    });
+  async findAll(
+    q: string | undefined,
+    pagination: PaginationQuery = {},
+  ): Promise<PaginatedResponse<any>> {
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const where = q ? { name: { contains: q, mode: "insensitive" as const } } : {};
+
+    const [data, total] = await Promise.all([
+      this.prisma.costTemplate.findMany({ where, skip, take: limit, orderBy: { name: "asc" } }),
+      this.prisma.costTemplate.count({ where }),
+    ]);
+
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   create(dto: CreateCostTemplateDto) {

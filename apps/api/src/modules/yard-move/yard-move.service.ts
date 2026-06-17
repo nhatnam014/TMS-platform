@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { YardMoveStatus } from "@tms/db";
+import { Prisma, YardMoveStatus } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { ENTITY_TYPES } from "@tms/shared";
-import type { YardMoveFilters } from "@tms/shared";
+import type { YardMoveFilters, PaginationQuery, PaginatedResponse } from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
 import { CreateYardMoveCostDto } from "./dto/create-yard-move-cost.dto";
@@ -45,19 +45,55 @@ export class YardMoveService {
     });
   }
 
-  findAll(filters: YardMoveFilters = {}) {
-    return this.prisma.yardMove.findMany({
-      where: {
-        isActive: true,
-        ...(filters.locationId ? { locationId: filters.locationId } : {}),
-        ...(filters.status ? { status: filters.status as YardMoveStatus } : {}),
-      },
-      include: {
-        location: { select: { id: true, code: true, name: true } },
-        costs: true,
-      },
-      orderBy: { date: "desc" },
-    });
+  async findAll(
+    filters: YardMoveFilters = {},
+    pagination: PaginationQuery = {},
+  ): Promise<PaginatedResponse<any>> {
+    const page = Number(pagination.page) || 1;
+    const limit = Number(pagination.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.YardMoveWhereInput = {
+      isActive: true,
+      ...(filters.locationId ? { locationId: filters.locationId } : {}),
+      ...(filters.status ? { status: filters.status as YardMoveStatus } : {}),
+    };
+
+    if (filters.search?.trim()) {
+      const s = filters.search.trim();
+      where.OR = [
+        { containerNumber: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { fromZone: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { toZone: { contains: s, mode: Prisma.QueryMode.insensitive } },
+        { location: { name: { contains: s, mode: Prisma.QueryMode.insensitive } } },
+      ];
+    }
+
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) {
+        const nextDay = new Date(filters.dateTo);
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+        where.createdAt.lt = nextDay;
+      }
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.yardMove.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          location: { select: { id: true, code: true, name: true } },
+          costs: true,
+        },
+        orderBy: { date: "desc" },
+      }),
+      this.prisma.yardMove.count({ where }),
+    ]);
+
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async findOne(id: string) {

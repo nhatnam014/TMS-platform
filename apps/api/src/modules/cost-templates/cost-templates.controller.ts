@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreateCostTemplateDto } from "./dto/create-cost-template.dto";
 import { UpdateCostTemplateDto } from "./dto/update-cost-template.dto";
@@ -25,8 +26,10 @@ export class CostTemplatesController {
   @Get()
   @ApiOperation({ summary: "List cost templates, optionally filtered by ?q= search" })
   @ApiQuery({ name: "q", required: false })
-  findAll(@Query("q") q?: string) {
-    return this.costTemplatesService.findAll(q);
+  @ApiQuery({ name: "page", required: false })
+  @ApiQuery({ name: "limit", required: false })
+  findAll(@Query("q") q?: string, @Query() pagination?: PaginationQuery) {
+    return this.costTemplatesService.findAll(q, pagination ?? {});
   }
 
   @Post()

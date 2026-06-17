@@ -258,12 +258,30 @@ export interface ApiResponse<T = unknown> {
 
 // ---------- Dashboard ----------
 export interface DashboardStats {
-  totalTripsToday: number;
-  tripsCompleted: number;
+  totalTrips: number;
+  tripsWaiting: number;
   tripsInTransit: number;
+  tripsCompleted: number;
+  tripsCancelled: number;
   vehiclesActive: number;
-  vehiclesInMaintenance: number;
-  expiringCompliance: number;
+  expiringDangKiemXe: number;
+  expiringCaVetXe: number;
+  expiringDangKiemMooc: number;
+  expiringCaVetMooc: number;
+}
+
+export interface ExpiryItem {
+  entityType: "xe" | "mooc";
+  plateOrMooc: string;
+  parentPlate?: string;
+  expType: "dangkiem" | "cavet";
+  expDate: string;
+  daysLeft: number;
+}
+
+export interface TripsTrendItem {
+  date: string;
+  count: number;
 }
 
 // ---------- Enums (mirrored from Prisma for frontend use) ----------
@@ -326,6 +344,9 @@ export interface CreateYardMoveDto {
 export interface YardMoveFilters {
   locationId?: string;
   status?: YardMoveStatus;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 // ---------- Excel Import/Export ----------
@@ -333,6 +354,15 @@ export interface ImportResult {
   imported: number;
   warnings: string[];
   errors: string[];
+}
+
+// ---------- Vehicle Record Filters ----------
+export interface VehicleRecordFilters {
+  search?: string;
+  expiryType?: "all" | "dangkiem" | "cavet";
+  expiryScope?: "all" | "xe" | "mooc";
+  expiryFrom?: string;
+  expiryTo?: string;
 }
 
 // ---------- Vehicle Record Management (standalone, no FK) ----------

@@ -1,44 +1,206 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../config/prisma.service";
-import type { DashboardStats } from "@tms/shared";
+import type { DashboardStats, ExpiryItem, TripsTrendItem } from "@tms/shared";
+
+function toDateRange(from?: string, to?: string, defaultDays = 0): { gte: Date; lte: Date } {
+  const start = from ? new Date(from) : new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = to ? new Date(to) : new Date();
+  if (!to && defaultDays > 0) end.setDate(end.getDate() + defaultDays);
+  end.setHours(23, 59, 59, 999);
+  return { gte: start, lte: end };
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStats(): Promise<DashboardStats> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  async getStats(
+    tripFrom?: string,
+    tripTo?: string,
+    expiryFrom?: string,
+    expiryTo?: string,
+  ): Promise<DashboardStats> {
+    const tripRange = toDateRange(tripFrom, tripTo);
+    const expiryRange = toDateRange(expiryFrom, expiryTo, 30);
 
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-
-    const [totalTrips, completed, inTransit, totalVehicleRecords, expiring] =
-      await Promise.all([
-        this.prisma.tripPlan.count({ where: { tripDate: { gte: today, lt: tomorrow } } }),
-        this.prisma.tripPlan.count({ where: { tripDate: { gte: today, lt: tomorrow }, status: "COMPLETED" } }),
-        this.prisma.tripPlan.count({ where: { tripDate: { gte: today, lt: tomorrow }, status: "IN_TRANSIT" } }),
-        this.prisma.vehicleRecord.count(),
-        this.prisma.vehicleRecord.count({
-          where: {
-            OR: [
-              { hanDangKiem: { gte: today, lte: thirtyDaysFromNow } },
-              { hanBaoHiem: { gte: today, lte: thirtyDaysFromNow } },
-              { hanCaVet: { gte: today, lte: thirtyDaysFromNow } },
-            ],
-          },
-        }),
-      ]);
+    const [
+      totalTrips,
+      tripsWaiting,
+      tripsInTransit,
+      tripsCompleted,
+      tripsCancelled,
+      vehiclesActive,
+      expiringDangKiemXe,
+      expiringCaVetXe,
+      expiringDangKiemMooc,
+      expiringCaVetMooc,
+    ] = await Promise.all([
+      this.prisma.tripPlan.count({
+        where: { tripDate: tripRange },
+      }),
+      this.prisma.tripPlan.count({
+        where: {
+          tripDate: tripRange,
+          status: { in: ["PLANNED", "DISPATCHED"] },
+        },
+      }),
+      this.prisma.tripPlan.count({
+        where: { tripDate: tripRange, status: "IN_TRANSIT" },
+      }),
+      this.prisma.tripPlan.count({
+        where: { tripDate: tripRange, status: "COMPLETED" },
+      }),
+      this.prisma.tripPlan.count({
+        where: { tripDate: tripRange, status: "CANCELLED" },
+      }),
+      this.prisma.vehicleRecord.count(),
+      this.prisma.vehicleRecord.count({
+        where: { hanDangKiem: expiryRange },
+      }),
+      this.prisma.vehicleRecord.count({
+        where: { hanCaVet: expiryRange },
+      }),
+      this.prisma.vehicleRecordMooc.count({
+        where: { hanDangKiem: expiryRange },
+      }),
+      this.prisma.vehicleRecordMooc.count({
+        where: { hanCaVet: expiryRange },
+      }),
+    ]);
 
     return {
-      totalTripsToday: totalTrips,
-      tripsCompleted: completed,
-      tripsInTransit: inTransit,
-      vehiclesActive: totalVehicleRecords,
-      vehiclesInMaintenance: 0,
-      expiringCompliance: expiring,
+      totalTrips,
+      tripsWaiting,
+      tripsInTransit,
+      tripsCompleted,
+      tripsCancelled,
+      vehiclesActive,
+      expiringDangKiemXe,
+      expiringCaVetXe,
+      expiringDangKiemMooc,
+      expiringCaVetMooc,
     };
+  }
+
+  async getTripsTrend(from: string, to: string): Promise<TripsTrendItem[]> {
+    const range = toDateRange(from, to);
+    const trips = await this.prisma.tripPlan.findMany({
+      where: { tripDate: range },
+      select: { tripDate: true },
+    });
+
+    const countByDate = new Map<string, number>();
+    for (const t of trips) {
+      const key = isoDate(new Date(t.tripDate));
+      countByDate.set(key, (countByDate.get(key) ?? 0) + 1);
+    }
+
+    return Array.from(countByDate.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count }));
+  }
+
+  async getExpiryList(
+    from?: string,
+    to?: string,
+    entity: "all" | "xe" | "mooc" = "all",
+    type: "all" | "dangkiem" | "cavet" = "all",
+  ): Promise<ExpiryItem[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const rangeEnd = to ? new Date(to) : new Date(today.getTime() + 30 * 86400000);
+    rangeEnd.setHours(23, 59, 59, 999);
+    const rangeStart = from ? new Date(from) : today;
+    rangeStart.setHours(0, 0, 0, 0);
+
+    const items: ExpiryItem[] = [];
+
+    if (entity !== "mooc") {
+      const records = await this.prisma.vehicleRecord.findMany({
+        select: { bienSo: true, hanDangKiem: true, hanCaVet: true },
+      });
+
+      for (const rec of records) {
+        const plate = rec.bienSo ?? "";
+
+        if (type !== "cavet" && rec.hanDangKiem) {
+          const d = new Date(rec.hanDangKiem);
+          if (d < today || (d >= rangeStart && d <= rangeEnd)) {
+            items.push({
+              entityType: "xe",
+              plateOrMooc: plate,
+              expType: "dangkiem",
+              expDate: isoDate(d),
+              daysLeft: Math.floor((d.getTime() - today.getTime()) / 86400000),
+            });
+          }
+        }
+
+        if (type !== "dangkiem" && rec.hanCaVet) {
+          const d = new Date(rec.hanCaVet);
+          if (d < today || (d >= rangeStart && d <= rangeEnd)) {
+            items.push({
+              entityType: "xe",
+              plateOrMooc: plate,
+              expType: "cavet",
+              expDate: isoDate(d),
+              daysLeft: Math.floor((d.getTime() - today.getTime()) / 86400000),
+            });
+          }
+        }
+      }
+    }
+
+    if (entity !== "xe") {
+      const moocs = await this.prisma.vehicleRecordMooc.findMany({
+        select: {
+          soMooc: true,
+          hanDangKiem: true,
+          hanCaVet: true,
+          vehicleRecord: { select: { bienSo: true } },
+        },
+      });
+
+      for (const m of moocs) {
+        const moocId = m.soMooc ?? "";
+        const parentPlate = m.vehicleRecord?.bienSo ?? undefined;
+
+        if (type !== "cavet" && m.hanDangKiem) {
+          const d = new Date(m.hanDangKiem);
+          if (d < today || (d >= rangeStart && d <= rangeEnd)) {
+            items.push({
+              entityType: "mooc",
+              plateOrMooc: moocId,
+              parentPlate,
+              expType: "dangkiem",
+              expDate: isoDate(d),
+              daysLeft: Math.floor((d.getTime() - today.getTime()) / 86400000),
+            });
+          }
+        }
+
+        if (type !== "dangkiem" && m.hanCaVet) {
+          const d = new Date(m.hanCaVet);
+          if (d < today || (d >= rangeStart && d <= rangeEnd)) {
+            items.push({
+              entityType: "mooc",
+              plateOrMooc: moocId,
+              parentPlate,
+              expType: "cavet",
+              expDate: isoDate(d),
+              daysLeft: Math.floor((d.getTime() - today.getTime()) / 86400000),
+            });
+          }
+        }
+      }
+    }
+
+    items.sort((a, b) => a.daysLeft - b.daysLeft);
+    return items;
   }
 }

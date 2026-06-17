@@ -37,7 +37,23 @@
       "Bash(pnpm -w -r exec tsc --noEmit)",
       "Bash(awk '/^const HEADERS = \\\\[/,/^\\\\] as const;/' /Users/admin/Downloads/tms-platform/apps/api/src/modules/export/builders/kehoach-xe.builder.ts)",
       "Bash(node -e \"const a=[6,12,14,22,12,18,10,16,16,22,22,22,12,16,12,16,14,16,12,12,16,20,30,14,14,24,24,24]; console.log\\('COL_WIDTHS length:', a.length\\);\")",
-      "Bash(awk '/ws.addRow\\\\\\(\\\\[$/,/^    \\\\]\\\\\\);$/' /Users/admin/Downloads/tms-platform/apps/api/src/modules/export/builders/kehoach-xe.builder.ts)"
+      "Bash(awk '/ws.addRow\\\\\\(\\\\[$/,/^    \\\\]\\\\\\);$/' /Users/admin/Downloads/tms-platform/apps/api/src/modules/export/builders/kehoach-xe.builder.ts)",
+      "Bash(pnpm --filter @tms/web add recharts)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['outputPath']\\)\")",
+      "Bash(echo \"API exit code: $?\")",
+      "Bash(echo \"Web exit code: $?\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['instruction'][:500]\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['instruction'][:800]\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); remaining=[t for t in d['tasks'] if not t['done']]; print\\(f'Progress: {d[\\\\\"progress\\\\\"][\\\\\"complete\\\\\"]}/{d[\\\\\"progress\\\\\"][\\\\\"total\\\\\"]}'\\); print\\('Remaining:'\\); [print\\(f'  - {t[\\\\\"id\\\\\"]}: {t[\\\\\"description\\\\\"][:80]}'\\) for t in remaining[:15]]\")",
+      "Bash(echo \"EXIT_API=$?\")",
+      "Bash(echo \"EXIT_WEB=$?\")",
+      "Bash(sed -n '49,90p' /Users/admin/Downloads/tms-platform/apps/api/src/modules/customer/customer.service.ts)",
+      "Bash(sed -n '96,145p' /Users/admin/Downloads/tms-platform/apps/api/src/modules/vehicle-record/vehicle-record.service.ts)",
+      "Bash(sed -n '18,50p' /Users/admin/Downloads/tms-platform/apps/api/src/modules/yard-move/yard-move.service.ts)",
+      "Bash(node -e \"const { PrismaClientKnownRequestError, PrismaClientUnknownRequestError } = require\\('@tms/db'\\); console.log\\('known:', typeof PrismaClientKnownRequestError, 'unknown:', typeof PrismaClientUnknownRequestError\\)\")",
+      "Bash(node -e \"const p = require\\('/Users/admin/Downloads/tms-platform/node_modules/@prisma/client'\\); console.log\\(Object.keys\\(p\\).filter\\(k => k.includes\\('Error'\\)\\)\\)\")",
+      "Bash(node -e \"const {Prisma} = require\\('./node_modules/.pnpm/@prisma+client@6.4.1_prisma@6.4.1/node_modules/@prisma/client'\\); console.log\\(Object.keys\\(Prisma\\).filter\\(k => k.includes\\('Error'\\)\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['outputPath']\\); print\\('---TEMPLATE---'\\); print\\(d['template']\\)\")"
     ]
   }
 }

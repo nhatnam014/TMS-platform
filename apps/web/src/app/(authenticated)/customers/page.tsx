@@ -161,6 +161,7 @@ function Modal({ title, onClose, onSubmit, error, children }: ModalProps) {
 }
 
 const EMPTY_FORM = { code: "", name: "", address: "", phone: "", email: "", taxCode: "" };
+const PAGE_SIZE_CUST = 10;
 
 export default function CustomersPage() {
   const toast = useToast();
@@ -169,6 +170,9 @@ export default function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState(EMPTY_FORM);
@@ -184,14 +188,20 @@ export default function CustomersPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch("/api/customers")
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE_CUST));
+    if (search.trim()) params.set("search", search.trim());
+    fetch(`/api/customers?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`API error ${res.status}`);
-        return res.json() as Promise<CustomerRow[]>;
+        return res.json();
       })
       .then((data) => {
         if (!cancelled) {
-          setCustomers(data);
+          setCustomers(data.data);
+          setTotal(data.meta.total);
+          setTotalPages(data.meta.totalPages);
           setError(null);
         }
       })
@@ -204,7 +214,7 @@ export default function CustomersPage() {
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refresh, search, page]);
 
   async function handleCreate() {
     setCreateError(null);
@@ -290,11 +300,6 @@ export default function CustomersPage() {
     }
   }
 
-  const displayed = customers.filter((c) => {
-    const q = search.toLowerCase();
-    return !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
-  });
-
   return (
     <div>
       <div
@@ -342,7 +347,10 @@ export default function CustomersPage() {
             <input
               placeholder="Tìm theo mã, tên khách hàng..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               style={{
                 flex: 1,
                 padding: "8px 12px",
@@ -382,7 +390,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody>
-                {displayed.length === 0 && (
+                {customers.length === 0 && (
                   <tr>
                     <td
                       colSpan={6}
@@ -392,7 +400,7 @@ export default function CustomersPage() {
                     </td>
                   </tr>
                 )}
-                {displayed.map((c) => (
+                {customers.map((c) => (
                   <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                     <td style={{ padding: "10px 14px", fontWeight: 600 }}>{c.code}</td>
                     <td style={{ padding: "10px 14px" }}>{c.name}</td>
@@ -436,8 +444,86 @@ export default function CustomersPage() {
                 ))}
               </tbody>
             </table>
-            <div style={{ padding: "10px 14px", color: "#94a3b8", fontSize: 13 }}>
-              {displayed.length} khách hàng
+            <div
+              style={{
+                padding: "10px 14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              <span style={{ color: "#94a3b8", fontSize: 13 }}>
+                {total === 0
+                  ? "0 khách hàng"
+                  : `Hiển thị ${(page - 1) * PAGE_SIZE_CUST + 1}–${Math.min(page * PAGE_SIZE_CUST, total)} / ${total}`}
+              </span>
+              {totalPages > 1 && (
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    style={{
+                      padding: "4px 10px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: 5,
+                      background: page === 1 ? "#f1f5f9" : "#fff",
+                      cursor: page === 1 ? "default" : "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    ‹
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                    .reduce<(number | "…")[]>((acc, p, i, arr) => {
+                      if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, i) =>
+                      p === "…" ? (
+                        <span
+                          key={`e${i}`}
+                          style={{ padding: "4px 6px", fontSize: 13, color: "#94a3b8" }}
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setPage(p as number)}
+                          style={{
+                            padding: "4px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 5,
+                            background: p === page ? "#3b82f6" : "#fff",
+                            color: p === page ? "#fff" : "#374151",
+                            cursor: "pointer",
+                            fontSize: 13,
+                          }}
+                        >
+                          {p}
+                        </button>
+                      ),
+                    )}
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    style={{
+                      padding: "4px 10px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: 5,
+                      background: page === totalPages ? "#f1f5f9" : "#fff",
+                      cursor: page === totalPages ? "default" : "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </>
