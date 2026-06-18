@@ -44,7 +44,9 @@ function UploadSection({ title, endpoint, description }: UploadSectionProps) {
       }
       const imported = data as ImportResult;
       setResult(imported);
-      toast.success(`Nhập thành công ${imported.imported} bản ghi`);
+      const parts = [`${imported.imported} tạo mới`];
+      if (imported.updated) parts.push(`${imported.updated} cập nhật`);
+      toast.success(`Nhập thành công: ${parts.join(", ")}`);
       if (fileRef.current) fileRef.current.value = "";
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Lỗi không xác định";
@@ -142,7 +144,8 @@ function ImportResultDisplay({
               marginBottom: result.warnings.length || result.errors.length ? 10 : 0,
             }}
           >
-            Nhập thành công {result.imported} bản ghi
+            Nhập thành công: {result.imported} tạo mới
+            {result.updated ? `, ${result.updated} cập nhật` : ""}
           </div>
           {result.warnings.length > 0 && (
             <details style={{ marginBottom: 8 }}>

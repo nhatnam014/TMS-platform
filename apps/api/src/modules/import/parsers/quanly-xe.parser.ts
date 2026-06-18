@@ -5,6 +5,7 @@ export interface ParsedVehicleRecordRow {
   rowNum: number;
   type: "record" | "mooc_continuation";
   reason?: string;
+  id?: string;
   // VehicleRecord fields
   tenTaiXe?: string;
   sdt?: string;
@@ -74,6 +75,7 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
   const headerRow = ws.getRow(headerRowNum);
   const hmap = buildHeaderMap(headerRow);
 
+  const ID_COL = col(hmap, "id");
   const STT = col(hmap, "stt");
   const HO_TEN = col(hmap, "tên tx", "ten tx", "họ và tên", "ho va ten", "tên tài xế", "họ tên");
   const DIEN_THOAI = col(hmap, "điện thoại", "dien thoai", "sdt", "sĐt", "số điện thoại");
@@ -133,9 +135,11 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
     if (!sttRaw) return; // empty structural row, skip silently
 
     // STT row → VehicleRecord
+    const idVal = ID_COL > 0 ? cellText(row, ID_COL) || undefined : undefined;
     results.push({
       rowNum,
       type: "record",
+      id: idVal,
       tenTaiXe: HO_TEN > 0 ? cellText(row, HO_TEN) || undefined : undefined,
       sdt: DIEN_THOAI > 0 ? cellText(row, DIEN_THOAI) || undefined : undefined,
       loaiXe: LOAI_XE > 0 ? cellText(row, LOAI_XE) || undefined : undefined,

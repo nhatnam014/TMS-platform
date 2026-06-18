@@ -54,62 +54,71 @@ export class ImportService {
     // ── Phase 2: Execute (writes) ─────────────────────────────────────────────
     const warnings: string[] = [];
     let imported = 0;
+    let updated = 0;
     let currentRecordId: string | null = null;
 
     for (const row of rows) {
       try {
         if (row.type === "record") {
-          if (row.bienSo) {
-            const existing = await this.prisma.vehicleRecord.findFirst({
-              where: { bienSo: row.bienSo },
+          const vehicleData = {
+            tenTaiXe: row.tenTaiXe ?? null,
+            sdt: row.sdt ?? null,
+            loaiXe: row.loaiXe ?? null,
+            bienSo: row.bienSo ?? null,
+            hanDangKiem: row.hanDangKiem ?? null,
+            hanBaoHiem: row.hanBaoHiem ?? null,
+            hanCaVet: row.hanCaVet ?? null,
+            ghiChu: row.ghiChu ?? null,
+          };
+
+          if (row.id) {
+            // UPDATE existing record by ID
+            const record = await this.prisma.vehicleRecord.update({
+              where: { id: row.id },
+              data: vehicleData,
             });
-            if (existing) {
-              warnings.push(`Hàng ${row.rowNum}: biển số ${row.bienSo} đã tồn tại, bỏ qua`);
-              currentRecordId = existing.id;
-              continue;
+            currentRecordId = record.id;
+            if (row.soMooc) {
+              await this.upsertMooc(currentRecordId, row.soMooc, {
+                hanDangKiem: row.moocHanDangKiem ?? null,
+                hanBaoHiem: row.moocHanBaoHiem ?? null,
+                hanCaVet: row.moocHanCaVet ?? null,
+              });
             }
+            updated++;
+          } else {
+            // CREATE new record
+            const record = await this.prisma.vehicleRecord.create({
+              data: {
+                ...vehicleData,
+                ...(row.soMooc
+                  ? {
+                      moocs: {
+                        create: [
+                          {
+                            soMooc: row.soMooc,
+                            hanDangKiem: row.moocHanDangKiem ?? null,
+                            hanBaoHiem: row.moocHanBaoHiem ?? null,
+                            hanCaVet: row.moocHanCaVet ?? null,
+                          },
+                        ],
+                      },
+                    }
+                  : {}),
+              },
+            });
+            currentRecordId = record.id;
+            imported++;
           }
-          const record = await this.prisma.vehicleRecord.create({
-            data: {
-              tenTaiXe: row.tenTaiXe ?? null,
-              sdt: row.sdt ?? null,
-              loaiXe: row.loaiXe ?? null,
-              bienSo: row.bienSo ?? null,
-              hanDangKiem: row.hanDangKiem ?? null,
-              hanBaoHiem: row.hanBaoHiem ?? null,
-              hanCaVet: row.hanCaVet ?? null,
-              ghiChu: row.ghiChu ?? null,
-              ...(row.soMooc
-                ? {
-                    moocs: {
-                      create: [
-                        {
-                          soMooc: row.soMooc,
-                          hanDangKiem: row.moocHanDangKiem ?? null,
-                          hanBaoHiem: row.moocHanBaoHiem ?? null,
-                          hanCaVet: row.moocHanCaVet ?? null,
-                        },
-                      ],
-                    },
-                  }
-                : {}),
-            },
-          });
-          currentRecordId = record.id;
-          imported++;
         } else if (row.type === "mooc_continuation") {
           if (!currentRecordId) {
             errors.push(`Hàng ${row.rowNum}: mooc continuation nhưng chưa có xe nào, bỏ qua`);
             continue;
           }
-          await this.prisma.vehicleRecordMooc.create({
-            data: {
-              vehicleRecordId: currentRecordId,
-              soMooc: row.soMooc ?? "",
-              hanDangKiem: row.moocHanDangKiem ?? null,
-              hanBaoHiem: row.moocHanBaoHiem ?? null,
-              hanCaVet: row.moocHanCaVet ?? null,
-            },
+          await this.upsertMooc(currentRecordId, row.soMooc ?? "", {
+            hanDangKiem: row.moocHanDangKiem ?? null,
+            hanBaoHiem: row.moocHanBaoHiem ?? null,
+            hanCaVet: row.moocHanCaVet ?? null,
           });
         }
       } catch (err) {
@@ -121,13 +130,13 @@ export class ImportService {
       await this.auditService.log({
         action: "CREATE",
         entityType: "VehicleRecord",
-        summary: `Excel import: ${imported} bản ghi quản lý xe, ${errors.length} lỗi`,
+        summary: `Excel import: ${imported} tạo mới, ${updated} cập nhật, ${errors.length} lỗi`,
       });
     } catch (err) {
       console.error("Audit log failed (non-fatal):", err);
     }
 
-    return { imported, warnings, errors };
+    return { imported, updated, warnings, errors };
   }
 
   async importTripPlans(buffer: Buffer): Promise<ImportResult> {
@@ -143,6 +152,7 @@ export class ImportService {
     }
     const errors: string[] = [];
     let imported = 0;
+    let updated = 0;
 
     for (const row of rows) {
       try {
@@ -180,29 +190,40 @@ export class ImportService {
             ? (await this.lookupOrCreateContainerSize(row.containerSizeCode, warnings, tx)).id
             : null;
 
-          const tripPlan = await tx.tripPlan.create({
-            data: {
-              tripDate: row.tripDate!,
-              tripNumber: row.tripNumber ?? null,
-              serviceTypeId,
-              vehiclePlate: row.vehiclePlate ?? null,
-              customerId: customer.id,
-              carrierId: carrierId ?? null,
-              containerSizeId,
-              outboundContainerNumber: row.outboundContainerNumber ?? null,
-              inboundContainerNumber: row.inboundContainerNumber ?? null,
-              pickupLocationName: row.pickupLocationName ?? null,
-              loadUnloadLocationName: row.loadUnloadLocationName ?? null,
-              dropoffLocationName: row.dropoffLocationName ?? null,
-              description: row.description ?? null,
-              notes: row.notes ?? null,
-            },
-          });
+          const tripPlanData = {
+            tripDate: row.tripDate!,
+            tripNumber: row.tripNumber ?? null,
+            serviceTypeId,
+            vehiclePlate: row.vehiclePlate ?? null,
+            customerId: customer.id,
+            carrierId: carrierId ?? null,
+            containerSizeId,
+            outboundContainerNumber: row.outboundContainerNumber ?? null,
+            inboundContainerNumber: row.inboundContainerNumber ?? null,
+            pickupLocationName: row.pickupLocationName ?? null,
+            loadUnloadLocationName: row.loadUnloadLocationName ?? null,
+            dropoffLocationName: row.dropoffLocationName ?? null,
+            description: row.description ?? null,
+            notes: row.notes ?? null,
+          };
+
+          let tripPlanId: string;
+          if (row.id) {
+            // UPDATE existing trip plan
+            await tx.tripPlan.update({ where: { id: row.id }, data: tripPlanData });
+            // Replace costs with what's in the file
+            await tx.tripPlanCost.deleteMany({ where: { tripPlanId: row.id } });
+            tripPlanId = row.id;
+          } else {
+            // CREATE new trip plan
+            const tripPlan = await tx.tripPlan.create({ data: tripPlanData });
+            tripPlanId = tripPlan.id;
+          }
 
           for (const costItem of row.costs ?? []) {
             await tx.tripPlanCost.create({
               data: {
-                tripPlanId: tripPlan.id,
+                tripPlanId,
                 costName: costItem.costName,
                 amount: costItem.amount,
                 invoiceNumber: costItem.invoiceNumber ?? null,
@@ -211,7 +232,8 @@ export class ImportService {
           }
         });
 
-        imported++;
+        if (row.id) updated++;
+        else imported++;
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -220,10 +242,30 @@ export class ImportService {
     await this.auditService.log({
       action: "CREATE",
       entityType: "TripPlan",
-      summary: `Excel import: ${imported} chuyến xe, ${warnings.length} cảnh báo, ${errors.length} lỗi`,
+      summary: `Excel import: ${imported} tạo mới, ${updated} cập nhật, ${warnings.length} cảnh báo, ${errors.length} lỗi`,
     });
 
-    return { imported, warnings, errors };
+    return { imported, updated, warnings, errors };
+  }
+
+  private async upsertMooc(
+    vehicleRecordId: string,
+    soMooc: string,
+    dates: { hanDangKiem: Date | null; hanBaoHiem: Date | null; hanCaVet: Date | null },
+  ) {
+    const existing = await this.prisma.vehicleRecordMooc.findFirst({
+      where: { vehicleRecordId, soMooc },
+    });
+    if (existing) {
+      await this.prisma.vehicleRecordMooc.update({
+        where: { id: existing.id },
+        data: dates,
+      });
+    } else {
+      await this.prisma.vehicleRecordMooc.create({
+        data: { vehicleRecordId, soMooc, ...dates },
+      });
+    }
   }
 
   private async lookupOrCreateServiceType(

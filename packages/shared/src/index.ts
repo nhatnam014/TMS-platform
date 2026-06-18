@@ -357,6 +357,7 @@ export interface YardMoveFilters {
 // ---------- Excel Import/Export ----------
 export interface ImportResult {
   imported: number;
+  updated?: number;
   warnings: string[];
   errors: string[];
 }

@@ -23,9 +23,10 @@ const HEADERS = [
   "HẠN BẢO HIỂM MOOC",
   "HẠN CÀ VẸT MOOC",
   "GHI CHÚ",
+  "ID",
 ];
 
-const COL_WIDTHS = [6, 24, 16, 14, 14, 16, 16, 16, 16, 20, 20, 20, 30];
+const COL_WIDTHS = [6, 24, 16, 14, 14, 16, 16, 16, 16, 20, 20, 20, 30, 30];
 
 export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -59,7 +60,11 @@ export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
       formatDate(firstMooc?.hanBaoHiem),
       formatDate(firstMooc?.hanCaVet),
       rec.ghiChu ?? "",
+      rec.id,
     ]);
+    // Style the ID cell to indicate it's system-managed
+    const idCell = row.getCell(HEADERS.length);
+    idCell.font = { color: { argb: "FF9CA3AF" }, size: 9 };
 
     // Additional moocs as continuation rows
     const extraMoocs = (rec.moocs ?? []).slice(1);

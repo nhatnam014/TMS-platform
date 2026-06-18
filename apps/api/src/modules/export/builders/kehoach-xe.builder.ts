@@ -38,11 +38,12 @@ const HEADERS = [
   "CHI PHÍ PHÁT SINH KHÁC",
   "NỘI DUNG",
   "GHI CHÚ",
+  "ID",
 ] as const;
 
 const COL_WIDTHS = [
-  6, 12, 14, 22, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12,
-  12, 16, 20, 30, 14, 14, 24, 24, 24,
+  6, 12, 14, 22, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20, 30, 14, 14,
+  24, 24, 24, 30,
 ];
 
 export async function buildKeHoachXe(
@@ -76,7 +77,7 @@ export async function buildKeHoachXe(
       0,
     );
 
-    ws.addRow([
+    const dataRow = ws.addRow([
       idx + 1,
       formatDate(tp.tripDate),
       tp.vehiclePlate ?? "",
@@ -105,7 +106,10 @@ export async function buildKeHoachXe(
       otherCostsTotal > 0 ? otherCostsTotal : "",
       tp.description ?? "",
       tp.notes ?? "",
+      tp.id,
     ]);
+    const idCell = dataRow.getCell(HEADERS.length);
+    idCell.font = { color: { argb: "FF9CA3AF" }, size: 9 };
   });
 
   // Borders on all rows

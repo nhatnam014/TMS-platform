@@ -11,6 +11,7 @@ export interface ParsedTripPlanRow {
   rowNum: number;
   type: "data" | "skip";
   reason?: string;
+  id?: string;
   tripNumber?: number;
   tripDate?: Date;
   vehiclePlate?: string;
@@ -87,6 +88,7 @@ const COL = {
   CHI_PHI_PHAT_SINH: 26,
   NOI_DUNG: 27,
   GHI_CHU: 28,
+  ID: 29,
 } as const;
 
 const COST_COLUMNS: Array<{ nameCol: string; amountCol: number; shdCol?: number }> = [
@@ -157,9 +159,11 @@ export function parseKeHoachXe(
 
     const tripNum = sttRaw ? parseInt(sttRaw, 10) : undefined;
 
+    const idVal = cellText(row, COL.ID) || undefined;
     results.push({
       rowNum,
       type: "data",
+      id: idVal,
       tripNumber: tripNum && !isNaN(tripNum) ? tripNum : undefined,
       tripDate,
       vehiclePlate,
