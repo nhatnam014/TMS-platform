@@ -65,7 +65,7 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
   // Find header row (first row with STT in col 1, within first 3 rows)
   let headerRowNum = 1;
   ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
-    if (headerRowNum === 1 && rowNum <= 3) {
+    if (headerRowNum === 1 && rowNum <= 10) {
       const text = String(row.getCell(1).value ?? "").toLowerCase();
       if (text === "stt" || text.includes("stt")) headerRowNum = rowNum;
     }

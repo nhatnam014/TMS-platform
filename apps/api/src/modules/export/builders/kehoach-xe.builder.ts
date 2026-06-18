@@ -1,6 +1,4 @@
 import * as ExcelJS from "exceljs";
-import * as fs from "fs";
-import * as path from "path";
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -33,7 +31,7 @@ const HEADERS = [
   "PHÍ CƯỢC",
   "VÉ CỔNG",
   "SHĐ",
-  "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM",
+  "CHÍ PHÍ KHÁC/ PHÍ ĐỨT TEM",
   "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM",
   "CẦU ĐƯỜNG",
   "NGÀY GỬI CT",
@@ -47,89 +45,29 @@ const COL_WIDTHS = [
   12, 16, 20, 30, 14, 14, 24, 24, 24,
 ];
 
-const LOGO_PATH = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "img",
-  "LogisticCompany.png",
-);
-
-const HEADER_ROWS = 5;
-const TITLE_ROW = 4;
-const DATE_ROW = 5;
-const TITLE_COL_START = 9;  // column I (1-based)
-const TITLE_COL_END = 19;   // column S (1-based)
-
 export async function buildKeHoachXe(
   tripPlans: any[],
   from?: string,
   to?: string,
 ): Promise<Buffer> {
-  // Date fallback logic
-  let headerFrom = from ? formatDate(new Date(from)) : "";
-  let headerTo = to ? formatDate(new Date(to)) : "";
-
-  if (!headerFrom && tripPlans.length > 0) {
-    const timestamps = tripPlans
-      .map((t) => new Date(t.tripDate).getTime())
-      .filter((n) => !isNaN(n));
-    if (timestamps.length > 0) {
-      headerFrom = formatDate(new Date(Math.min(...timestamps)));
-    }
-  }
-  if (!headerTo) {
-    headerTo = formatDate(new Date());
-  }
+  void from;
+  void to;
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("kế hoạch xe");
 
-  // ── Column widths ──────────────────────────────────────────────────────────
   HEADERS.forEach((_, i) => {
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  // Logo image
-  let logoBuffer: Buffer | null = null;
-  try {
-    logoBuffer = fs.readFileSync(LOGO_PATH) as unknown as Buffer;
-  } catch {
-    // Logo file missing — skip image, still render title
-  }
-
-  if (logoBuffer) {
-    const imageId = wb.addImage({ buffer: logoBuffer as any, extension: "png" });
-    ws.addImage(imageId, {
-      tl: { col: 0, row: 0 },
-      br: { col: 5, row: 7 },
-    } as any);
-  }
-
-  // Title: row 4, I4:S4
-  ws.mergeCells(TITLE_ROW, TITLE_COL_START, TITLE_ROW, TITLE_COL_END);
-  const titleCell = ws.getCell(TITLE_ROW, TITLE_COL_START);
-  titleCell.value = "KẾ HOẠCH XE";
-  titleCell.font = { bold: true, size: 18, color: { argb: "FF003399" } };
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-
-  // Date range: row 5, I5:S5
-  ws.mergeCells(DATE_ROW, TITLE_COL_START, DATE_ROW, TITLE_COL_END);
-  const dateCell = ws.getCell(DATE_ROW, TITLE_COL_START);
-  dateCell.value = `From: ${headerFrom}  To: ${headerTo}`;
-  dateCell.font = { size: 11 };
-  dateCell.alignment = { horizontal: "center", vertical: "middle" };
-
-  // ── Column header row (row 6) ──────────────────────────────────────────────
+  // Header at row 1
   const headerRowObj = ws.addRow(HEADERS as unknown as any[]);
   headerRowObj.font = { bold: true };
   headerRowObj.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
   headerRowObj.alignment = { horizontal: "center", wrapText: true };
+  headerRowObj.height = 22;
 
-  // ── Data rows ──────────────────────────────────────────────────────────────
+  // Data rows from row 2
   tripPlans.forEach((tp, idx) => {
     const sizeCode = tp.containerSize?.code ?? null;
     const serviceTypeLabel = tp.serviceType?.code ?? "";
@@ -139,40 +77,39 @@ export async function buildKeHoachXe(
     );
 
     ws.addRow([
-      idx + 1, // STT
-      formatDate(tp.tripDate), // NGÀY
-      tp.vehiclePlate ?? "", // SỐ XE
-      tp.customer?.name ?? "", // KHÁCH HÀNG
-      serviceTypeLabel, // LOẠI HÌNH
-      tp.carrier?.name ?? "", // ĐƠN VỊ
-      sizeCode ?? "", // SIZE CONT
-      tp.outboundContainerNumber ?? "", // CONT ĐI
-      tp.inboundContainerNumber ?? "", // CONT VỀ
-      tp.pickupLocationName ?? "", // Điểm Lấy
-      tp.loadUnloadLocationName ?? "", // Điểm Đóng/Rút
-      tp.dropoffLocationName ?? "", // Điểm Hạ
-      tp.phiNangAmount != null ? Number(tp.phiNangAmount) : "", // PHÍ NÂNG
-      tp.shdNang ?? "", // SHĐ NÂNG
-      tp.phiHaAmount != null ? Number(tp.phiHaAmount) : "", // PHÍ HẠ
-      tp.shdHa ?? "", // SHĐ HẠ
-      tp.phiVeSinhAmount != null ? Number(tp.phiVeSinhAmount) : "", // PHÍ VỆ SINH
-      tp.shdVeSinh ?? "", // SHĐ
-      tp.phiCuocAmount != null ? Number(tp.phiCuocAmount) : "", // PHÍ CƯỢC
-      tp.veCongAmount != null ? Number(tp.veCongAmount) : "", // VÉ CỔNG
-      tp.shdVeCong ?? "", // SHĐ
-      tp.chiPhiKhacAmount != null ? Number(tp.chiPhiKhacAmount) : "", // CHÍ PHÍ ĐỨT TEM
-      tp.chiPhiTraiTuyenAmount != null ? Number(tp.chiPhiTraiTuyenAmount) : "", // CHI PHÍ TRÁI TUYẾN
-      tp.cauDuongAmount != null ? Number(tp.cauDuongAmount) : "", // CẦU ĐƯỜNG
-      formatDate(tp.documentSentDate), // NGÀY GỬI CT
-      otherCostsTotal > 0 ? otherCostsTotal : "", // CHI PHÍ PHÁT SINH KHÁC
-      tp.description ?? "", // NỘI DUNG
-      tp.notes ?? "", // GHI CHÚ
+      idx + 1,
+      formatDate(tp.tripDate),
+      tp.vehiclePlate ?? "",
+      tp.customer?.name ?? "",
+      serviceTypeLabel,
+      tp.carrier?.name ?? "",
+      sizeCode ?? "",
+      tp.outboundContainerNumber ?? "",
+      tp.inboundContainerNumber ?? "",
+      tp.pickupLocationName ?? "",
+      tp.loadUnloadLocationName ?? "",
+      tp.dropoffLocationName ?? "",
+      tp.phiNangAmount != null ? Number(tp.phiNangAmount) : "",
+      tp.shdNang ?? "",
+      tp.phiHaAmount != null ? Number(tp.phiHaAmount) : "",
+      tp.shdHa ?? "",
+      tp.phiVeSinhAmount != null ? Number(tp.phiVeSinhAmount) : "",
+      tp.shdVeSinh ?? "",
+      tp.phiCuocAmount != null ? Number(tp.phiCuocAmount) : "",
+      tp.veCongAmount != null ? Number(tp.veCongAmount) : "",
+      tp.shdVeCong ?? "",
+      tp.chiPhiKhacAmount != null ? Number(tp.chiPhiKhacAmount) : "",
+      tp.chiPhiTraiTuyenAmount != null ? Number(tp.chiPhiTraiTuyenAmount) : "",
+      tp.cauDuongAmount != null ? Number(tp.cauDuongAmount) : "",
+      formatDate(tp.documentSentDate),
+      otherCostsTotal > 0 ? otherCostsTotal : "",
+      tp.description ?? "",
+      tp.notes ?? "",
     ]);
   });
 
-  // ── Borders on data rows ───────────────────────────────────────────────────
-  ws.eachRow((row, rowNum) => {
-    if (rowNum <= HEADER_ROWS) return;
+  // Borders on all rows
+  ws.eachRow((row) => {
     row.eachCell((cell) => {
       cell.border = {
         top: { style: "thin" },

@@ -1,6 +1,4 @@
 import * as ExcelJS from "exceljs";
-import * as fs from "fs";
-import * as path from "path";
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -24,74 +22,30 @@ const HEADERS = [
   "HẠN ĐĂNG KIỂM MOOC",
   "HẠN BẢO HIỂM MOOC",
   "HẠN CÀ VẸT MOOC",
+  "GHI CHÚ",
 ];
 
-const COL_WIDTHS = [6, 24, 16, 14, 14, 16, 16, 16, 16, 20, 20, 20];
-
-const LOGO_PATH = path.resolve(
-  __dirname,
-  "..",
-  "..",
-  "..",
-  "..",
-  "..",
-  "img",
-  "LogisticCompany.png",
-);
-
-const HEADER_ROWS = 4;
-const TITLE_START_COL = 7;
+const COL_WIDTHS = [6, 24, 16, 14, 14, 16, 16, 16, 16, 20, 20, 20, 30];
 
 export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("quản lý xe");
 
-  // ── Column widths ──────────────────────────────────────────────────────────
   HEADERS.forEach((_, i) => {
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  // ── Header rows 1-4 ────────────────────────────────────────────────────────
-  for (let r = 1; r <= HEADER_ROWS; r++) {
-    ws.getRow(r).height = 30;
-  }
-
-  // Logo image
-  let logoBuffer: Buffer | null = null;
-  try {
-    logoBuffer = fs.readFileSync(LOGO_PATH) as unknown as Buffer;
-  } catch {
-    // Logo file missing — skip image, still render title
-  }
-
-  if (logoBuffer) {
-    const imageId = wb.addImage({ buffer: logoBuffer as any, extension: "png" });
-    ws.addImage(imageId, {
-      tl: { col: 0, row: 0 },
-      br: { col: 6, row: 4 },
-    } as any);
-  }
-
-  // Title: merge G1:lastCol x rows 1-2
-  ws.mergeCells(1, TITLE_START_COL, 2, HEADERS.length);
-  const titleCell = ws.getCell(1, TITLE_START_COL);
-  titleCell.value = "QUẢN LÝ XE";
-  titleCell.font = { bold: true, size: 18, color: { argb: "FF003399" } };
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-
-  // Rows 3-4 are left empty (no date line for quản lý xe)
-
-  // ── Column header row (row 5) ──────────────────────────────────────────────
+  // Header at row 1
   const headerRowObj = ws.addRow(HEADERS);
   headerRowObj.font = { bold: true };
   headerRowObj.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
   headerRowObj.alignment = { horizontal: "center", wrapText: true };
+  headerRowObj.height = 22;
 
-  // ── Data rows ──────────────────────────────────────────────────────────────
+  // Data rows from row 2
   records.forEach((rec, idx) => {
     const firstMooc = rec.moocs?.[0] ?? null;
-
-    ws.addRow([
+    const row = ws.addRow([
       idx + 1,
       rec.tenTaiXe ?? "",
       rec.sdt ?? "",
@@ -104,12 +58,34 @@ export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
       formatDate(firstMooc?.hanDangKiem),
       formatDate(firstMooc?.hanBaoHiem),
       formatDate(firstMooc?.hanCaVet),
+      rec.ghiChu ?? "",
     ]);
+
+    // Additional moocs as continuation rows
+    const extraMoocs = (rec.moocs ?? []).slice(1);
+    for (const mooc of extraMoocs) {
+      ws.addRow([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        mooc.soMooc ?? "",
+        formatDate(mooc.hanDangKiem),
+        formatDate(mooc.hanBaoHiem),
+        formatDate(mooc.hanCaVet),
+        "",
+      ]);
+    }
+
+    void row;
   });
 
-  // ── Borders on data rows ───────────────────────────────────────────────────
-  ws.eachRow((row, rowNum) => {
-    if (rowNum <= HEADER_ROWS) return;
+  // Borders on all rows
+  ws.eachRow((row) => {
     row.eachCell((cell) => {
       cell.border = {
         top: { style: "thin" },

@@ -11,14 +11,9 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get("stats")
-  @ApiOperation({ summary: "Get dashboard statistics with optional date ranges" })
-  getStats(
-    @Query("tripFrom") tripFrom?: string,
-    @Query("tripTo") tripTo?: string,
-    @Query("expiryFrom") expiryFrom?: string,
-    @Query("expiryTo") expiryTo?: string,
-  ) {
-    return this.dashboardService.getStats(tripFrom, tripTo, expiryFrom, expiryTo);
+  @ApiOperation({ summary: "Get dashboard statistics with optional trip date range" })
+  getStats(@Query("tripFrom") tripFrom?: string, @Query("tripTo") tripTo?: string) {
+    return this.dashboardService.getStats(tripFrom, tripTo);
   }
 
   @Get("trips-trend")

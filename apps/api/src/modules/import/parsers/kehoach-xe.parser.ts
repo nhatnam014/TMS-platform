@@ -57,7 +57,7 @@ function normalizeServiceTypeCode(raw: string): string {
   return raw.replace(/\s+/g, " ").toUpperCase().trim().replace(" - ", "-");
 }
 
-// Column indices matching the actual "kế hoạch xe" template (1-based)
+// Column indices matching the exported "kế hoạch xe" file (1-based, 28 columns)
 const COL = {
   STT: 1,
   NGAY: 2,
@@ -68,26 +68,25 @@ const COL = {
   SIZE_CONT: 7,
   CONT_DI: 8,
   CONT_VE: 9,
-  // 10: 20', 11: 40', 12: 45' — derived tick cols, not parsed
-  DIEM_LAY: 13,
-  DIEM_DONG_RUT: 14,
-  DIEM_HA: 15,
-  PHI_NANG: 16,
-  SHD_NANG: 17,
-  PHI_HA: 18,
-  SHD_HA: 19,
-  PHI_VE_SINH: 20,
-  SHD_VE_SINH: 21,
-  PHI_CUOC: 22,
-  VE_CONG: 23,
-  SHD_CONG: 24,
-  CHI_PHI_DUT_TEM: 25,
-  CHI_PHI_TRAI_TUYEN: 26,
-  CAU_DUONG: 27,
-  NGAY_GUI_CT: 28,
-  CHI_PHI_PHAT_SINH: 29,
-  NOI_DUNG: 30,
-  GHI_CHU: 31,
+  DIEM_LAY: 10,
+  DIEM_DONG_RUT: 11,
+  DIEM_HA: 12,
+  PHI_NANG: 13,
+  SHD_NANG: 14,
+  PHI_HA: 15,
+  SHD_HA: 16,
+  PHI_VE_SINH: 17,
+  SHD_VE_SINH: 18,
+  PHI_CUOC: 19,
+  VE_CONG: 20,
+  SHD_CONG: 21,
+  CHI_PHI_DUT_TEM: 22,
+  CHI_PHI_TRAI_TUYEN: 23,
+  CAU_DUONG: 24,
+  NGAY_GUI_CT: 25,
+  CHI_PHI_PHAT_SINH: 26,
+  NOI_DUNG: 27,
+  GHI_CHU: 28,
 } as const;
 
 const COST_COLUMNS: Array<{ nameCol: string; amountCol: number; shdCol?: number }> = [

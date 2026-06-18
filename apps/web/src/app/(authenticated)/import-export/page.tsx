@@ -298,7 +298,7 @@ export default function ImportExportPage() {
 
       <UploadSection
         title="Nhập danh sách xe — Quản lý xe"
-        endpoint="/api/import/vehicles"
+        endpoint="/api/import/vehicles?confirm=true"
         description="Tải lên sheet 'quản lý xe' — mỗi lần nhập sẽ tạo thêm bản ghi mới vào danh sách quản lý xe."
       />
 

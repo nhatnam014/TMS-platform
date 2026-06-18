@@ -52,12 +52,23 @@ export class ImportService {
     }
 
     // ── Phase 2: Execute (writes) ─────────────────────────────────────────────
+    const warnings: string[] = [];
     let imported = 0;
     let currentRecordId: string | null = null;
 
     for (const row of rows) {
       try {
         if (row.type === "record") {
+          if (row.bienSo) {
+            const existing = await this.prisma.vehicleRecord.findFirst({
+              where: { bienSo: row.bienSo },
+            });
+            if (existing) {
+              warnings.push(`Hàng ${row.rowNum}: biển số ${row.bienSo} đã tồn tại, bỏ qua`);
+              currentRecordId = existing.id;
+              continue;
+            }
+          }
           const record = await this.prisma.vehicleRecord.create({
             data: {
               tenTaiXe: row.tenTaiXe ?? null,
@@ -116,7 +127,7 @@ export class ImportService {
       console.error("Audit log failed (non-fatal):", err);
     }
 
-    return { imported, warnings: [], errors };
+    return { imported, warnings, errors };
   }
 
   async importTripPlans(buffer: Buffer): Promise<ImportResult> {

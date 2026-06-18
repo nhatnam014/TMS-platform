@@ -19,14 +19,15 @@ function isoDate(d: Date): string {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStats(
-    tripFrom?: string,
-    tripTo?: string,
-    expiryFrom?: string,
-    expiryTo?: string,
-  ): Promise<DashboardStats> {
+  async getStats(tripFrom?: string, tripTo?: string): Promise<DashboardStats> {
     const tripRange = toDateRange(tripFrom, tripTo);
-    const expiryRange = toDateRange(expiryFrom, expiryTo, 30);
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    const today29 = new Date();
+    today29.setDate(today29.getDate() + 29);
+    today29.setHours(23, 59, 59, 999);
 
     const [
       totalTrips,
@@ -34,9 +35,14 @@ export class DashboardService {
       tripsInTransit,
       tripsCompleted,
       tripsCancelled,
-      vehiclesActive,
-      expiringDangKiemXe,
-      expiringCaVetXe,
+      vehiclesActiveGroups,
+      moocsActive,
+      urgentDangKiemXeGroups,
+      urgentCaVetXeGroups,
+      urgentDangKiemMooc,
+      urgentCaVetMooc,
+      expiringDangKiemXeGroups,
+      expiringCaVetXeGroups,
       expiringDangKiemMooc,
       expiringCaVetMooc,
     ] = await Promise.all([
@@ -58,18 +64,41 @@ export class DashboardService {
       this.prisma.tripPlan.count({
         where: { tripDate: tripRange, status: "CANCELLED" },
       }),
-      this.prisma.vehicleRecord.count(),
-      this.prisma.vehicleRecord.count({
-        where: { hanDangKiem: expiryRange },
+      // Distinct non-null bienSo for active vehicles
+      this.prisma.vehicleRecord.groupBy({
+        by: ["bienSo"],
+        where: { bienSo: { not: null } },
       }),
-      this.prisma.vehicleRecord.count({
-        where: { hanCaVet: expiryRange },
+      this.prisma.vehicleRecordMooc.count(),
+      // Urgent: expired or expiring today
+      this.prisma.vehicleRecord.groupBy({
+        by: ["bienSo"],
+        where: { bienSo: { not: null }, hanDangKiem: { lte: today } },
+      }),
+      this.prisma.vehicleRecord.groupBy({
+        by: ["bienSo"],
+        where: { bienSo: { not: null }, hanCaVet: { lte: today } },
       }),
       this.prisma.vehicleRecordMooc.count({
-        where: { hanDangKiem: expiryRange },
+        where: { hanDangKiem: { lte: today } },
       }),
       this.prisma.vehicleRecordMooc.count({
-        where: { hanCaVet: expiryRange },
+        where: { hanCaVet: { lte: today } },
+      }),
+      // Warning: expired or expiring within 29 days
+      this.prisma.vehicleRecord.groupBy({
+        by: ["bienSo"],
+        where: { bienSo: { not: null }, hanDangKiem: { lte: today29 } },
+      }),
+      this.prisma.vehicleRecord.groupBy({
+        by: ["bienSo"],
+        where: { bienSo: { not: null }, hanCaVet: { lte: today29 } },
+      }),
+      this.prisma.vehicleRecordMooc.count({
+        where: { hanDangKiem: { lte: today29 } },
+      }),
+      this.prisma.vehicleRecordMooc.count({
+        where: { hanCaVet: { lte: today29 } },
       }),
     ]);
 
@@ -79,9 +108,14 @@ export class DashboardService {
       tripsInTransit,
       tripsCompleted,
       tripsCancelled,
-      vehiclesActive,
-      expiringDangKiemXe,
-      expiringCaVetXe,
+      vehiclesActive: vehiclesActiveGroups.length,
+      moocsActive,
+      urgentDangKiemXe: urgentDangKiemXeGroups.length,
+      urgentCaVetXe: urgentCaVetXeGroups.length,
+      urgentDangKiemMooc,
+      urgentCaVetMooc,
+      expiringDangKiemXe: expiringDangKiemXeGroups.length,
+      expiringCaVetXe: expiringCaVetXeGroups.length,
       expiringDangKiemMooc,
       expiringCaVetMooc,
     };

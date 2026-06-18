@@ -264,10 +264,15 @@ export interface DashboardStats {
   tripsCompleted: number;
   tripsCancelled: number;
   vehiclesActive: number;
+  moocsActive: number;
   expiringDangKiemXe: number;
   expiringCaVetXe: number;
   expiringDangKiemMooc: number;
   expiringCaVetMooc: number;
+  urgentDangKiemXe: number;
+  urgentCaVetXe: number;
+  urgentDangKiemMooc: number;
+  urgentCaVetMooc: number;
 }
 
 export interface ExpiryItem {

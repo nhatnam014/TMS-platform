@@ -182,8 +182,6 @@ export default function DashboardPage() {
     const p = new URLSearchParams({
       tripFrom: appliedFrom,
       tripTo: appliedTo,
-      expiryFrom: appliedFrom,
-      expiryTo: appliedTo,
     });
     const [sRes, tRes] = await Promise.all([
       fetch(`/api/dashboard/stats?${p}`),
@@ -361,6 +359,13 @@ export default function DashboardPage() {
             value={stats?.vehiclesActive ?? 0}
             valueColor="#16a34a"
           />
+          <StatCard
+            icon="🚛"
+            iconBg="#f0fdf4"
+            label="Mooc đang hoạt động"
+            value={stats?.moocsActive ?? 0}
+            valueColor="#16a34a"
+          />
         </div>
       </div>
 
@@ -392,7 +397,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p style={{ fontSize: 28, fontWeight: 700, color: "#dc2626", lineHeight: 1 }}>
-                {stats?.expiringDangKiemXe ?? 0}
+                {stats?.urgentDangKiemXe ?? 0}
               </p>
               <p style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Xe hết hạn đăng kiểm</p>
             </div>
@@ -414,9 +419,53 @@ export default function DashboardPage() {
             </div>
             <div>
               <p style={{ fontSize: 28, fontWeight: 700, color: "#d97706", lineHeight: 1 }}>
-                {stats?.expiringDangKiemMooc ?? 0}
+                {stats?.urgentDangKiemMooc ?? 0}
               </p>
               <p style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Mooc hết hạn đăng kiểm</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "#fee2e2",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+              }}
+            >
+              ⚠️
+            </div>
+            <div>
+              <p style={{ fontSize: 28, fontWeight: 700, color: "#dc2626", lineHeight: 1 }}>
+                {stats?.urgentCaVetXe ?? 0}
+              </p>
+              <p style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Xe hết hạn cà vẹt</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "#fef3c7",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+              }}
+            >
+              ⚠️
+            </div>
+            <div>
+              <p style={{ fontSize: 28, fontWeight: 700, color: "#d97706", lineHeight: 1 }}>
+                {stats?.urgentCaVetMooc ?? 0}
+              </p>
+              <p style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Mooc hết hạn cà vẹt</p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -448,7 +497,7 @@ export default function DashboardPage() {
 
       {/* ── CẢNH BÁO HỒ SƠ ─────────────────────────────────────────── */}
       <div>
-        {sectionTitle("Cảnh báo hồ sơ (sắp hết hạn)")}
+        {sectionTitle("Cảnh báo hồ sơ (hết hạn + sắp hết hạn 29 ngày)")}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
           <ExpiryCard label="Hết hạn ĐK xe" value={stats?.expiringDangKiemXe ?? 0} />
           <ExpiryCard label="Hết hạn Cà vẹt xe" value={stats?.expiringCaVetXe ?? 0} />
