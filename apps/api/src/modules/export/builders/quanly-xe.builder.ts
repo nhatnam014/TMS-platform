@@ -28,6 +28,8 @@ const HEADERS = [
 
 const COL_WIDTHS = [6, 24, 16, 14, 14, 16, 16, 16, 16, 20, 20, 20, 30, 30];
 
+const ID_COL = HEADERS.length; // last column = ID
+
 export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("quản lý xe");
@@ -36,12 +38,16 @@ export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  // Header at row 1
+  // Header at row 1 — lock the ID header cell
   const headerRowObj = ws.addRow(HEADERS);
   headerRowObj.font = { bold: true };
   headerRowObj.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
   headerRowObj.alignment = { horizontal: "center", wrapText: true };
   headerRowObj.height = 22;
+  headerRowObj.eachCell({ includeEmpty: true }, (cell) => {
+    cell.protection = { locked: false };
+  });
+  headerRowObj.getCell(ID_COL).protection = { locked: true };
 
   // Data rows from row 2
   records.forEach((rec, idx) => {
@@ -62,31 +68,29 @@ export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
       rec.ghiChu ?? "",
       rec.id,
     ]);
-    // Style the ID cell to indicate it's system-managed
-    const idCell = row.getCell(HEADERS.length);
+    // Unlock all cells, then lock only the ID cell
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.protection = { locked: false };
+    });
+    const idCell = row.getCell(ID_COL);
+    idCell.protection = { locked: true };
     idCell.font = { color: { argb: "FF9CA3AF" }, size: 9 };
 
-    // Additional moocs as continuation rows
+    // Additional moocs as continuation rows (no ID cell → fully unlocked)
     const extraMoocs = (rec.moocs ?? []).slice(1);
     for (const mooc of extraMoocs) {
-      ws.addRow([
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
+      const contRow = ws.addRow([
+        "", "", "", "", "", "", "", "",
         mooc.soMooc ?? "",
         formatDate(mooc.hanDangKiem),
         formatDate(mooc.hanBaoHiem),
         formatDate(mooc.hanCaVet),
         "",
       ]);
+      contRow.eachCell({ includeEmpty: true }, (cell) => {
+        cell.protection = { locked: false };
+      });
     }
-
-    void row;
   });
 
   // Borders on all rows
@@ -99,6 +103,16 @@ export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
         right: { style: "thin" },
       };
     });
+  });
+
+  // Protect sheet: locked cells (ID col) become read-only; everything else stays editable
+  await ws.protect("", {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+    sort: true,
+    autoFilter: true,
+    insertRows: true,
+    deleteRows: true,
   });
 
   const buf = await wb.xlsx.writeBuffer();

@@ -101,6 +101,10 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
   const GHI_CHU = SO_MOOC > 0 ? SO_MOOC + 4 : -1;
 
   const results: ParsedVehicleRecordRow[] = [];
+  // Track previous STT number to detect merged-cell continuation rows.
+  // When Excel template uses merged cells, ExcelJS reads the same STT value
+  // for all rows in the merge — causing mooc rows to look like new vehicle rows.
+  let prevSttNum: number | null = null;
 
   ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
     if (rowNum <= headerRowNum) return;
@@ -119,8 +123,14 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
     const moocHanBaoHiem = HAN_BH_MOOC > 0 ? parseExcelDate(row.getCell(HAN_BH_MOOC).value) : null;
     const moocHanCaVet = HAN_CV_MOOC > 0 ? parseExcelDate(row.getCell(HAN_CV_MOOC).value) : null;
 
-    if (!sttRaw && soMooc) {
-      // Continuation mooc row
+    const sttNum = sttRaw ? parseInt(sttRaw, 10) : NaN;
+    // A mooc continuation row is either:
+    //   (a) empty STT with a mooc number, OR
+    //   (b) same STT as previous vehicle (merged cell in user's template)
+    const isSameStt = !isNaN(sttNum) && sttNum === prevSttNum;
+    const isContinuation = (!sttRaw || isSameStt) && !!soMooc;
+
+    if (isContinuation) {
       results.push({
         rowNum,
         type: "mooc_continuation",
@@ -132,9 +142,10 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
       return;
     }
 
-    if (!sttRaw) return; // empty structural row, skip silently
+    if (!sttRaw) return; // empty structural row with no mooc, skip silently
 
-    // STT row → VehicleRecord
+    // New STT → VehicleRecord
+    prevSttNum = isNaN(sttNum) ? null : sttNum;
     const idVal = ID_COL > 0 ? cellText(row, ID_COL) || undefined : undefined;
     results.push({
       rowNum,

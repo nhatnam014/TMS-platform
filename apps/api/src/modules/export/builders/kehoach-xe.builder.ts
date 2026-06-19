@@ -46,6 +46,8 @@ const COL_WIDTHS = [
   24, 24, 24, 30,
 ];
 
+const ID_COL = HEADERS.length; // last column = ID
+
 export async function buildKeHoachXe(
   tripPlans: any[],
   from?: string,
@@ -61,12 +63,16 @@ export async function buildKeHoachXe(
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  // Header at row 1
+  // Header at row 1 — lock the ID header cell
   const headerRowObj = ws.addRow(HEADERS as unknown as any[]);
   headerRowObj.font = { bold: true };
   headerRowObj.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
   headerRowObj.alignment = { horizontal: "center", wrapText: true };
   headerRowObj.height = 22;
+  headerRowObj.eachCell({ includeEmpty: true }, (cell) => {
+    cell.protection = { locked: false };
+  });
+  headerRowObj.getCell(ID_COL).protection = { locked: true };
 
   // Data rows from row 2
   tripPlans.forEach((tp, idx) => {
@@ -108,7 +114,12 @@ export async function buildKeHoachXe(
       tp.notes ?? "",
       tp.id,
     ]);
-    const idCell = dataRow.getCell(HEADERS.length);
+    // Unlock all cells, then lock only the ID cell
+    dataRow.eachCell({ includeEmpty: true }, (cell) => {
+      cell.protection = { locked: false };
+    });
+    const idCell = dataRow.getCell(ID_COL);
+    idCell.protection = { locked: true };
     idCell.font = { color: { argb: "FF9CA3AF" }, size: 9 };
   });
 
@@ -122,6 +133,16 @@ export async function buildKeHoachXe(
         right: { style: "thin" },
       };
     });
+  });
+
+  // Protect sheet: locked cells (ID col) become read-only; everything else stays editable
+  await ws.protect("", {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+    sort: true,
+    autoFilter: true,
+    insertRows: true,
+    deleteRows: true,
   });
 
   const buf = await wb.xlsx.writeBuffer();
