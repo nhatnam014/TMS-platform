@@ -13,6 +13,7 @@ import { ImportModule } from "./modules/import/import.module";
 import { LocationModule } from "./modules/location/location.module";
 import { ServiceTypesModule } from "./modules/service-types/service-types.module";
 import { TripPlanModule } from "./modules/trip-plan/trip-plan.module";
+import { VehicleMaintenanceModule } from "./modules/vehicle-maintenance/vehicle-maintenance.module";
 import { VehicleRecordModule } from "./modules/vehicle-record/vehicle-record.module";
 import { UserModule } from "./modules/user/user.module";
 import { YardMoveModule } from "./modules/yard-move/yard-move.module";
@@ -40,6 +41,7 @@ import { YardMoveModule } from "./modules/yard-move/yard-move.module";
     ServiceTypesModule,
     TripPlanModule,
     UserModule,
+    VehicleMaintenanceModule,
     VehicleRecordModule,
     YardMoveModule,
   ],

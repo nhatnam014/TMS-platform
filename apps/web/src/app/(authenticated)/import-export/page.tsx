@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ImportResult } from "@tms/shared";
 import { useToast } from "@/lib/toast-context";
 
@@ -267,6 +267,106 @@ function DownloadButton({ label, endpoint, filename, extraInputs, buildUrl }: Do
   );
 }
 
+// ── Maintenance export section ────────────────────────────────────────────────
+
+function MaintenanceExportSection() {
+  const toast = useToast();
+  const [units, setUnits] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/vehicle-maintenance/distinct-units")
+      .then((r) => r.json())
+      .then((data: string[]) => {
+        setUnits(data);
+        setSelected(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  function toggleAll() {
+    setSelected(selected.length === units.length ? [] : [...units]);
+  }
+
+  function toggle(unit: string) {
+    setSelected((prev) =>
+      prev.includes(unit) ? prev.filter((u) => u !== unit) : [...prev, unit],
+    );
+  }
+
+  async function handleDownload() {
+    setDownloading(true);
+    setError(null);
+    try {
+      const params = selected.length > 0 ? `?units=${selected.join(",")}` : "";
+      const res = await fetch(`/api/export/vehicle-maintenance${params}`);
+      if (!res.ok) {
+        const msg = `Lỗi ${res.status}`;
+        setError(msg);
+        toast.error(msg);
+        return;
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "bao-duong-xe.xlsx";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Tải xuống thành công");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", padding: 24, marginBottom: 24 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất bảo dưỡng xe</h2>
+      <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+        Xuất bảo dưỡng xe ra file Excel nhiều sheet. Mỗi sheet tương ứng với một loại xe (ĐV SC / Loại xe).
+      </p>
+
+      {units.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Chọn loại xe để xuất:</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "4px 10px", border: "1px solid #a5b4fc", borderRadius: 6, background: selected.length === units.length ? "#e0e7ff" : "#f8fafc" }}>
+              <input type="checkbox" checked={selected.length === units.length} onChange={toggleAll} style={{ cursor: "pointer" }} />
+              Tất cả
+            </label>
+            {units.map((unit) => (
+              <label key={unit} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", padding: "4px 10px", border: "1px solid #d1d5db", borderRadius: 6, background: selected.includes(unit) ? "#f0fdf4" : "#f8fafc" }}>
+                <input type="checkbox" checked={selected.includes(unit)} onChange={() => toggle(unit)} style={{ cursor: "pointer" }} />
+                {unit}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {units.length === 0 && (
+        <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>Chưa có dữ liệu bảo dưỡng xe để xuất.</p>
+      )}
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <button
+          onClick={handleDownload}
+          disabled={downloading || units.length === 0}
+          style={{ padding: "8px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: (downloading || units.length === 0) ? "not-allowed" : "pointer", opacity: (downloading || units.length === 0) ? 0.6 : 1, fontWeight: 500 }}
+        >
+          {downloading ? "Đang tải..." : "Tải xuống bao-duong-xe.xlsx"}
+        </button>
+        {error && <span style={{ fontSize: 12, color: "#dc2626" }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ImportExportPage() {
@@ -309,6 +409,12 @@ export default function ImportExportPage() {
         title="Nhập kế hoạch chuyến — Kế hoạch xe"
         endpoint="/api/import/trip-plans"
         description="Tải lên sheet 'kế hoạch xe' — mỗi lần nhập sẽ tạo thêm bản ghi mới. Khách hàng, hãng xe, địa điểm chưa có sẽ được tự tạo."
+      />
+
+      <UploadSection
+        title="Nhập bảo dưỡng xe"
+        endpoint="/api/import/vehicle-maintenance"
+        description="Tải lên file Excel nhiều sheet (mỗi sheet là một loại xe). Hàng có ID → cập nhật; hàng không có ID → tạo mới."
       />
 
       <h2
@@ -413,6 +519,8 @@ export default function ImportExportPage() {
           filename="quan-ly-xe.xlsx"
         />
       </div>
+
+      <MaintenanceExportSection />
     </div>
   );
 }

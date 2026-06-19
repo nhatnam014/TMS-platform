@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../config/prisma.service";
 import { TripPlanService } from "../trip-plan/trip-plan.service";
+import { buildBaoDuongXe } from "./builders/baoduong-xe.builder";
 import { buildKeHoachXe } from "./builders/kehoach-xe.builder";
 import { buildQuanLyXe } from "./builders/quanly-xe.builder";
 
@@ -25,5 +26,21 @@ export class ExportService {
       orderBy: { createdAt: "asc" },
     });
     return buildQuanLyXe(records);
+  }
+
+  async exportVehicleMaintenance(units?: string[]): Promise<Buffer> {
+    const selectedUnits = units && units.length > 0 ? units : [];
+
+    const where = selectedUnits.length > 0
+      ? { loaiXe: { in: selectedUnits } }
+      : {};
+
+    const records = await this.prisma.vehicleMaintenanceRecord.findMany({
+      where,
+      orderBy: [{ loaiXe: "asc" }, { ngayLam: "asc" }],
+      take: 10000,
+    });
+
+    return buildBaoDuongXe(records, selectedUnits);
   }
 }

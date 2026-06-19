@@ -41,4 +41,18 @@ export class ExportController {
     });
     res.end(buffer);
   }
+
+  @Get("vehicle-maintenance")
+  @ApiOperation({ summary: "Export vehicle maintenance records as multi-sheet Excel (ADMIN only)" })
+  @ApiQuery({ name: "units", required: false, description: "Comma-separated loaiXe values" })
+  async exportVehicleMaintenance(@Query("units") units: string | undefined, @Res() res: Response) {
+    const unitList = units ? units.split(",").map((u) => u.trim()).filter(Boolean) : [];
+    const buffer = await this.exportService.exportVehicleMaintenance(unitList);
+    res.set({
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": 'attachment; filename="bao-duong-xe.xlsx"',
+      "Content-Length": buffer.length,
+    });
+    res.end(buffer);
+  }
 }

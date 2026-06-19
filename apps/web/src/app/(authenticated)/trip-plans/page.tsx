@@ -271,7 +271,7 @@ function ActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
   function openMenu() {
     if (!btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
   }
 
   function closeMenu() {
@@ -299,18 +299,6 @@ function ActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
     };
   }, [open]);
 
-  const itemStyle: React.CSSProperties = {
-    display: "block",
-    width: "100%",
-    padding: "9px 16px",
-    textAlign: "left",
-    background: "none",
-    border: "none",
-    fontSize: 13,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
-
   const menu = (
     <div
       ref={menuRef}
@@ -321,10 +309,14 @@ function ActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
         zIndex: 9999,
         background: "#fff",
         border: "1px solid #e2e8f0",
-        borderRadius: 8,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-        minWidth: 120,
+        borderRadius: 10,
+        boxShadow: "0 8px 28px rgba(0,0,0,0.18)",
         overflow: "hidden",
+        minWidth: 140,
+        padding: 6,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
       }}
     >
       <button
@@ -333,32 +325,59 @@ function ActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
           onEdit();
           closeMenu();
         }}
-        style={{ ...itemStyle, color: "#0369a1" }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+          padding: "9px 14px",
+          textAlign: "left",
+          background: "#eff6ff",
+          border: "1px solid #bfdbfe",
+          borderRadius: 6,
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#2563eb",
+          cursor: "pointer",
+        }}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "#f0f9ff";
+          (e.currentTarget as HTMLElement).style.background = "#dbeafe";
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "none";
+          (e.currentTarget as HTMLElement).style.background = "#eff6ff";
         }}
       >
-        Sửa
+        ✏️ Sửa
       </button>
-      <div style={{ height: 1, background: "#f1f5f9" }} />
       <button
         onMouseDown={(e) => {
           e.preventDefault();
           onDelete();
           closeMenu();
         }}
-        style={{ ...itemStyle, color: "#ef4444" }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+          padding: "9px 14px",
+          textAlign: "left",
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          borderRadius: 6,
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#dc2626",
+          cursor: "pointer",
+        }}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "#fef2f2";
+          (e.currentTarget as HTMLElement).style.background = "#fee2e2";
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "none";
+          (e.currentTarget as HTMLElement).style.background = "#fef2f2";
         }}
       >
-        Xóa
+        🗑 Xóa
       </button>
     </div>
   );
@@ -369,15 +388,18 @@ function ActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
         ref={btnRef}
         onClick={open ? closeMenu : openMenu}
         style={{
-          padding: "3px 9px",
-          background: open ? "#f1f5f9" : "transparent",
-          border: "1px solid #e2e8f0",
-          borderRadius: 4,
+          padding: "5px 22px",
+          background: open ? "#c7d2fe" : "#e0e7ff",
+          border: `1px solid ${open ? "#818cf8" : "#a5b4fc"}`,
+          borderRadius: 6,
           cursor: "pointer",
-          fontSize: 16,
-          color: "#475569",
-          lineHeight: 1.2,
+          fontSize: 18,
+          fontWeight: 700,
+          color: open ? "#3730a3" : "#4f46e5",
+          lineHeight: 1,
+          transition: "background 0.1s, color 0.1s",
         }}
+        title="Thao tác"
       >
         ⋮
       </button>
@@ -460,6 +482,28 @@ const costLabelStyle: React.CSSProperties = {
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 };
+
+// Section background palette — 100-level tones for visible distinction
+const SECTION_BG = {
+  trip:         "#dbeafe", // blue-100
+  container:    "#fef9c3", // yellow-100
+  location:     "#dcfce7", // green-100
+  supplemental: "#f1f5f9", // slate-100
+};
+
+// Per-slot backgrounds for the 8 fixed cost slots (same order as FIXED_SLOT_DEFAULTS)
+const SLOT_COLORS = [
+  "#e0e7ff", // PHÍ NÂNG     – indigo-100
+  "#e0f2fe", // PHÍ HẠ       – sky-100
+  "#cffafe", // PHÍ VỆ SINH  – cyan-100
+  "#ccfbf1", // PHÍ CƯỢC     – teal-100
+  "#ecfccb", // VÉ CỔNG      – lime-100
+  "#fef3c7", // CHÍ PHÍ KHÁC – amber-100
+  "#ffedd5", // TRÁI TUYẾN   – orange-100
+  "#fae8ff", // CẦU ĐƯỜNG    – fuchsia-100
+];
+
+const OTHER_COST_BG = "#ffe4e6"; // rose-100
 
 // ─── Fixed cost slot state helpers ───────────────────────────────────────────
 
@@ -593,6 +637,7 @@ function CostSlotInput({
   onChange,
   costOptions,
   hasShd,
+  bgColor,
 }: {
   slotKey: string;
   label: string;
@@ -600,6 +645,7 @@ function CostSlotInput({
   onChange: (key: string, patch: Partial<FixedSlotState>) => void;
   costOptions: ComboboxOption[];
   hasShd: boolean;
+  bgColor?: string;
 }) {
   return (
     <div
@@ -607,6 +653,7 @@ function CostSlotInput({
         padding: "8px 12px",
         borderBottom: "1px solid #e2e8f0",
         borderRight: "1px solid #e2e8f0",
+        background: bgColor,
       }}
     >
       <span style={costLabelStyle}>{label}</span>
@@ -769,7 +816,7 @@ function TripFormBody({
         }}
       >
         {/* Chuyến đi */}
-        <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
+        <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0", background: SECTION_BG.trip }}>
           <div style={colHeaderStyle}>Chuyến đi</div>
           <Field label="Ngày chuyến *">
             <input
@@ -838,7 +885,7 @@ function TripFormBody({
           </Field>
         </div>
         {/* Container */}
-        <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0" }}>
+        <div style={{ padding: "14px 16px", borderRight: "1px solid #e2e8f0", background: SECTION_BG.container }}>
           <div style={colHeaderStyle}>Container</div>
           <Field label="Size Cont">
             <SelectInput
@@ -871,7 +918,7 @@ function TripFormBody({
           </Field>
         </div>
         {/* Địa điểm */}
-        <div style={{ padding: "14px 16px" }}>
+        <div style={{ padding: "14px 16px", background: SECTION_BG.location }}>
           <div style={colHeaderStyle}>Địa điểm</div>
           <Field label="Điểm Lấy (R/H)">
             <Combobox
@@ -924,7 +971,7 @@ function TripFormBody({
           Chi phí chuyến
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-          {FIXED_SLOT_DEFAULTS.map((s) => (
+          {FIXED_SLOT_DEFAULTS.map((s, idx) => (
             <CostSlotInput
               key={s.key}
               slotKey={s.key}
@@ -933,12 +980,13 @@ function TripFormBody({
               onChange={setSlot}
               costOptions={costTemplateOptions}
               hasShd={s.hasShd}
+              bgColor={SLOT_COLORS[idx]}
             />
           ))}
         </div>
 
         {/* Other costs - multi row */}
-        <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px" }}>
+        <div style={{ borderTop: "1px solid #e2e8f0", padding: "8px 12px", background: OTHER_COST_BG }}>
           <div
             style={{
               display: "flex",
@@ -1064,7 +1112,16 @@ function TripFormBody({
 
       {/* Supplemental row */}
       <div
-        style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: 12, marginBottom: 12 }}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "auto 1fr 1fr",
+          gap: 12,
+          marginBottom: 12,
+          background: SECTION_BG.supplemental,
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          padding: "12px 16px",
+        }}
       >
         <Field label="Ngày gửi CT">
           <input

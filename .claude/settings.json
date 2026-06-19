@@ -61,7 +61,8 @@
       "Bash(pnpm --filter @tms/api exec npx ts-node -e ' *)",
       "Bash(npx ts-node -e ' *)",
       "Bash(psql \"postgresql://tms:tms_secret@localhost:5432/tms_dev?schema=public\" -c \"TRUNCATE TABLE vehicle_record_moocs, vehicle_records CASCADE;\")",
-      "Bash(PGPASSWORD=tms_secret psql -h localhost -U tms -d tms_dev -c \"TRUNCATE TABLE vehicle_record_moocs, vehicle_records CASCADE;\")"
+      "Bash(PGPASSWORD=tms_secret psql -h localhost -U tms -d tms_dev -c \"TRUNCATE TABLE vehicle_record_moocs, vehicle_records CASCADE;\")",
+      "Bash(pnpm --filter @tms/db exec prisma migrate dev --name add-vehicle-maintenance)"
     ]
   }
 }

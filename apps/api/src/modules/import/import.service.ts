@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
+import { Prisma } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { ImportResult } from "@tms/shared";
 import { parseQuanLyXe } from "./parsers/quanly-xe.parser";
 import { parseKeHoachXe } from "./parsers/kehoach-xe.parser";
+import { parseBaoDuongXe } from "./parsers/baoduong-xe.parser";
 
 @Injectable()
 export class ImportService {
@@ -244,6 +246,77 @@ export class ImportService {
       entityType: "TripPlan",
       summary: `Excel import: ${imported} tạo mới, ${updated} cập nhật, ${warnings.length} cảnh báo, ${errors.length} lỗi`,
     });
+
+    return { imported, updated, warnings, errors };
+  }
+
+  async importVehicleMaintenance(buffer: Buffer): Promise<ImportResult> {
+    const warnings: string[] = [];
+    let rows: ReturnType<typeof parseBaoDuongXe>;
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      rows = parseBaoDuongXe(workbook);
+    } catch (err) {
+      console.error("[import/vehicle-maintenance] xlsx parse failed:", err);
+      throw new BadRequestException("File không hợp lệ hoặc không đúng định dạng .xlsx");
+    }
+
+    const errors: string[] = [];
+    let imported = 0;
+    let updated = 0;
+
+    for (const row of rows) {
+      try {
+        const vehicleRecord = row.bienSo
+          ? await this.prisma.vehicleRecord.findFirst({ where: { bienSo: row.bienSo } })
+          : null;
+
+        const data = {
+          vehicleRecordId: vehicleRecord?.id ?? null,
+          bienSo: row.bienSo ?? null,
+          tenTaiXe: row.tenTaiXe ?? null,
+          sdt: row.sdt ?? null,
+          loaiXe: row.loaiXe ?? null,
+          donViSuaChua: row.donViSuaChua ?? null,
+          ngayLam: row.ngayLam ?? null,
+          soKmBaoDuong: row.soKmBaoDuong ? new Prisma.Decimal(row.soKmBaoDuong) : null,
+          kiBaoDuongTiepTheo: row.kiBaoDuongTiepTheo
+            ? new Prisma.Decimal(row.kiBaoDuongTiepTheo)
+            : null,
+          soKmHienTai: row.soKmHienTai ? new Prisma.Decimal(row.soKmHienTai) : null,
+        };
+
+        if (row.id) {
+          const exists = await this.prisma.vehicleMaintenanceRecord.findUnique({
+            where: { id: row.id },
+          });
+          if (exists) {
+            await this.prisma.vehicleMaintenanceRecord.update({ where: { id: row.id }, data });
+            updated++;
+          } else {
+            warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại, tạo mới thay thế`);
+            await this.prisma.vehicleMaintenanceRecord.create({ data });
+            imported++;
+          }
+        } else {
+          await this.prisma.vehicleMaintenanceRecord.create({ data });
+          imported++;
+        }
+      } catch (err) {
+        errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    try {
+      await this.auditService.log({
+        action: "CREATE",
+        entityType: "VehicleMaintenanceRecord",
+        summary: `Excel import bảo dưỡng xe: ${imported} tạo mới, ${updated} cập nhật, ${errors.length} lỗi`,
+      });
+    } catch (err) {
+      console.error("Audit log failed (non-fatal):", err);
+    }
 
     return { imported, updated, warnings, errors };
   }

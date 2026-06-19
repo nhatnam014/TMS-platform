@@ -46,4 +46,13 @@ export class ImportController {
     if (!file) throw new BadRequestException("No file uploaded");
     return this.importService.importTripPlans(file.buffer);
   }
+
+  @Post("vehicle-maintenance")
+  @ApiOperation({ summary: "Import vehicle maintenance records from multi-sheet Excel (ADMIN only)" })
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  importVehicleMaintenance(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException("No file uploaded");
+    return this.importService.importVehicleMaintenance(file.buffer);
+  }
 }
