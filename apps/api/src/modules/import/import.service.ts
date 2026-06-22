@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
-import { Prisma } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { ImportResult } from "@tms/shared";
@@ -315,14 +314,8 @@ export class ImportService {
                 roundNumber: kmRound.roundNumber,
               },
             },
-            create: {
-              vehicleRecordId,
-              roundNumber: kmRound.roundNumber,
-              kmCon: new Prisma.Decimal(kmRound.kmCon),
-            },
-            update: {
-              kmCon: new Prisma.Decimal(kmRound.kmCon),
-            },
+            create: { vehicleRecordId, roundNumber: kmRound.roundNumber, kmCon: kmRound.kmCon },
+            update: { kmCon: kmRound.kmCon },
           });
         }
       } catch (err) {

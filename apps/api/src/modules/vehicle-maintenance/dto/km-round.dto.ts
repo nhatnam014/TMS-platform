@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsArray, IsInt, IsNumberString, Min, ValidateNested } from "class-validator";
+import { IsArray, IsInt, IsString, Min, ValidateNested } from "class-validator";
 
 export class KmRoundDto {
   @ApiProperty({ example: 1 })
@@ -9,8 +9,8 @@ export class KmRoundDto {
   @Type(() => Number)
   roundNumber!: number;
 
-  @ApiProperty({ example: "250000" })
-  @IsNumberString()
+  @ApiProperty({ example: "250.000 km" })
+  @IsString()
   kmCon!: string;
 }
 

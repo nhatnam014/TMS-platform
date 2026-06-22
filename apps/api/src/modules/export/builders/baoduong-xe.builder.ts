@@ -9,12 +9,9 @@ function formatDate(d: Date | string | null | undefined): string {
   return `${dd}/${mm}/${date.getFullYear()}`;
 }
 
-function toNum(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "object" && v !== null && "toNumber" in v
-    ? (v as { toNumber(): number }).toNumber()
-    : Number(v);
-  return isNaN(n) ? null : n;
+function toStr(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  return String(v).trim();
 }
 
 function buildHeaders(colCount: number): string[] {
@@ -53,17 +50,16 @@ function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[]) {
 
   records.forEach((rec, idx) => {
     // Build km cell values from kmRounds array (roundNumber → kmCon)
-    const kmMap: Record<number, number | null> = {};
+    const kmMap: Record<number, string> = {};
     if (rec.kmRounds) {
       for (const r of rec.kmRounds) {
-        kmMap[r.roundNumber] = toNum(r.kmCon);
+        kmMap[r.roundNumber] = toStr(r.kmCon);
       }
     }
 
-    const kmValues: (number | string)[] = [];
+    const kmValues: string[] = [];
     for (let i = 1; i <= colCount; i++) {
-      const val = kmMap[i];
-      kmValues.push(val !== null && val !== undefined ? val : "");
+      kmValues.push(kmMap[i] ?? "");
     }
 
     const row = ws.addRow([

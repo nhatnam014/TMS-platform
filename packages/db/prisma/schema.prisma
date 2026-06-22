@@ -414,7 +414,7 @@ model VehicleMaintenanceKmRound {
   vehicleRecordId String        @map("vehicle_record_id")
   vehicleRecord   VehicleRecord @relation(fields: [vehicleRecordId], references: [id], onDelete: Cascade)
   roundNumber     Int           @map("round_number")
-  kmCon           Decimal       @db.Decimal(10, 2) @map("km_con")
+  kmCon           String        @map("km_con")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 

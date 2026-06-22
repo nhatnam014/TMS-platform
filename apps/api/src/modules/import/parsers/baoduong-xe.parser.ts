@@ -26,13 +26,13 @@ function cellText(row: ExcelJS.Row, colIdx: number): string {
   return String(v).trim();
 }
 
-function cellNum(row: ExcelJS.Row, colIdx: number): string | undefined {
+function cellKmCon(row: ExcelJS.Row, colIdx: number): string | undefined {
   if (colIdx <= 0) return undefined;
   const v = row.getCell(colIdx).value;
   if (v === null || v === undefined || v === "") return undefined;
   const raw = typeof v === "object" && "result" in v ? (v as ExcelJS.CellFormulaValue).result : v;
-  const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
-  return isNaN(n) ? undefined : String(n);
+  const s = String(raw).trim();
+  return s === "" ? undefined : s;
 }
 
 function buildHeaderMap(headerRow: ExcelJS.Row): Record<string, number> {
@@ -124,7 +124,7 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
 
       const kmRounds: ParsedKmRound[] = [];
       for (const [roundNumber, colIndex] of kmColMap) {
-        const val = cellNum(row, colIndex);
+        const val = cellKmCon(row, colIndex);
         if (val !== undefined) {
           kmRounds.push({ roundNumber, kmCon: val });
         }

@@ -134,6 +134,9 @@ function EditModal({
   const [donViSuaChua, setDonViSuaChua] = useState(record.donViSuaChua ?? "");
   const [ngayLam, setNgayLam] = useState(record.ngayLam ? record.ngayLam.slice(0, 10) : "");
   const [existingRounds, setExistingRounds] = useState<KmRound[]>(record.kmRounds ?? []);
+  const [editedKmCon, setEditedKmCon] = useState<Record<string, string>>(
+    Object.fromEntries((record.kmRounds ?? []).map((r) => [r.id, r.kmCon])),
+  );
   const [newRounds, setNewRounds] = useState<NewRound[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,17 +194,24 @@ function EditModal({
       return;
     }
 
-    // 2. Batch upsert new km rounds (if any)
-    const validNewRounds = newRounds.filter((r) => r.kmCon.trim() !== "");
-    if (validNewRounds.length > 0) {
+    // 2. Batch upsert edited existing + new km rounds
+    const editedRounds = existingRounds.map((r) => ({
+      roundNumber: r.roundNumber,
+      kmCon: editedKmCon[r.id] ?? r.kmCon,
+    }));
+    const validNewRounds = newRounds
+      .filter((r) => r.kmCon.trim() !== "")
+      .map((r) => ({ roundNumber: r.roundNumber, kmCon: r.kmCon }));
+    const allRounds = [...editedRounds, ...validNewRounds];
+    if (allRounds.length > 0) {
       const putRes = await fetch(`/api/vehicle-maintenance/${record.id}/km-rounds`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rounds: validNewRounds }),
+        body: JSON.stringify({ rounds: allRounds }),
       });
       if (!putRes.ok) {
         const body = await putRes.json().catch(() => ({}));
-        setError(body.message ?? "Lỗi thêm km rounds");
+        setError(body.message ?? "Lỗi cập nhật km rounds");
         setSaving(false);
         return;
       }
@@ -257,10 +267,11 @@ function EditModal({
               <div key={r.roundNumber} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 13, color: "#374151", minWidth: 60 }}>Lần {r.roundNumber}</span>
                 <input
-                  type="number"
-                  defaultValue={r.kmCon}
-                  readOnly
-                  style={{ flex: 1, padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, background: "#f9fafb" }}
+                  type="text"
+                  value={editedKmCon[r.id] ?? r.kmCon}
+                  onChange={(e) => setEditedKmCon((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                  placeholder="VD: 250.000 km"
+                  style={{ flex: 1, padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, background: "#fff" }}
                 />
                 <button
                   type="button"
@@ -285,9 +296,9 @@ function EditModal({
                 <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                   <label style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>KM còn</label>
                   <input
-                    type="number"
+                    type="text"
                     value={r.kmCon}
-                    placeholder="e.g. 250000"
+                    placeholder="VD: 250.000 km"
                     onChange={(e) => updateNewRound(idx, "kmCon", e.target.value)}
                     style={{ width: "100%", padding: "6px 10px", border: "1px solid #86efac", borderRadius: 6, fontSize: 13, background: "#f0fdf4", boxSizing: "border-box" }}
                   />

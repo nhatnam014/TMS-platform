@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@tms/db";
+import { Prisma } from "@tms/db"; // kept for QueryMode
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { PaginationQuery, PaginatedResponse } from "@tms/shared";
@@ -129,14 +129,8 @@ export class VehicleMaintenanceService {
       rounds.map((r) =>
         this.prisma.vehicleMaintenanceKmRound.upsert({
           where: { vehicleRecordId_roundNumber: { vehicleRecordId, roundNumber: r.roundNumber } },
-          create: {
-            vehicleRecordId,
-            roundNumber: r.roundNumber,
-            kmCon: new Prisma.Decimal(r.kmCon),
-          },
-          update: {
-            kmCon: new Prisma.Decimal(r.kmCon),
-          },
+          create: { vehicleRecordId, roundNumber: r.roundNumber, kmCon: r.kmCon },
+          update: { kmCon: r.kmCon },
         }),
       ),
     );
