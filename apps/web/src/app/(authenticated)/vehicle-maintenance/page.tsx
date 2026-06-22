@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
 
@@ -67,31 +68,49 @@ function Pagination({
 
 function ActionMenu({ onEdit }: { onEdit: () => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropPos, setDropPos] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        dropRef.current && !dropRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  function handleToggle() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    }
+    setOpen((v) => !v);
+  }
+
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+    <>
       <button
-        onClick={() => setOpen((v) => !v)}
-        style={{ padding: "5px 22px", background: open ? "#c7d2fe" : "#e0e7ff", border: `1px solid ${open ? "#818cf8" : "#a5b4fc"}`, borderRadius: 6, fontSize: 18, fontWeight: 700, color: open ? "#3730a3" : "#4f46e5", cursor: "pointer", lineHeight: 1 }}
+        ref={btnRef}
+        onClick={handleToggle}
+        style={{ padding: "5px 14px", background: open ? "#c7d2fe" : "#e0e7ff", border: `1px solid ${open ? "#818cf8" : "#a5b4fc"}`, borderRadius: 6, fontSize: 18, fontWeight: 700, color: open ? "#3730a3" : "#4f46e5", cursor: "pointer", lineHeight: 1 }}
       >···</button>
-      {open && (
-        <div style={{ position: "absolute", right: 0, top: "110%", background: "#fff", borderRadius: 10, padding: 6, boxShadow: "0 8px 28px rgba(0,0,0,0.18)", minWidth: 120, display: "flex", flexDirection: "column", zIndex: 100 }}>
+      {open && dropPos && createPortal(
+        <div
+          ref={dropRef}
+          style={{ position: "fixed", top: dropPos.top, right: dropPos.right, background: "#fff", borderRadius: 10, padding: 6, boxShadow: "0 8px 28px rgba(0,0,0,0.18)", minWidth: 140, display: "flex", flexDirection: "column", zIndex: 9999 }}
+        >
           <button
             onClick={() => { setOpen(false); onEdit(); }}
             style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#2563eb", fontWeight: 600, fontSize: 13, padding: "9px 14px", borderRadius: 6, cursor: "pointer", textAlign: "left" }}
           >Sửa bảo dưỡng</button>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 
@@ -403,7 +422,7 @@ export default function VehicleMaintenancePage() {
       )}
 
       <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "auto" }}>
-        <table style={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0, width: `${764 + colCount * 150 + 64}px` }}>
+        <table style={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0, width: `${764 + colCount * 150 + 84}px` }}>
           <thead>
             <tr style={{ background: "#f8fafc" }}>
               <TH width={44}  style={{ position: "sticky", left: 0,   zIndex: 3, background: "#f8fafc" }}>STT</TH>
@@ -416,7 +435,7 @@ export default function VehicleMaintenancePage() {
               {kmHeaders.map((h) => (
                 <TH key={h} width={150} style={{ background: "#fef9c3" }}>{h}</TH>
               ))}
-              <TH width={64} style={{ position: "sticky", right: 0, zIndex: 3, background: "#f8fafc", boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)" }}></TH>
+              <TH width={84} style={{ position: "sticky", right: 0, zIndex: 3, background: "#f8fafc", boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)" }}></TH>
             </tr>
           </thead>
           <tbody>
@@ -452,7 +471,7 @@ export default function VehicleMaintenancePage() {
                         </TD>
                       );
                     })}
-                    <TD style={{ position: "sticky", right: 0, zIndex: 1, background: bg, boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)" }}>
+                    <TD style={{ position: "sticky", right: 0, zIndex: 1, background: bg, boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)", textAlign: "center" }}>
                       <ActionMenu onEdit={() => setEditTarget(rec)} />
                     </TD>
                   </tr>
