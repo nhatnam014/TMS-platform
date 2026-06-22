@@ -268,40 +268,62 @@ export class ImportService {
 
     for (const row of rows) {
       try {
-        const vehicleRecord = row.bienSo
-          ? await this.prisma.vehicleRecord.findFirst({ where: { bienSo: row.bienSo } })
-          : null;
-
-        const data = {
-          vehicleRecordId: vehicleRecord?.id ?? null,
-          bienSo: row.bienSo ?? null,
-          tenTaiXe: row.tenTaiXe ?? null,
-          sdt: row.sdt ?? null,
-          loaiXe: row.loaiXe ?? null,
-          donViSuaChua: row.donViSuaChua ?? null,
-          ngayLam: row.ngayLam ?? null,
-          soKmBaoDuong: row.soKmBaoDuong ? new Prisma.Decimal(row.soKmBaoDuong) : null,
-          kiBaoDuongTiepTheo: row.kiBaoDuongTiepTheo
-            ? new Prisma.Decimal(row.kiBaoDuongTiepTheo)
-            : null,
-          soKmHienTai: row.soKmHienTai ? new Prisma.Decimal(row.soKmHienTai) : null,
-        };
+        let vehicleRecordId: string;
 
         if (row.id) {
-          const exists = await this.prisma.vehicleMaintenanceRecord.findUnique({
-            where: { id: row.id },
-          });
-          if (exists) {
-            await this.prisma.vehicleMaintenanceRecord.update({ where: { id: row.id }, data });
-            updated++;
-          } else {
-            warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại, tạo mới thay thế`);
-            await this.prisma.vehicleMaintenanceRecord.create({ data });
-            imported++;
+          // Update existing VehicleRecord by ID
+          const existing = await this.prisma.vehicleRecord.findUnique({ where: { id: row.id } });
+          if (!existing) {
+            warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — bỏ qua`);
+            continue;
           }
+          await this.prisma.vehicleRecord.update({
+            where: { id: row.id },
+            data: {
+              ...(row.bienSo !== undefined && { bienSo: row.bienSo }),
+              ...(row.tenTaiXe !== undefined && { tenTaiXe: row.tenTaiXe }),
+              ...(row.sdt !== undefined && { sdt: row.sdt }),
+              ...(row.loaiXe !== undefined && { loaiXe: row.loaiXe }),
+              ...(row.donViSuaChua !== undefined && { donViSuaChua: row.donViSuaChua ?? null }),
+              ...(row.ngayLam !== undefined && { ngayLam: row.ngayLam ?? null }),
+            },
+          });
+          vehicleRecordId = row.id;
+          updated++;
         } else {
-          await this.prisma.vehicleMaintenanceRecord.create({ data });
+          // Create new VehicleRecord
+          const newRecord = await this.prisma.vehicleRecord.create({
+            data: {
+              bienSo: row.bienSo ?? null,
+              tenTaiXe: row.tenTaiXe ?? null,
+              sdt: row.sdt ?? null,
+              loaiXe: row.loaiXe ?? null,
+              donViSuaChua: row.donViSuaChua ?? null,
+              ngayLam: row.ngayLam ?? null,
+            },
+          });
+          vehicleRecordId = newRecord.id;
           imported++;
+        }
+
+        // Upsert km rounds
+        for (const kmRound of row.kmRounds) {
+          await this.prisma.vehicleMaintenanceKmRound.upsert({
+            where: {
+              vehicleRecordId_roundNumber: {
+                vehicleRecordId,
+                roundNumber: kmRound.roundNumber,
+              },
+            },
+            create: {
+              vehicleRecordId,
+              roundNumber: kmRound.roundNumber,
+              kmCon: new Prisma.Decimal(kmRound.kmCon),
+            },
+            update: {
+              kmCon: new Prisma.Decimal(kmRound.kmCon),
+            },
+          });
         }
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
@@ -311,7 +333,7 @@ export class ImportService {
     try {
       await this.auditService.log({
         action: "CREATE",
-        entityType: "VehicleMaintenanceRecord",
+        entityType: "VehicleRecord",
         summary: `Excel import bảo dưỡng xe: ${imported} tạo mới, ${updated} cập nhật, ${errors.length} lỗi`,
       });
     } catch (err) {

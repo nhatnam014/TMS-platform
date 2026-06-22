@@ -22,6 +22,12 @@ import { UpdateVehicleRecordDto } from "./dto/update-vehicle-record.dto";
 export class VehicleRecordController {
   constructor(private readonly vehicleRecordService: VehicleRecordService) {}
 
+  @Get("distinct-loai-xe")
+  @ApiOperation({ summary: "Get distinct non-null loaiXe values sorted ascending" })
+  distinctLoaiXe() {
+    return this.vehicleRecordService.distinctLoaiXe();
+  }
+
   @Get()
   @ApiOperation({ summary: "List vehicle records with search, expiry filter, and pagination" })
   findAll(

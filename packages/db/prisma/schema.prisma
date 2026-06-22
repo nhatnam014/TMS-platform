@@ -374,19 +374,21 @@ enum AuditAction {
 // ============================================================
 
 model VehicleRecord {
-  id                 String                      @id @default(cuid())
-  tenTaiXe           String?                     @map("ten_tai_xe")       // Tên tài xế
-  sdt                String?                                              // Số điện thoại
-  loaiXe             String?                     @map("loai_xe")          // Loại xe
-  bienSo             String?                     @map("bien_so")          // Biển số / Theo xe
-  hanDangKiem        DateTime?                   @map("han_dang_kiem")    // Hạn đăng kiểm xe
-  hanBaoHiem         DateTime?                   @map("han_bao_hiem")     // Hạn bảo hiểm xe
-  hanCaVet           DateTime?                   @map("han_ca_vet")       // Hạn cà vẹt xe
-  ghiChu             String?                     @map("ghi_chu")
-  moocs              VehicleRecordMooc[]
-  maintenanceRecords VehicleMaintenanceRecord[]
-  createdAt          DateTime                    @default(now()) @map("created_at")
-  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  id              String                      @id @default(cuid())
+  tenTaiXe        String?                     @map("ten_tai_xe")       // Tên tài xế
+  sdt             String?                                              // Số điện thoại
+  loaiXe          String?                     @map("loai_xe")          // Loại xe
+  bienSo          String?                     @map("bien_so")          // Biển số / Theo xe
+  hanDangKiem     DateTime?                   @map("han_dang_kiem")    // Hạn đăng kiểm xe
+  hanBaoHiem      DateTime?                   @map("han_bao_hiem")     // Hạn bảo hiểm xe
+  hanCaVet        DateTime?                   @map("han_ca_vet")       // Hạn cà vẹt xe
+  ghiChu          String?                     @map("ghi_chu")
+  donViSuaChua    String?                     @map("don_vi_sua_chua")  // Đơn vị sửa chữa bảo dưỡng
+  ngayLam         DateTime?                   @map("ngay_lam") @db.Date // Ngày làm bảo dưỡng gần nhất
+  moocs           VehicleRecordMooc[]
+  kmRounds        VehicleMaintenanceKmRound[]
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
 
   @@map("vehicle_records")
 }
@@ -404,28 +406,19 @@ model VehicleRecordMooc {
 }
 
 // ============================================================
-// VEHICLE MAINTENANCE RECORDS — Bảo dưỡng xe
+// VEHICLE MAINTENANCE — KM ROUNDS — Bảo dưỡng xe (km từng lần)
 // ============================================================
 
-model VehicleMaintenanceRecord {
-  id                   String         @id @default(cuid())
-  vehicleRecordId      String?        @map("vehicle_record_id")
-  vehicleRecord        VehicleRecord? @relation(fields: [vehicleRecordId], references: [id], onDelete: SetNull)
-  bienSo               String?        @map("bien_so")
-  tenTaiXe             String?        @map("ten_tai_xe")
-  sdt                  String?
-  loaiXe               String?        @map("loai_xe")                // col F — ĐƠN VỊ SỬA CHỮA / LOẠI XE — sheet key
-  donViSuaChua         String?        @map("don_vi_sua_chua")        // col G — ĐƠN VỊ SỬA CHỮA — repair shop name
-  ngayLam              DateTime?      @map("ngay_lam") @db.Date
-  soKmBaoDuong         Decimal?       @db.Decimal(10, 2) @map("so_km_bao_duong")
-  kiBaoDuongTiepTheo   Decimal?       @db.Decimal(10, 2) @map("ki_bao_duong_tiep_theo")
-  soKmHienTai          Decimal?       @db.Decimal(10, 2) @map("so_km_hien_tai")
-  ghiChu               String?        @map("ghi_chu")
-  createdAt            DateTime       @default(now()) @map("created_at")
-  updatedAt            DateTime       @updatedAt @map("updated_at")
+model VehicleMaintenanceKmRound {
+  id              String        @id @default(cuid())
+  vehicleRecordId String        @map("vehicle_record_id")
+  vehicleRecord   VehicleRecord @relation(fields: [vehicleRecordId], references: [id], onDelete: Cascade)
+  roundNumber     Int           @map("round_number")
+  kmCon           Decimal       @db.Decimal(10, 2) @map("km_con")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  @@index([bienSo])
-  @@index([loaiXe])
-  @@index([ngayLam])
-  @@map("vehicle_maintenance_records")
+  @@unique([vehicleRecordId, roundNumber])
+  @@index([vehicleRecordId])
+  @@map("vehicle_maintenance_km_rounds")
 }

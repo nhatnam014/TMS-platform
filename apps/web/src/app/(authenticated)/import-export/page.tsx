@@ -267,27 +267,23 @@ function DownloadButton({ label, endpoint, filename, extraInputs, buildUrl }: Do
   );
 }
 
-// ── Maintenance export section ────────────────────────────────────────────────
+// ── LoaiXeExportPopup ─────────────────────────────────────────────────────────
 
-function MaintenanceExportSection() {
-  const toast = useToast();
-  const [units, setUnits] = useState<string[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/vehicle-maintenance/distinct-units")
-      .then((r) => r.json())
-      .then((data: string[]) => {
-        setUnits(data);
-        setSelected(data);
-      })
-      .catch(() => {});
-  }, []);
+function LoaiXeExportPopup({
+  loaiXeList,
+  onConfirm,
+  onClose,
+  downloading,
+}: {
+  loaiXeList: string[];
+  onConfirm: (selected: string[]) => void;
+  onClose: () => void;
+  downloading: boolean;
+}) {
+  const [selected, setSelected] = useState<string[]>([...loaiXeList]);
 
   function toggleAll() {
-    setSelected(selected.length === units.length ? [] : [...units]);
+    setSelected(selected.length === loaiXeList.length ? [] : [...loaiXeList]);
   }
 
   function toggle(unit: string) {
@@ -296,7 +292,60 @@ function MaintenanceExportSection() {
     );
   }
 
-  async function handleDownload() {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+      <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: "min(95vw, 440px)", maxHeight: "80vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Chọn loại xe để xuất</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>×</button>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "8px 12px", border: "1px solid #a5b4fc", borderRadius: 8, background: selected.length === loaiXeList.length ? "#e0e7ff" : "#f8fafc", marginBottom: 8 }}>
+            <input type="checkbox" checked={selected.length === loaiXeList.length} onChange={toggleAll} style={{ cursor: "pointer" }} />
+            Tất cả ({loaiXeList.length} loại xe)
+          </label>
+          {loaiXeList.map((unit) => (
+            <label key={unit} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, background: selected.includes(unit) ? "#f0fdf4" : "#fafafa", marginBottom: 6 }}>
+              <input type="checkbox" checked={selected.includes(unit)} onChange={() => toggle(unit)} style={{ cursor: "pointer" }} />
+              {unit}
+            </label>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: "1px solid #e5e7eb", paddingTop: 14 }}>
+          <button type="button" onClick={onClose} style={{ padding: "8px 16px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", fontSize: 14, cursor: "pointer" }}>Hủy</button>
+          <button
+            type="button"
+            onClick={() => onConfirm(selected)}
+            disabled={downloading || selected.length === 0}
+            style={{ padding: "8px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: (downloading || selected.length === 0) ? "not-allowed" : "pointer", opacity: (downloading || selected.length === 0) ? 0.6 : 1, fontWeight: 500 }}
+          >
+            {downloading ? "Đang tải..." : `Xuất ${selected.length} loại xe`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Maintenance export section ────────────────────────────────────────────────
+
+function MaintenanceExportSection() {
+  const toast = useToast();
+  const [loaiXeList, setLoaiXeList] = useState<string[]>([]);
+  const [showPopup, setShowPopup] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/vehicle-records/distinct-loai-xe")
+      .then((r) => r.json())
+      .then((data: string[]) => setLoaiXeList(data))
+      .catch(() => {});
+  }, []);
+
+  async function handleConfirmExport(selected: string[]) {
     setDownloading(true);
     setError(null);
     try {
@@ -315,6 +364,7 @@ function MaintenanceExportSection() {
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success("Tải xuống thành công");
+      setShowPopup(false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Lỗi không xác định";
       setError(msg);
@@ -328,41 +378,32 @@ function MaintenanceExportSection() {
     <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", padding: 24, marginBottom: 24 }}>
       <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất bảo dưỡng xe</h2>
       <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
-        Xuất bảo dưỡng xe ra file Excel nhiều sheet. Mỗi sheet tương ứng với một loại xe (ĐV SC / Loại xe).
+        Xuất bảo dưỡng xe ra file Excel nhiều sheet. Mỗi sheet tương ứng với một loại xe từ quản lý xe.
       </p>
 
-      {units.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Chọn loại xe để xuất:</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "4px 10px", border: "1px solid #a5b4fc", borderRadius: 6, background: selected.length === units.length ? "#e0e7ff" : "#f8fafc" }}>
-              <input type="checkbox" checked={selected.length === units.length} onChange={toggleAll} style={{ cursor: "pointer" }} />
-              Tất cả
-            </label>
-            {units.map((unit) => (
-              <label key={unit} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", padding: "4px 10px", border: "1px solid #d1d5db", borderRadius: 6, background: selected.includes(unit) ? "#f0fdf4" : "#f8fafc" }}>
-                <input type="checkbox" checked={selected.includes(unit)} onChange={() => toggle(unit)} style={{ cursor: "pointer" }} />
-                {unit}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {units.length === 0 && (
-        <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>Chưa có dữ liệu bảo dưỡng xe để xuất.</p>
+      {loaiXeList.length === 0 && (
+        <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>Chưa có loại xe nào trong hệ thống.</p>
       )}
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <button
-          onClick={handleDownload}
-          disabled={downloading || units.length === 0}
-          style={{ padding: "8px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: (downloading || units.length === 0) ? "not-allowed" : "pointer", opacity: (downloading || units.length === 0) ? 0.6 : 1, fontWeight: 500 }}
+          onClick={() => setShowPopup(true)}
+          disabled={loaiXeList.length === 0}
+          style={{ padding: "8px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 6, fontSize: 14, cursor: loaiXeList.length === 0 ? "not-allowed" : "pointer", opacity: loaiXeList.length === 0 ? 0.6 : 1, fontWeight: 500 }}
         >
-          {downloading ? "Đang tải..." : "Tải xuống bao-duong-xe.xlsx"}
+          Xuất Excel bảo dưỡng xe
         </button>
         {error && <span style={{ fontSize: 12, color: "#dc2626" }}>{error}</span>}
       </div>
+
+      {showPopup && (
+        <LoaiXeExportPopup
+          loaiXeList={loaiXeList}
+          onConfirm={handleConfirmExport}
+          onClose={() => setShowPopup(false)}
+          downloading={downloading}
+        />
+      )}
     </div>
   );
 }

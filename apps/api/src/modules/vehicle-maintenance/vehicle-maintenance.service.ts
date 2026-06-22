@@ -3,8 +3,8 @@ import { Prisma } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { PaginationQuery, PaginatedResponse } from "@tms/shared";
-import { CreateVehicleMaintenanceDto } from "./dto/create-vehicle-maintenance.dto";
-import { UpdateVehicleMaintenanceDto } from "./dto/update-vehicle-maintenance.dto";
+import { UpdateMaintenanceFieldsDto } from "./dto/update-maintenance-fields.dto";
+import { KmRoundDto } from "./dto/km-round.dto";
 
 @Injectable()
 export class VehicleMaintenanceService {
@@ -21,7 +21,7 @@ export class VehicleMaintenanceService {
     const limit = Number(pagination.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const andConditions: Prisma.VehicleMaintenanceRecordWhereInput[] = [];
+    const andConditions: Prisma.VehicleRecordWhereInput[] = [];
 
     if (filters.search) {
       const s = filters.search.trim();
@@ -39,17 +39,18 @@ export class VehicleMaintenanceService {
       andConditions.push({ loaiXe: { equals: filters.loaiXe, mode: Prisma.QueryMode.insensitive } });
     }
 
-    const where: Prisma.VehicleMaintenanceRecordWhereInput =
+    const where: Prisma.VehicleRecordWhereInput =
       andConditions.length > 0 ? { AND: andConditions } : {};
 
     const [data, total] = await Promise.all([
-      this.prisma.vehicleMaintenanceRecord.findMany({
+      this.prisma.vehicleRecord.findMany({
         where,
         skip,
         take: limit,
-        orderBy: [{ ngayLam: "desc" }, { createdAt: "desc" }],
+        orderBy: { createdAt: "asc" },
+        include: { kmRounds: { orderBy: { roundNumber: "asc" } } },
       }),
-      this.prisma.vehicleMaintenanceRecord.count({ where }),
+      this.prisma.vehicleRecord.count({ where }),
     ]);
 
     return {
@@ -64,7 +65,7 @@ export class VehicleMaintenanceService {
   }
 
   async distinctUnits(): Promise<string[]> {
-    const rows = await this.prisma.vehicleMaintenanceRecord.findMany({
+    const rows = await this.prisma.vehicleRecord.findMany({
       select: { loaiXe: true },
       distinct: ["loaiXe"],
       where: { loaiXe: { not: null } },
@@ -73,80 +74,36 @@ export class VehicleMaintenanceService {
     return rows.map((r) => r.loaiXe as string);
   }
 
-  async findOne(id: string) {
-    const record = await this.prisma.vehicleMaintenanceRecord.findUnique({ where: { id } });
-    if (!record) throw new NotFoundException("Vehicle maintenance record not found");
-    return record;
+  async findOne(vehicleRecordId: string) {
+    const record = await this.prisma.vehicleRecord.findUnique({
+      where: { id: vehicleRecordId },
+      include: { kmRounds: { orderBy: { roundNumber: "asc" } } },
+    });
+    if (!record) throw new NotFoundException("Vehicle record not found");
+    return {
+      donViSuaChua: record.donViSuaChua,
+      ngayLam: record.ngayLam,
+      kmRounds: record.kmRounds,
+    };
   }
 
-  async create(dto: CreateVehicleMaintenanceDto) {
-    const vehicleRecord = dto.bienSo
-      ? await this.prisma.vehicleRecord.findFirst({ where: { bienSo: dto.bienSo } })
-      : null;
+  async updateMaintenanceFields(vehicleRecordId: string, dto: UpdateMaintenanceFieldsDto) {
+    const existing = await this.prisma.vehicleRecord.findUnique({ where: { id: vehicleRecordId } });
+    if (!existing) throw new NotFoundException("Vehicle record not found");
 
-    const record = await this.prisma.vehicleMaintenanceRecord.create({
+    const record = await this.prisma.vehicleRecord.update({
+      where: { id: vehicleRecordId },
       data: {
-        vehicleRecordId: vehicleRecord?.id ?? null,
-        bienSo: dto.bienSo ?? null,
-        tenTaiXe: dto.tenTaiXe ?? null,
-        sdt: dto.sdt ?? null,
-        loaiXe: dto.loaiXe ?? null,
-        donViSuaChua: dto.donViSuaChua ?? null,
-        ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null,
-        soKmBaoDuong: dto.soKmBaoDuong ? new Prisma.Decimal(dto.soKmBaoDuong) : null,
-        kiBaoDuongTiepTheo: dto.kiBaoDuongTiepTheo ? new Prisma.Decimal(dto.kiBaoDuongTiepTheo) : null,
-        soKmHienTai: dto.soKmHienTai ? new Prisma.Decimal(dto.soKmHienTai) : null,
-        ghiChu: dto.ghiChu ?? null,
-      },
-    });
-
-    await this.auditService.log({
-      action: "CREATE",
-      entityType: "VehicleMaintenanceRecord",
-      entityId: record.id,
-      summary: `Tạo bảo dưỡng xe: ${record.bienSo ?? "(chưa có biển số)"} — ${record.ngayLam?.toISOString().slice(0, 10) ?? ""}`,
-      afterSnapshot: record as object,
-    });
-
-    return record;
-  }
-
-  async update(id: string, dto: UpdateVehicleMaintenanceDto) {
-    const existing = await this.prisma.vehicleMaintenanceRecord.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException("Vehicle maintenance record not found");
-
-    const bienSo = dto.bienSo !== undefined ? dto.bienSo : existing.bienSo;
-    const vehicleRecord = bienSo
-      ? await this.prisma.vehicleRecord.findFirst({ where: { bienSo } })
-      : null;
-
-    const record = await this.prisma.vehicleMaintenanceRecord.update({
-      where: { id },
-      data: {
-        ...(dto.bienSo !== undefined && { bienSo: dto.bienSo ?? null, vehicleRecordId: vehicleRecord?.id ?? null }),
-        ...(dto.tenTaiXe !== undefined && { tenTaiXe: dto.tenTaiXe ?? null }),
-        ...(dto.sdt !== undefined && { sdt: dto.sdt ?? null }),
-        ...(dto.loaiXe !== undefined && { loaiXe: dto.loaiXe ?? null }),
         ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
         ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
-        ...(dto.soKmBaoDuong !== undefined && {
-          soKmBaoDuong: dto.soKmBaoDuong ? new Prisma.Decimal(dto.soKmBaoDuong) : null,
-        }),
-        ...(dto.kiBaoDuongTiepTheo !== undefined && {
-          kiBaoDuongTiepTheo: dto.kiBaoDuongTiepTheo ? new Prisma.Decimal(dto.kiBaoDuongTiepTheo) : null,
-        }),
-        ...(dto.soKmHienTai !== undefined && {
-          soKmHienTai: dto.soKmHienTai ? new Prisma.Decimal(dto.soKmHienTai) : null,
-        }),
-        ...(dto.ghiChu !== undefined && { ghiChu: dto.ghiChu ?? null }),
       },
     });
 
     await this.auditService.log({
       action: "UPDATE",
-      entityType: "VehicleMaintenanceRecord",
-      entityId: record.id,
-      summary: `Cập nhật bảo dưỡng xe: ${record.bienSo ?? "(chưa có biển số)"}`,
+      entityType: "VehicleRecord",
+      entityId: vehicleRecordId,
+      summary: `Cập nhật thông tin bảo dưỡng: ${record.bienSo ?? "(chưa có biển số)"}`,
       beforeSnapshot: existing as object,
       afterSnapshot: record as object,
     });
@@ -154,18 +111,47 @@ export class VehicleMaintenanceService {
     return record;
   }
 
-  async remove(id: string) {
-    const existing = await this.prisma.vehicleMaintenanceRecord.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException("Vehicle maintenance record not found");
+  async listKmRounds(vehicleRecordId: string) {
+    const record = await this.prisma.vehicleRecord.findUnique({ where: { id: vehicleRecordId } });
+    if (!record) throw new NotFoundException("Vehicle record not found");
 
-    await this.prisma.vehicleMaintenanceRecord.delete({ where: { id } });
+    return this.prisma.vehicleMaintenanceKmRound.findMany({
+      where: { vehicleRecordId },
+      orderBy: { roundNumber: "asc" },
+    });
+  }
 
-    await this.auditService.log({
-      action: "DELETE",
-      entityType: "VehicleMaintenanceRecord",
-      entityId: id,
-      summary: `Xóa bảo dưỡng xe: ${existing.bienSo ?? "(chưa có biển số)"}`,
-      beforeSnapshot: existing as object,
+  async batchUpsertKmRounds(vehicleRecordId: string, rounds: KmRoundDto[]) {
+    const record = await this.prisma.vehicleRecord.findUnique({ where: { id: vehicleRecordId } });
+    if (!record) throw new NotFoundException("Vehicle record not found");
+
+    const results = await Promise.all(
+      rounds.map((r) =>
+        this.prisma.vehicleMaintenanceKmRound.upsert({
+          where: { vehicleRecordId_roundNumber: { vehicleRecordId, roundNumber: r.roundNumber } },
+          create: {
+            vehicleRecordId,
+            roundNumber: r.roundNumber,
+            kmCon: new Prisma.Decimal(r.kmCon),
+          },
+          update: {
+            kmCon: new Prisma.Decimal(r.kmCon),
+          },
+        }),
+      ),
+    );
+
+    return results;
+  }
+
+  async deleteKmRound(vehicleRecordId: string, roundNumber: number) {
+    const existing = await this.prisma.vehicleMaintenanceKmRound.findUnique({
+      where: { vehicleRecordId_roundNumber: { vehicleRecordId, roundNumber } },
+    });
+    if (!existing) throw new NotFoundException("Km round not found");
+
+    await this.prisma.vehicleMaintenanceKmRound.delete({
+      where: { vehicleRecordId_roundNumber: { vehicleRecordId, roundNumber } },
     });
   }
 }

@@ -68,6 +68,16 @@ export class CreateVehicleRecordDto implements ICreateVehicleRecordDto {
   @IsString()
   ghiChu?: string;
 
+  @ApiPropertyOptional({ example: "Gara ABC" })
+  @IsOptional()
+  @IsString()
+  donViSuaChua?: string;
+
+  @ApiPropertyOptional({ example: "2026-05-11" })
+  @IsOptional()
+  @IsDateString()
+  ngayLam?: string;
+
   @ApiPropertyOptional({ type: [MoocDto] })
   @IsOptional()
   @IsArray()

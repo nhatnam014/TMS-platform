@@ -29,18 +29,19 @@ export class ExportService {
   }
 
   async exportVehicleMaintenance(units?: string[]): Promise<Buffer> {
-    const selectedUnits = units && units.length > 0 ? units : [];
+    const selectedLoaiXe = units && units.length > 0 ? units : [];
 
-    const where = selectedUnits.length > 0
-      ? { loaiXe: { in: selectedUnits } }
+    const where = selectedLoaiXe.length > 0
+      ? { loaiXe: { in: selectedLoaiXe } }
       : {};
 
-    const records = await this.prisma.vehicleMaintenanceRecord.findMany({
+    const records = await this.prisma.vehicleRecord.findMany({
       where,
-      orderBy: [{ loaiXe: "asc" }, { ngayLam: "asc" }],
+      orderBy: [{ loaiXe: "asc" }, { createdAt: "asc" }],
       take: 10000,
+      include: { kmRounds: { orderBy: { roundNumber: "asc" } } },
     });
 
-    return buildBaoDuongXe(records, selectedUnits);
+    return buildBaoDuongXe(records, selectedLoaiXe);
   }
 }

@@ -74,7 +74,7 @@ export class VehicleRecordService {
     const [data, total] = await Promise.all([
       this.prisma.vehicleRecord.findMany({
         where,
-        include: { moocs: true },
+        include: { moocs: true, kmRounds: { orderBy: { roundNumber: "asc" } } },
         skip,
         take: limit,
         orderBy: { createdAt: "asc" },
@@ -105,6 +105,8 @@ export class VehicleRecordService {
           hanBaoHiem: dto.hanBaoHiem ? new Date(dto.hanBaoHiem) : undefined,
           hanCaVet: dto.hanCaVet ? new Date(dto.hanCaVet) : undefined,
           ghiChu: dto.ghiChu,
+          donViSuaChua: dto.donViSuaChua,
+          ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : undefined,
           moocs: dto.moocs?.length
             ? {
                 create: dto.moocs.map((m) => ({
@@ -116,7 +118,7 @@ export class VehicleRecordService {
               }
             : undefined,
         },
-        include: { moocs: true },
+        include: { moocs: true, kmRounds: { orderBy: { roundNumber: "asc" } } },
       });
 
       await this.auditService.log(
@@ -163,6 +165,8 @@ export class VehicleRecordService {
             hanCaVet: dto.hanCaVet ? new Date(dto.hanCaVet) : null,
           }),
           ...(dto.ghiChu !== undefined && { ghiChu: dto.ghiChu }),
+          ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
+          ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
           ...(dto.moocs !== undefined &&
             dto.moocs.length > 0 && {
               moocs: {
@@ -175,7 +179,7 @@ export class VehicleRecordService {
               },
             }),
         },
-        include: { moocs: true },
+        include: { moocs: true, kmRounds: { orderBy: { roundNumber: "asc" } } },
       });
 
       await this.auditService.log(
@@ -192,6 +196,16 @@ export class VehicleRecordService {
 
       return record;
     });
+  }
+
+  async distinctLoaiXe(): Promise<string[]> {
+    const rows = await this.prisma.vehicleRecord.findMany({
+      select: { loaiXe: true },
+      distinct: ["loaiXe"],
+      where: { loaiXe: { not: null } },
+      orderBy: { loaiXe: "asc" },
+    });
+    return rows.map((r) => r.loaiXe as string);
   }
 
   async delete(id: string) {

@@ -4,16 +4,17 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
-  Post,
+  Put,
   Query,
   UseGuards,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { VehicleMaintenanceService } from "./vehicle-maintenance.service";
-import { CreateVehicleMaintenanceDto } from "./dto/create-vehicle-maintenance.dto";
-import { UpdateVehicleMaintenanceDto } from "./dto/update-vehicle-maintenance.dto";
+import { UpdateMaintenanceFieldsDto } from "./dto/update-maintenance-fields.dto";
+import { BatchKmRoundsDto } from "./dto/km-round.dto";
 
 @ApiTags("VehicleMaintenance")
 @ApiBearerAuth()
@@ -23,7 +24,7 @@ export class VehicleMaintenanceController {
   constructor(private readonly vehicleMaintenanceService: VehicleMaintenanceService) {}
 
   @Get()
-  @ApiOperation({ summary: "List vehicle maintenance records with search and pagination" })
+  @ApiOperation({ summary: "List vehicle records for bảo dưỡng view with search and pagination" })
   findAll(
     @Query("search") search?: string,
     @Query("loaiXe") loaiXe?: string,
@@ -37,32 +38,47 @@ export class VehicleMaintenanceController {
   }
 
   @Get("distinct-units")
-  @ApiOperation({ summary: "Get distinct loaiXe values for export unit selector" })
+  @ApiOperation({ summary: "Get distinct loaiXe values from vehicle records" })
   distinctUnits() {
     return this.vehicleMaintenanceService.distinctUnits();
   }
 
-  @Get(":id")
-  @ApiOperation({ summary: "Get a single vehicle maintenance record" })
-  findOne(@Param("id") id: string) {
-    return this.vehicleMaintenanceService.findOne(id);
+  @Get(":vehicleRecordId")
+  @ApiOperation({ summary: "Get maintenance profile for a vehicle record" })
+  findOne(@Param("vehicleRecordId") vehicleRecordId: string) {
+    return this.vehicleMaintenanceService.findOne(vehicleRecordId);
   }
 
-  @Post()
-  @ApiOperation({ summary: "Create a vehicle maintenance record" })
-  create(@Body() dto: CreateVehicleMaintenanceDto) {
-    return this.vehicleMaintenanceService.create(dto);
+  @Patch(":vehicleRecordId")
+  @ApiOperation({ summary: "Update donViSuaChua and ngayLam on a vehicle record" })
+  updateMaintenanceFields(
+    @Param("vehicleRecordId") vehicleRecordId: string,
+    @Body() dto: UpdateMaintenanceFieldsDto,
+  ) {
+    return this.vehicleMaintenanceService.updateMaintenanceFields(vehicleRecordId, dto);
   }
 
-  @Patch(":id")
-  @ApiOperation({ summary: "Update a vehicle maintenance record" })
-  update(@Param("id") id: string, @Body() dto: UpdateVehicleMaintenanceDto) {
-    return this.vehicleMaintenanceService.update(id, dto);
+  @Get(":vehicleRecordId/km-rounds")
+  @ApiOperation({ summary: "List km rounds for a vehicle record" })
+  listKmRounds(@Param("vehicleRecordId") vehicleRecordId: string) {
+    return this.vehicleMaintenanceService.listKmRounds(vehicleRecordId);
   }
 
-  @Delete(":id")
-  @ApiOperation({ summary: "Delete a vehicle maintenance record" })
-  remove(@Param("id") id: string) {
-    return this.vehicleMaintenanceService.remove(id);
+  @Put(":vehicleRecordId/km-rounds")
+  @ApiOperation({ summary: "Batch upsert km rounds for a vehicle record" })
+  batchUpsertKmRounds(
+    @Param("vehicleRecordId") vehicleRecordId: string,
+    @Body() dto: BatchKmRoundsDto,
+  ) {
+    return this.vehicleMaintenanceService.batchUpsertKmRounds(vehicleRecordId, dto.rounds);
+  }
+
+  @Delete(":vehicleRecordId/km-rounds/:roundNumber")
+  @ApiOperation({ summary: "Delete a specific km round" })
+  deleteKmRound(
+    @Param("vehicleRecordId") vehicleRecordId: string,
+    @Param("roundNumber", ParseIntPipe) roundNumber: number,
+  ) {
+    return this.vehicleMaintenanceService.deleteKmRound(vehicleRecordId, roundNumber);
   }
 }

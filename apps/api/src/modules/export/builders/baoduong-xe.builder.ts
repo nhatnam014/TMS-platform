@@ -17,47 +17,54 @@ function toNum(v: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-const HEADERS = [
-  "TT",
-  "SỐ XE",
-  "Tài xế",
-  "phone",
-  "NGÀY LÀM",
-  "ĐƠN VỊ SỬA CHỮA / LOẠI XE",
-  "ĐƠN VỊ SỬA CHỮA",
-  "SỐ KM BẢO DƯỠNG",
-  "KÌ BẢO DƯỠNG TIẾP THEO",
-  "SỐ KM HIỆN TẠI",
-  "KM ĐÃ CHẠY",
-  "KM CÒN",
-  "ID",
-];
-
-const COL_WIDTHS = [6, 14, 22, 14, 14, 28, 24, 20, 24, 20, 14, 14, 30];
+function buildHeaders(colCount: number): string[] {
+  const base = ["TT", "SỐ XE", "Tài xế", "PHONE", "NGÀY LÀM", "LOẠI XE", "ĐƠN VỊ SỬA CHỮA"];
+  for (let i = 1; i <= colCount; i++) {
+    base.push(`KM CÒN DƯỠNG LẦN ${i}`);
+  }
+  base.push("ID");
+  return base;
+}
 
 function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[]) {
+  // Compute maxRound for this group
+  let maxRound = 0;
+  for (const rec of records) {
+    for (const r of (rec.kmRounds ?? [])) {
+      if (r.roundNumber > maxRound) maxRound = r.roundNumber;
+    }
+  }
+  const colCount = Math.max(4, maxRound);
+  const headers = buildHeaders(colCount);
+
   const ws = wb.addWorksheet(sheetName);
 
-  HEADERS.forEach((_, i) => {
-    ws.getColumn(i + 1).width = COL_WIDTHS[i];
-  });
+  // Column widths: base 7 cols + km cols + ID
+  const baseWidths = [6, 14, 22, 14, 14, 18, 22];
+  const kmWidths = Array(colCount).fill(16);
+  const colWidths = [...baseWidths, ...kmWidths, 30];
+  colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
-  const headerRow = ws.addRow(HEADERS);
+  const headerRow = ws.addRow(headers);
   headerRow.font = { bold: true };
   headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
   headerRow.alignment = { horizontal: "center", wrapText: true };
   headerRow.height = 22;
 
   records.forEach((rec, idx) => {
-    const soKmBaoDuong = toNum(rec.soKmBaoDuong);
-    const kiBaoDuongTiepTheo = toNum(rec.kiBaoDuongTiepTheo);
-    const soKmHienTai = toNum(rec.soKmHienTai);
-    const kmDaChay = soKmBaoDuong !== null && soKmHienTai !== null
-      ? soKmHienTai - soKmBaoDuong
-      : null;
-    const kmCon = kiBaoDuongTiepTheo !== null && soKmHienTai !== null
-      ? kiBaoDuongTiepTheo - soKmHienTai
-      : null;
+    // Build km cell values from kmRounds array (roundNumber → kmCon)
+    const kmMap: Record<number, number | null> = {};
+    if (rec.kmRounds) {
+      for (const r of rec.kmRounds) {
+        kmMap[r.roundNumber] = toNum(r.kmCon);
+      }
+    }
+
+    const kmValues: (number | string)[] = [];
+    for (let i = 1; i <= colCount; i++) {
+      const val = kmMap[i];
+      kmValues.push(val !== null && val !== undefined ? val : "");
+    }
 
     const row = ws.addRow([
       idx + 1,
@@ -67,16 +74,12 @@ function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[]) {
       formatDate(rec.ngayLam),
       rec.loaiXe ?? "",
       rec.donViSuaChua ?? "",
-      soKmBaoDuong ?? "",
-      kiBaoDuongTiepTheo ?? "",
-      soKmHienTai ?? "",
-      kmDaChay ?? "",
-      kmCon ?? "",
+      ...kmValues,
       rec.id,
     ]);
 
     // ID cell grey
-    row.getCell(HEADERS.length).font = { color: { argb: "FF9CA3AF" }, size: 9 };
+    row.getCell(headers.length).font = { color: { argb: "FF9CA3AF" }, size: 9 };
   });
 
   ws.eachRow((row) => {
@@ -91,28 +94,28 @@ function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[]) {
   });
 }
 
-export async function buildBaoDuongXe(records: any[], units: string[]): Promise<Buffer> {
+export async function buildBaoDuongXe(records: any[], selectedLoaiXe: string[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
 
-  if (units.length === 0) {
-    // Export all — group by loaiXe
-    const unitSet = new Map<string, any[]>();
+  if (selectedLoaiXe.length === 0) {
+    // Group by loaiXe
+    const groupMap = new Map<string, any[]>();
     for (const rec of records) {
       const key = rec.loaiXe ?? "(Khác)";
-      if (!unitSet.has(key)) unitSet.set(key, []);
-      unitSet.get(key)!.push(rec);
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(rec);
     }
-    if (unitSet.size === 0) {
+    if (groupMap.size === 0) {
       wb.addWorksheet("bảo dưỡng xe");
     } else {
-      for (const [unit, recs] of unitSet) {
-        addSheet(wb, unit, recs);
+      for (const [loaiXe, recs] of groupMap) {
+        addSheet(wb, loaiXe, recs);
       }
     }
   } else {
-    for (const unit of units) {
-      const recs = records.filter((r) => r.loaiXe === unit);
-      addSheet(wb, unit, recs);
+    for (const loaiXe of selectedLoaiXe) {
+      const recs = records.filter((r) => r.loaiXe === loaiXe);
+      addSheet(wb, loaiXe, recs);
     }
   }
 
