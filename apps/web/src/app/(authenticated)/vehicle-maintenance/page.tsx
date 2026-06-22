@@ -303,7 +303,7 @@ function EditModal({
 // ─── Table helpers ─────────────────────────────────────────────────────────
 
 const TH = ({ children, width, style }: { children?: React.ReactNode; width?: number; style?: React.CSSProperties }) => (
-  <th style={{ padding: "9px 10px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", width, ...style }}>
+  <th style={{ padding: "9px 10px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", borderBottom: "2px solid #e2e8f0", width, ...style }}>
     {children}
   </th>
 );
@@ -403,20 +403,20 @@ export default function VehicleMaintenancePage() {
       )}
 
       <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 + colCount * 120 }}>
+        <table style={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0, width: `${764 + colCount * 150 + 64}px` }}>
           <thead>
-            <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0" }}>
-              <TH width={36}>STT</TH>
-              <TH>Số xe</TH>
-              <TH>Tài xế</TH>
-              <TH>SĐT</TH>
-              <TH>Ngày làm</TH>
-              <TH>Loại xe</TH>
-              <TH>Đơn vị sửa chữa</TH>
+            <tr style={{ background: "#f8fafc" }}>
+              <TH width={44}  style={{ position: "sticky", left: 0,   zIndex: 3, background: "#f8fafc" }}>STT</TH>
+              <TH width={110} style={{ position: "sticky", left: 44,  zIndex: 3, background: "#f8fafc" }}>Số xe</TH>
+              <TH width={130} style={{ position: "sticky", left: 154, zIndex: 3, background: "#f8fafc" }}>Tài xế</TH>
+              <TH width={110} style={{ position: "sticky", left: 284, zIndex: 3, background: "#f8fafc" }}>SĐT</TH>
+              <TH width={100} style={{ position: "sticky", left: 394, zIndex: 3, background: "#f8fafc" }}>Ngày làm</TH>
+              <TH width={110} style={{ position: "sticky", left: 494, zIndex: 3, background: "#f8fafc" }}>Loại xe</TH>
+              <TH width={160} style={{ position: "sticky", left: 604, zIndex: 3, background: "#f8fafc", boxShadow: "2px 0 5px -2px rgba(0,0,0,0.14)" }}>Đơn vị sửa chữa</TH>
               {kmHeaders.map((h) => (
-                <TH key={h} style={{ background: "#fef9c3" }}>{h}</TH>
+                <TH key={h} width={150} style={{ background: "#fef9c3" }}>{h}</TH>
               ))}
-              <TH></TH>
+              <TH width={64} style={{ position: "sticky", right: 0, zIndex: 3, background: "#f8fafc", boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)" }}></TH>
             </tr>
           </thead>
           <tbody>
@@ -436,13 +436,13 @@ export default function VehicleMaintenancePage() {
 
                 return (
                   <tr key={rec.id} style={{ background: bg }}>
-                    <TD style={{ color: "#94a3b8" }}>{recNum}</TD>
-                    <TD style={{ fontFamily: "monospace", fontWeight: 600 }}>{rec.bienSo ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
-                    <TD>{rec.tenTaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
-                    <TD style={{ fontFamily: "monospace" }}>{rec.sdt ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
-                    <TD>{formatDate(rec.ngayLam) || <span style={{ color: "#94a3b8" }}>—</span>}</TD>
-                    <TD>{rec.loaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
-                    <TD>{rec.donViSuaChua ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ color: "#94a3b8", position: "sticky", left: 0,   zIndex: 1, background: bg }}>{recNum}</TD>
+                    <TD style={{ fontFamily: "monospace", fontWeight: 600, position: "sticky", left: 44,  zIndex: 1, background: bg }}>{rec.bienSo ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ position: "sticky", left: 154, zIndex: 1, background: bg }}>{rec.tenTaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ fontFamily: "monospace", position: "sticky", left: 284, zIndex: 1, background: bg }}>{rec.sdt ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ position: "sticky", left: 394, zIndex: 1, background: bg }}>{formatDate(rec.ngayLam) || <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ position: "sticky", left: 494, zIndex: 1, background: bg }}>{rec.loaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ position: "sticky", left: 604, zIndex: 1, background: bg, boxShadow: "2px 0 5px -2px rgba(0,0,0,0.14)" }}>{rec.donViSuaChua ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
                     {Array.from({ length: colCount }, (_, i) => {
                       const rn = i + 1;
                       const val = kmMap[rn];
@@ -452,7 +452,7 @@ export default function VehicleMaintenancePage() {
                         </TD>
                       );
                     })}
-                    <TD>
+                    <TD style={{ position: "sticky", right: 0, zIndex: 1, background: bg, boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)" }}>
                       <ActionMenu onEdit={() => setEditTarget(rec)} />
                     </TD>
                   </tr>
