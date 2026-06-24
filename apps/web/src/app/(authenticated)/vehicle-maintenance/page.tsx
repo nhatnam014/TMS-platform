@@ -19,6 +19,8 @@ interface VehicleRecord {
   loaiXe: string | null;
   donViSuaChua: string | null;
   ngayLam: string | null;
+  kmHienTai: string | null;
+  ghiChuBaoDuong: string | null;
   kmRounds: KmRound[];
 }
 
@@ -133,6 +135,8 @@ function EditModal({
   const toast = useToast();
   const [donViSuaChua, setDonViSuaChua] = useState(record.donViSuaChua ?? "");
   const [ngayLam, setNgayLam] = useState(record.ngayLam ? record.ngayLam.slice(0, 10) : "");
+  const [kmHienTai, setKmHienTai] = useState(record.kmHienTai ?? "");
+  const [ghiChuBaoDuong, setGhiChuBaoDuong] = useState(record.ghiChuBaoDuong ?? "");
   const [existingRounds, setExistingRounds] = useState<KmRound[]>(record.kmRounds ?? []);
   const [editedKmCon, setEditedKmCon] = useState<Record<string, string>>(
     Object.fromEntries((record.kmRounds ?? []).map((r) => [r.id, r.kmCon])),
@@ -185,6 +189,8 @@ function EditModal({
       body: JSON.stringify({
         donViSuaChua: donViSuaChua || null,
         ngayLam: ngayLam || null,
+        kmHienTai: kmHienTai || null,
+        ghiChuBaoDuong: ghiChuBaoDuong || null,
       }),
     });
     if (!patchRes.ok) {
@@ -248,12 +254,22 @@ function EditModal({
                 style={{ width: "100%", padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, boxSizing: "border-box" }}
               />
             </div>
-            <div>
+            <div style={{ marginBottom: 10 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 3, color: "#6b7280" }}>Ngày làm</label>
               <input
                 type="date"
                 value={ngayLam}
                 onChange={(e) => setNgayLam(e.target.value)}
+                style={{ width: "100%", padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 3, color: "#6b7280" }}>Số KM hiện tại</label>
+              <input
+                type="text"
+                value={kmHienTai}
+                onChange={(e) => setKmHienTai(e.target.value)}
+                placeholder="VD: 320.000 km"
                 style={{ width: "100%", padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, boxSizing: "border-box" }}
               />
             </div>
@@ -316,6 +332,18 @@ function EditModal({
               onClick={addNewRoundRow}
               style={{ marginTop: 6, padding: "7px 14px", background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 500 }}
             >+ Thêm lần</button>
+          </div>
+
+          {/* Section C: Ghi chú */}
+          <div style={{ background: "#f3f4f6", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Ghi chú</div>
+            <textarea
+              value={ghiChuBaoDuong}
+              onChange={(e) => setGhiChuBaoDuong(e.target.value)}
+              rows={3}
+              placeholder="Ghi chú bảo dưỡng..."
+              style={{ width: "100%", padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+            />
           </div>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16, borderTop: "1px solid #e5e7eb", paddingTop: 14 }}>
@@ -410,7 +438,7 @@ export default function VehicleMaintenancePage() {
   }, [page, refresh]);
 
   const kmHeaders = Array.from({ length: colCount }, (_, i) => `KM CÒN DƯỠNG LẦN ${i + 1}`);
-  const totalCols = 8 + colCount; // STT + 6 base cols + km cols + action
+  const totalCols = 10 + colCount; // STT + 6 base cols + KM hiện tại + km cols + ghi chú + action
 
   return (
     <div>
@@ -433,7 +461,7 @@ export default function VehicleMaintenancePage() {
       )}
 
       <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "auto" }}>
-        <table style={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0, width: `${764 + colCount * 150 + 84}px` }}>
+        <table style={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0, width: `${764 + 140 + colCount * 150 + 180 + 84}px` }}>
           <thead>
             <tr style={{ background: "#f8fafc" }}>
               <TH width={44}  style={{ position: "sticky", left: 0,   zIndex: 3, background: "#f8fafc" }}>STT</TH>
@@ -443,9 +471,11 @@ export default function VehicleMaintenancePage() {
               <TH width={100} style={{ position: "sticky", left: 394, zIndex: 3, background: "#f8fafc" }}>Ngày làm</TH>
               <TH width={110} style={{ position: "sticky", left: 494, zIndex: 3, background: "#f8fafc" }}>Loại xe</TH>
               <TH width={160} style={{ position: "sticky", left: 604, zIndex: 3, background: "#f8fafc", boxShadow: "2px 0 5px -2px rgba(0,0,0,0.14)" }}>Đơn vị sửa chữa</TH>
+              <TH width={140}>Số KM hiện tại</TH>
               {kmHeaders.map((h) => (
                 <TH key={h} width={150} style={{ background: "#fef9c3" }}>{h}</TH>
               ))}
+              <TH width={180}>Ghi chú</TH>
               <TH width={84} style={{ position: "sticky", right: 0, zIndex: 3, background: "#f8fafc", boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)" }}></TH>
             </tr>
           </thead>
@@ -473,6 +503,7 @@ export default function VehicleMaintenancePage() {
                     <TD style={{ position: "sticky", left: 394, zIndex: 1, background: bg }}>{formatDate(rec.ngayLam) || <span style={{ color: "#94a3b8" }}>—</span>}</TD>
                     <TD style={{ position: "sticky", left: 494, zIndex: 1, background: bg }}>{rec.loaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
                     <TD style={{ position: "sticky", left: 604, zIndex: 1, background: bg, boxShadow: "2px 0 5px -2px rgba(0,0,0,0.14)" }}>{rec.donViSuaChua ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ fontFamily: "monospace" }}>{rec.kmHienTai ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
                     {Array.from({ length: colCount }, (_, i) => {
                       const rn = i + 1;
                       const val = kmMap[rn];
@@ -482,6 +513,7 @@ export default function VehicleMaintenancePage() {
                         </TD>
                       );
                     })}
+                    <TD>{rec.ghiChuBaoDuong ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
                     <TD style={{ position: "sticky", right: 0, zIndex: 1, background: bg, boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)", textAlign: "center" }}>
                       <ActionMenu onEdit={() => setEditTarget(rec)} />
                     </TD>

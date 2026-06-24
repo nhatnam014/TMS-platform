@@ -15,10 +15,20 @@ function toStr(v: unknown): string {
 }
 
 function buildHeaders(colCount: number): string[] {
-  const base = ["TT", "SỐ XE", "Tài xế", "PHONE", "NGÀY LÀM", "LOẠI XE", "ĐƠN VỊ SỬA CHỮA"];
+  const base = [
+    "TT",
+    "SỐ XE",
+    "Tài xế",
+    "PHONE",
+    "NGÀY LÀM",
+    "LOẠI XE",
+    "ĐƠN VỊ SỬA CHỮA",
+    "KM HIỆN TẠI",
+  ];
   for (let i = 1; i <= colCount; i++) {
     base.push(`KM CÒN DƯỠNG LẦN ${i}`);
   }
+  base.push("GHI CHÚ");
   base.push("ID");
   return base;
 }
@@ -36,10 +46,10 @@ function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[]) {
 
   const ws = wb.addWorksheet(sheetName);
 
-  // Column widths: base 7 cols + km cols + ID
-  const baseWidths = [6, 14, 22, 14, 14, 18, 22];
+  // Column widths: base 7 cols + KM HIỆN TẠI + km cols + GHI CHÚ + ID
+  const baseWidths = [6, 14, 22, 14, 14, 18, 22, 16];
   const kmWidths = Array(colCount).fill(16);
-  const colWidths = [...baseWidths, ...kmWidths, 30];
+  const colWidths = [...baseWidths, ...kmWidths, 28, 30];
   colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
   const headerRow = ws.addRow(headers);
@@ -70,7 +80,9 @@ function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[]) {
       formatDate(rec.ngayLam),
       rec.loaiXe ?? "",
       rec.donViSuaChua ?? "",
+      toStr(rec.kmHienTai),
       ...kmValues,
+      toStr(rec.ghiChuBaoDuong),
       rec.id,
     ]);
 

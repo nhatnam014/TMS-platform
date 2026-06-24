@@ -285,6 +285,8 @@ export class ImportService {
               ...(row.loaiXe !== undefined && { loaiXe: row.loaiXe }),
               ...(row.donViSuaChua !== undefined && { donViSuaChua: row.donViSuaChua ?? null }),
               ...(row.ngayLam !== undefined && { ngayLam: row.ngayLam ?? null }),
+              ...(row.kmHienTai !== undefined && { kmHienTai: row.kmHienTai ?? null }),
+              ...(row.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: row.ghiChuBaoDuong ?? null }),
             },
           });
           vehicleRecordId = row.id;
@@ -299,6 +301,8 @@ export class ImportService {
               loaiXe: row.loaiXe ?? null,
               donViSuaChua: row.donViSuaChua ?? null,
               ngayLam: row.ngayLam ?? null,
+              kmHienTai: row.kmHienTai ?? null,
+              ghiChuBaoDuong: row.ghiChuBaoDuong ?? null,
             },
           });
           vehicleRecordId = newRecord.id;

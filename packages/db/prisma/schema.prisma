@@ -385,6 +385,8 @@ model VehicleRecord {
   ghiChu          String?                     @map("ghi_chu")
   donViSuaChua    String?                     @map("don_vi_sua_chua")  // Đơn vị sửa chữa bảo dưỡng
   ngayLam         DateTime?                   @map("ngay_lam") @db.Date // Ngày làm bảo dưỡng gần nhất
+  kmHienTai       String?                     @map("km_hien_tai")      // Số KM hiện tại
+  ghiChuBaoDuong  String?                     @map("ghi_chu_bao_duong") // Ghi chú bảo dưỡng (khác ghiChu của quản lý xe)
   moocs           VehicleRecordMooc[]
   kmRounds        VehicleMaintenanceKmRound[]
   createdAt       DateTime                    @default(now()) @map("created_at")

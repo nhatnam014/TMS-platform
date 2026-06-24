@@ -16,6 +16,8 @@ export interface ParsedMaintenanceRow {
   loaiXe?: string;
   donViSuaChua?: string;
   ngayLam?: Date;
+  kmHienTai?: string;
+  ghiChuBaoDuong?: string;
   kmRounds: ParsedKmRound[];
 }
 
@@ -101,6 +103,8 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
     const COL_LOAI_XE = colIdx(hmap, "loại xe", "loai xe");
     const COL_DON_VI = colIdx(hmap, "đơn vị sửa chữa", "don vi sua chua", "đơn vị bảo dưỡng", "don vi bao duong");
     const COL_NGAY_LAM = colIdx(hmap, "ngày làm", "ngay lam");
+    const COL_KM_HIEN_TAI = colIdx(hmap, "km hiện tại", "km hien tai");
+    const COL_GHI_CHU = colIdx(hmap, "ghi chú", "ghi chu");
 
     // Detect km round columns
     const kmColMap = detectKmRoundCols(headerRow);
@@ -142,6 +146,8 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
         loaiXe: COL_LOAI_XE > 0 ? cellText(row, COL_LOAI_XE) || undefined : undefined,
         donViSuaChua: COL_DON_VI > 0 ? cellText(row, COL_DON_VI) || undefined : undefined,
         ngayLam: ngayLam ?? undefined,
+        kmHienTai: COL_KM_HIEN_TAI > 0 ? cellText(row, COL_KM_HIEN_TAI) || undefined : undefined,
+        ghiChuBaoDuong: COL_GHI_CHU > 0 ? cellText(row, COL_GHI_CHU) || undefined : undefined,
         kmRounds,
       });
     });

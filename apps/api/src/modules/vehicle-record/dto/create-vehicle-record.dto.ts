@@ -78,6 +78,16 @@ export class CreateVehicleRecordDto implements ICreateVehicleRecordDto {
   @IsDateString()
   ngayLam?: string;
 
+  @ApiPropertyOptional({ example: "320.000 km" })
+  @IsOptional()
+  @IsString()
+  kmHienTai?: string;
+
+  @ApiPropertyOptional({ example: "Cần kiểm tra phanh" })
+  @IsOptional()
+  @IsString()
+  ghiChuBaoDuong?: string;
+
   @ApiPropertyOptional({ type: [MoocDto] })
   @IsOptional()
   @IsArray()

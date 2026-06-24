@@ -107,6 +107,8 @@ export class VehicleRecordService {
           ghiChu: dto.ghiChu,
           donViSuaChua: dto.donViSuaChua,
           ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : undefined,
+          kmHienTai: dto.kmHienTai,
+          ghiChuBaoDuong: dto.ghiChuBaoDuong,
           moocs: dto.moocs?.length
             ? {
                 create: dto.moocs.map((m) => ({
@@ -167,6 +169,8 @@ export class VehicleRecordService {
           ...(dto.ghiChu !== undefined && { ghiChu: dto.ghiChu }),
           ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
           ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
+          ...(dto.kmHienTai !== undefined && { kmHienTai: dto.kmHienTai ?? null }),
+          ...(dto.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: dto.ghiChuBaoDuong ?? null }),
           ...(dto.moocs !== undefined &&
             dto.moocs.length > 0 && {
               moocs: {

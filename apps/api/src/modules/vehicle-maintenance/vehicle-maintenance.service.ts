@@ -83,6 +83,8 @@ export class VehicleMaintenanceService {
     return {
       donViSuaChua: record.donViSuaChua,
       ngayLam: record.ngayLam,
+      kmHienTai: record.kmHienTai,
+      ghiChuBaoDuong: record.ghiChuBaoDuong,
       kmRounds: record.kmRounds,
     };
   }
@@ -96,6 +98,8 @@ export class VehicleMaintenanceService {
       data: {
         ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
         ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
+        ...(dto.kmHienTai !== undefined && { kmHienTai: dto.kmHienTai ?? null }),
+        ...(dto.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: dto.ghiChuBaoDuong ?? null }),
       },
     });
 

@@ -390,6 +390,8 @@ export interface CreateVehicleRecordDto {
   ghiChu?: string;
   donViSuaChua?: string;
   ngayLam?: string;
+  kmHienTai?: string;
+  ghiChuBaoDuong?: string;
   moocs?: VehicleRecordMoocDto[];
 }
 
@@ -404,5 +406,7 @@ export interface UpdateVehicleRecordDto {
   ghiChu?: string | null;
   donViSuaChua?: string | null;
   ngayLam?: string | null;
+  kmHienTai?: string | null;
+  ghiChuBaoDuong?: string | null;
   moocs?: VehicleRecordMoocDto[];
 }

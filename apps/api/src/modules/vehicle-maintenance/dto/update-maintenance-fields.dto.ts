@@ -11,4 +11,14 @@ export class UpdateMaintenanceFieldsDto {
   @IsOptional()
   @IsDateString()
   ngayLam?: string | null;
+
+  @ApiPropertyOptional({ example: "320.000 km" })
+  @IsOptional()
+  @IsString()
+  kmHienTai?: string | null;
+
+  @ApiPropertyOptional({ example: "Cần kiểm tra phanh" })
+  @IsOptional()
+  @IsString()
+  ghiChuBaoDuong?: string | null;
 }
