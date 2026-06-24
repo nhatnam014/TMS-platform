@@ -355,11 +355,25 @@ export interface YardMoveFilters {
 }
 
 // ---------- Excel Import/Export ----------
+export interface ImportChangedField {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export interface ImportChangedRecord {
+  rowNum: number;
+  identifier: string;
+  tripPlanId: string;
+  changes: ImportChangedField[];
+}
+
 export interface ImportResult {
   imported: number;
   updated?: number;
   warnings: string[];
   errors: string[];
+  changedRecords?: ImportChangedRecord[];
 }
 
 // ---------- Vehicle Record Filters ----------

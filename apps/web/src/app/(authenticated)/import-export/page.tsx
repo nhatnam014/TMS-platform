@@ -171,7 +171,7 @@ function ImportResultDisplay({
             </details>
           )}
           {result.errors.length > 0 && (
-            <details>
+            <details style={{ marginBottom: result.changedRecords?.length ? 8 : 0 }}>
               <summary
                 style={{
                   fontSize: 13,
@@ -188,6 +188,36 @@ function ImportResultDisplay({
                 {result.errors.map((e, i) => (
                   <li key={i} style={{ fontSize: 12, color: "#7f1d1d", marginBottom: 3 }}>
                     {e}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {result.changedRecords && result.changedRecords.length > 0 && (
+            <details>
+              <summary
+                style={{
+                  fontSize: 13,
+                  color: "#1d4ed8",
+                  cursor: "pointer",
+                  padding: "8px 12px",
+                  background: "#eff6ff",
+                  borderRadius: 6,
+                }}
+              >
+                {result.changedRecords.length} bản ghi đã thay đổi (bấm để xem)
+              </summary>
+              <ul style={{ margin: "6px 0 0 0", paddingLeft: 20 }}>
+                {result.changedRecords.map((rec, i) => (
+                  <li key={i} style={{ fontSize: 12, color: "#1e3a8a", marginBottom: 6 }}>
+                    <strong>{rec.identifier}</strong>
+                    <ul style={{ margin: "2px 0 0 0", paddingLeft: 16 }}>
+                      {rec.changes.map((c, j) => (
+                        <li key={j}>
+                          {c.field}: {String(c.oldValue ?? "—")} → {String(c.newValue ?? "—")}
+                        </li>
+                      ))}
+                    </ul>
                   </li>
                 ))}
               </ul>

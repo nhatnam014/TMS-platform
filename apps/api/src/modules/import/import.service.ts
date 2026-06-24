@@ -2,10 +2,34 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import type { ImportResult } from "@tms/shared";
+import type { ImportResult, ImportChangedRecord, ImportChangedField } from "@tms/shared";
 import { parseQuanLyXe } from "./parsers/quanly-xe.parser";
 import { parseKeHoachXe } from "./parsers/kehoach-xe.parser";
 import { parseBaoDuongXe } from "./parsers/baoduong-xe.parser";
+
+function normalizeForDiff(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object" && typeof (value as { toNumber?: unknown }).toNumber === "function") {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+  return value;
+}
+
+function diffTripPlanFields(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): ImportChangedField[] {
+  const changes: ImportChangedField[] = [];
+  for (const field of Object.keys(after)) {
+    const oldValue = normalizeForDiff(before[field]);
+    const newValue = normalizeForDiff(after[field]);
+    if (oldValue !== newValue) {
+      changes.push({ field, oldValue, newValue });
+    }
+  }
+  return changes;
+}
 
 @Injectable()
 export class ImportService {
@@ -152,6 +176,7 @@ export class ImportService {
       throw new BadRequestException("File không hợp lệ hoặc không đúng định dạng .xlsx");
     }
     const errors: string[] = [];
+    const changedRecords: ImportChangedRecord[] = [];
     let imported = 0;
     let updated = 0;
 
@@ -191,33 +216,143 @@ export class ImportService {
             ? (await this.lookupOrCreateContainerSize(row.containerSizeCode, warnings, tx)).id
             : null;
 
-          const tripPlanData = {
-            tripDate: row.tripDate!,
-            tripNumber: row.tripNumber ?? null,
-            serviceTypeId,
-            vehiclePlate: row.vehiclePlate ?? null,
-            customerId: customer.id,
-            carrierId: carrierId ?? null,
-            containerSizeId,
-            outboundContainerNumber: row.outboundContainerNumber ?? null,
-            inboundContainerNumber: row.inboundContainerNumber ?? null,
-            pickupLocationName: row.pickupLocationName ?? null,
-            loadUnloadLocationName: row.loadUnloadLocationName ?? null,
-            dropoffLocationName: row.dropoffLocationName ?? null,
-            description: row.description ?? null,
-            notes: row.notes ?? null,
-          };
-
           let tripPlanId: string;
           if (row.id) {
             // UPDATE existing trip plan
-            await tx.tripPlan.update({ where: { id: row.id }, data: tripPlanData });
+            const before = await tx.tripPlan.findUnique({ where: { id: row.id } });
+
+            const updateData = {
+              tripDate: row.tripDate!,
+              ...(row.tripNumber !== undefined && { tripNumber: row.tripNumber }),
+              serviceTypeId,
+              vehiclePlate: row.vehiclePlate ?? null,
+              customerId: customer.id,
+              carrierId: carrierId ?? null,
+              containerSizeId,
+              outboundContainerNumber: row.outboundContainerNumber ?? null,
+              inboundContainerNumber: row.inboundContainerNumber ?? null,
+              pickupLocationName: row.pickupLocationName ?? null,
+              loadUnloadLocationName: row.loadUnloadLocationName ?? null,
+              dropoffLocationName: row.dropoffLocationName ?? null,
+              description: row.description ?? null,
+              notes: row.notes ?? null,
+              ...(row.documentSentDate !== undefined && {
+                documentSentDate: row.documentSentDate,
+              }),
+              ...(row.phiNangAmount !== undefined && {
+                phiNangAmount: row.phiNangAmount,
+                phiNangName: "PHÍ NÂNG",
+              }),
+              ...(row.shdNang !== undefined && { shdNang: row.shdNang }),
+              ...(row.phiHaAmount !== undefined && {
+                phiHaAmount: row.phiHaAmount,
+                phiHaName: "PHÍ HẠ",
+              }),
+              ...(row.shdHa !== undefined && { shdHa: row.shdHa }),
+              ...(row.phiVeSinhAmount !== undefined && {
+                phiVeSinhAmount: row.phiVeSinhAmount,
+                phiVeSinhName: "PHÍ VỆ SINH",
+              }),
+              ...(row.shdVeSinh !== undefined && { shdVeSinh: row.shdVeSinh }),
+              ...(row.phiCuocAmount !== undefined && {
+                phiCuocAmount: row.phiCuocAmount,
+                phiCuocName: "PHÍ CƯỢC",
+              }),
+              ...(row.veCongAmount !== undefined && {
+                veCongAmount: row.veCongAmount,
+                veCongName: "VÉ CỔNG",
+              }),
+              ...(row.shdVeCong !== undefined && { shdVeCong: row.shdVeCong }),
+              ...(row.chiPhiKhacAmount !== undefined && {
+                chiPhiKhacAmount: row.chiPhiKhacAmount,
+                chiPhiKhacName: "PHÍ ĐỨT TEM",
+              }),
+              ...(row.chiPhiTraiTuyenAmount !== undefined && {
+                chiPhiTraiTuyenAmount: row.chiPhiTraiTuyenAmount,
+                chiPhiTraiTuyenName: "CHI PHÍ TRÁI TUYẾN",
+              }),
+              ...(row.cauDuongAmount !== undefined && {
+                cauDuongAmount: row.cauDuongAmount,
+                cauDuongName: "CẦU ĐƯỜNG",
+              }),
+            };
+
+            await tx.tripPlan.update({ where: { id: row.id }, data: updateData });
+
+            if (before) {
+              const changes = diffTripPlanFields(before, updateData);
+              if (changes.length > 0) {
+                const identifier = `${row.vehiclePlate ?? "?"} - ${row.tripDate!.toISOString().slice(0, 10)}`;
+                await this.auditService.log(
+                  {
+                    action: "UPDATE",
+                    entityType: "TripPlan",
+                    entityId: row.id,
+                    summary: `Excel import cập nhật chuyến (${identifier}): ${changes.map((c) => c.field).join(", ")}`,
+                    beforeSnapshot: Object.fromEntries(
+                      changes.map((c) => [c.field, c.oldValue]),
+                    ),
+                    afterSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.newValue])),
+                  },
+                  tx,
+                );
+                changedRecords.push({
+                  rowNum: row.rowNum,
+                  identifier,
+                  tripPlanId: row.id,
+                  changes,
+                });
+              }
+            }
+
             // Replace costs with what's in the file
             await tx.tripPlanCost.deleteMany({ where: { tripPlanId: row.id } });
             tripPlanId = row.id;
           } else {
-            // CREATE new trip plan
-            const tripPlan = await tx.tripPlan.create({ data: tripPlanData });
+            // CREATE new trip plan — STT cell is ignored; tripNumber is always auto-assigned
+            const maxResult = await tx.tripPlan.aggregate({ _max: { tripNumber: true } });
+            const tripNumber = (maxResult._max.tripNumber ?? 0) + 1;
+
+            const tripPlan = await tx.tripPlan.create({
+              data: {
+                tripDate: row.tripDate!,
+                tripNumber,
+                serviceTypeId,
+                vehiclePlate: row.vehiclePlate ?? null,
+                customerId: customer.id,
+                carrierId: carrierId ?? null,
+                containerSizeId,
+                outboundContainerNumber: row.outboundContainerNumber ?? null,
+                inboundContainerNumber: row.inboundContainerNumber ?? null,
+                pickupLocationName: row.pickupLocationName ?? null,
+                loadUnloadLocationName: row.loadUnloadLocationName ?? null,
+                dropoffLocationName: row.dropoffLocationName ?? null,
+                description: row.description ?? null,
+                notes: row.notes ?? null,
+                documentSentDate: row.documentSentDate ?? null,
+                phiNangAmount: row.phiNangAmount ?? null,
+                phiNangName: row.phiNangAmount !== undefined ? "PHÍ NÂNG" : null,
+                shdNang: row.shdNang ?? null,
+                phiHaAmount: row.phiHaAmount ?? null,
+                phiHaName: row.phiHaAmount !== undefined ? "PHÍ HẠ" : null,
+                shdHa: row.shdHa ?? null,
+                phiVeSinhAmount: row.phiVeSinhAmount ?? null,
+                phiVeSinhName: row.phiVeSinhAmount !== undefined ? "PHÍ VỆ SINH" : null,
+                shdVeSinh: row.shdVeSinh ?? null,
+                phiCuocAmount: row.phiCuocAmount ?? null,
+                phiCuocName: row.phiCuocAmount !== undefined ? "PHÍ CƯỢC" : null,
+                veCongAmount: row.veCongAmount ?? null,
+                veCongName: row.veCongAmount !== undefined ? "VÉ CỔNG" : null,
+                shdVeCong: row.shdVeCong ?? null,
+                chiPhiKhacAmount: row.chiPhiKhacAmount ?? null,
+                chiPhiKhacName: row.chiPhiKhacAmount !== undefined ? "PHÍ ĐỨT TEM" : null,
+                chiPhiTraiTuyenAmount: row.chiPhiTraiTuyenAmount ?? null,
+                chiPhiTraiTuyenName:
+                  row.chiPhiTraiTuyenAmount !== undefined ? "CHI PHÍ TRÁI TUYẾN" : null,
+                cauDuongAmount: row.cauDuongAmount ?? null,
+                cauDuongName: row.cauDuongAmount !== undefined ? "CẦU ĐƯỜNG" : null,
+              },
+            });
             tripPlanId = tripPlan.id;
           }
 
@@ -246,7 +381,13 @@ export class ImportService {
       summary: `Excel import: ${imported} tạo mới, ${updated} cập nhật, ${warnings.length} cảnh báo, ${errors.length} lỗi`,
     });
 
-    return { imported, updated, warnings, errors };
+    return {
+      imported,
+      updated,
+      warnings,
+      errors,
+      ...(changedRecords.length > 0 && { changedRecords }),
+    };
   }
 
   async importVehicleMaintenance(buffer: Buffer): Promise<ImportResult> {

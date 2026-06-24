@@ -1905,18 +1905,14 @@ export default function TripPlansPage() {
                         <td style={tdStyle}>{trip.dropoffLocationName ?? ""}</td>
                         {COST_COLUMNS.map((cc) => (
                           <Fragment key={cc.label}>
-                            <td style={{ ...tdStyle, textAlign: "right" }}>
-                              {fmt(trip[cc.amountKey] as number | null)}
-                            </td>
+                            <td style={tdStyle}>{fmt(trip[cc.amountKey] as number | null)}</td>
                             {cc.shdLabel && (
                               <td style={tdStyle}>{(trip[cc.shdKey!] as string | null) ?? ""}</td>
                             )}
                           </Fragment>
                         ))}
                         <td style={tdStyle}>{formatDate(trip.documentSentDate)}</td>
-                        <td style={{ ...tdStyle, textAlign: "right" }}>
-                          {totalOtherCosts > 0 ? fmt(totalOtherCosts) : ""}
-                        </td>
+                        <td style={tdStyle}>{totalOtherCosts > 0 ? fmt(totalOtherCosts) : ""}</td>
                         <td style={tdStyle}>{trip.description ?? ""}</td>
                         <td style={tdStyle}>{trip.notes ?? ""}</td>
                         {/* Right sticky */}

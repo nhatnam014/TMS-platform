@@ -27,6 +27,18 @@ export interface ParsedTripPlanRow {
   documentSentDate?: Date;
   description?: string;
   notes?: string;
+  phiNangAmount?: number;
+  shdNang?: string;
+  phiHaAmount?: number;
+  shdHa?: string;
+  phiVeSinhAmount?: number;
+  shdVeSinh?: string;
+  phiCuocAmount?: number;
+  veCongAmount?: number;
+  shdVeCong?: string;
+  chiPhiKhacAmount?: number;
+  chiPhiTraiTuyenAmount?: number;
+  cauDuongAmount?: number;
   costs: ParsedCostItem[];
 }
 
@@ -92,14 +104,6 @@ const COL = {
 } as const;
 
 const COST_COLUMNS: Array<{ nameCol: string; amountCol: number; shdCol?: number }> = [
-  { nameCol: "PHÍ NÂNG", amountCol: COL.PHI_NANG, shdCol: COL.SHD_NANG },
-  { nameCol: "PHÍ HẠ", amountCol: COL.PHI_HA, shdCol: COL.SHD_HA },
-  { nameCol: "PHÍ VỆ SINH", amountCol: COL.PHI_VE_SINH, shdCol: COL.SHD_VE_SINH },
-  { nameCol: "PHÍ CƯỢC", amountCol: COL.PHI_CUOC },
-  { nameCol: "VÉ CỔNG", amountCol: COL.VE_CONG, shdCol: COL.SHD_CONG },
-  { nameCol: "PHÍ ĐỨT TEM", amountCol: COL.CHI_PHI_DUT_TEM },
-  { nameCol: "CHI PHÍ TRÁI TUYẾN", amountCol: COL.CHI_PHI_TRAI_TUYEN },
-  { nameCol: "CẦU ĐƯỜNG", amountCol: COL.CAU_DUONG },
   { nameCol: "CHI PHÍ PHÁT SINH KHÁC", amountCol: COL.CHI_PHI_PHAT_SINH },
 ];
 
@@ -179,6 +183,18 @@ export function parseKeHoachXe(
       documentSentDate: parseExcelDate(row.getCell(COL.NGAY_GUI_CT).value) ?? undefined,
       description: cellText(row, COL.NOI_DUNG) || undefined,
       notes: cellText(row, COL.GHI_CHU) || undefined,
+      phiNangAmount: cellNum(row, COL.PHI_NANG),
+      shdNang: cellText(row, COL.SHD_NANG) || undefined,
+      phiHaAmount: cellNum(row, COL.PHI_HA),
+      shdHa: cellText(row, COL.SHD_HA) || undefined,
+      phiVeSinhAmount: cellNum(row, COL.PHI_VE_SINH),
+      shdVeSinh: cellText(row, COL.SHD_VE_SINH) || undefined,
+      phiCuocAmount: cellNum(row, COL.PHI_CUOC),
+      veCongAmount: cellNum(row, COL.VE_CONG),
+      shdVeCong: cellText(row, COL.SHD_CONG) || undefined,
+      chiPhiKhacAmount: cellNum(row, COL.CHI_PHI_DUT_TEM),
+      chiPhiTraiTuyenAmount: cellNum(row, COL.CHI_PHI_TRAI_TUYEN),
+      cauDuongAmount: cellNum(row, COL.CAU_DUONG),
       costs,
     });
   });

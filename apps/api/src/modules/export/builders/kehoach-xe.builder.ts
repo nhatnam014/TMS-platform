@@ -78,7 +78,7 @@ export async function buildKeHoachXe(
     );
 
     const dataRow = ws.addRow([
-      idx + 1,
+      tp.tripNumber ?? idx + 1,
       formatDate(tp.tripDate),
       tp.vehiclePlate ?? "",
       tp.customer?.name ?? "",
