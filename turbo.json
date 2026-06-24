@@ -46,6 +46,9 @@
     "db:migrate": {
       "cache": false
     },
+    "db:migrate:prod": {
+      "cache": false
+    },
     "db:seed": {
       "cache": false
     }
