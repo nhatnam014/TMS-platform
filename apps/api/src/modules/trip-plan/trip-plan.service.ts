@@ -50,8 +50,9 @@ export class TripPlanService {
   ): Promise<PaginatedResponse<any>> {
     const page = Number(pagination.page) || 1;
     const limit = Number(pagination.limit) || 20;
-    const sortBy = pagination.sortBy ?? "tripNumber";
-    const sortOrder = pagination.sortOrder ?? "asc";
+    const isDefaultSort = !pagination.sortBy;
+    const sortBy = pagination.sortBy ?? "listSortedAt";
+    const sortOrder = pagination.sortOrder ?? "desc";
     const skip = (page - 1) * limit;
 
     const where: Prisma.TripPlanWhereInput = {};
@@ -110,7 +111,9 @@ export class TripPlanService {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: isDefaultSort
+          ? [{ [sortBy]: sortOrder }, { tripNumber: "asc" }]
+          : { [sortBy]: sortOrder },
         include: TRIP_PLAN_INCLUDE,
       }),
       this.prisma.tripPlan.count({ where }),
@@ -161,12 +164,9 @@ export class TripPlanService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const maxResult = await tx.tripPlan.aggregate({ _max: { tripNumber: true } });
-      const tripNumber = (maxResult._max.tripNumber ?? 0) + 1;
-
       const trip = await tx.tripPlan.create({
         data: {
-          tripNumber,
+          listSortedAt: new Date(),
           tripDate: new Date(dto.tripDate),
           serviceTypeId: dto.serviceTypeId,
           tripMode,

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "trip_plans" ADD COLUMN     "list_sorted_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

@@ -83,6 +83,9 @@ export class ImportService {
     let currentRecordId: string | null = null;
     let currentRecordIsUpdate = false;
     let currentRecordIdentifier: string = "";
+    let currentRecordRowNum = 0;
+    let currentRecordMoocNames = new Set<string>();
+    let currentRecordHasMoocColumn = false;
     const changeGroups = new Map<
       string,
       { rowNum: number; identifier: string; changes: ImportChangedField[] }
@@ -103,9 +106,41 @@ export class ImportService {
       }
     }
 
+    // Deletes moocs left over from a previous import that no longer appear under the
+    // vehicle's "record" row + its "mooc_continuation" rows in this file — only when this
+    // file actually has a SỐ MOOC column (otherwise the file just doesn't track moocs at all).
+    const flushMoocSync = async () => {
+      if (!currentRecordId || !currentRecordIsUpdate || !currentRecordHasMoocColumn) return;
+      const moocsToDelete = await this.prisma.vehicleRecordMooc.findMany({
+        where: {
+          vehicleRecordId: currentRecordId,
+          soMooc: { notIn: [...currentRecordMoocNames] },
+        },
+      });
+      if (moocsToDelete.length === 0) return;
+      await this.prisma.vehicleRecordMooc.deleteMany({
+        where: { id: { in: moocsToDelete.map((m) => m.id) } },
+      });
+      recordChanges(
+        currentRecordId,
+        currentRecordRowNum,
+        currentRecordIdentifier,
+        moocsToDelete.map((m) => ({
+          field: `mooc[${m.soMooc}]`,
+          oldValue: "present",
+          newValue: null,
+        })),
+      );
+    };
+
     for (const row of rows) {
       try {
         if (row.type === "record") {
+          await flushMoocSync();
+          currentRecordMoocNames = new Set();
+          currentRecordHasMoocColumn = !!row.hasMoocColumn;
+          currentRecordRowNum = row.rowNum;
+
           const vehicleData = {
             tenTaiXe: row.tenTaiXe ?? null,
             sdt: row.sdt ?? null,
@@ -117,24 +152,30 @@ export class ImportService {
             ghiChu: row.ghiChu ?? null,
           };
 
-          if (row.id) {
+          const existing = row.id
+            ? await this.prisma.vehicleRecord.findUnique({ where: { id: row.id } })
+            : null;
+
+          if (row.id && !existing) {
+            warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — đã tạo mới`);
+          }
+
+          if (existing) {
             // UPDATE existing record by ID
-            const existing = await this.prisma.vehicleRecord.findUnique({
-              where: { id: row.id },
-            });
             const record = await this.prisma.vehicleRecord.update({
               where: { id: row.id },
               data: vehicleData,
             });
             currentRecordId = record.id;
             currentRecordIsUpdate = true;
-            const identifier = row.bienSo ?? row.tenTaiXe ?? row.id;
+            const identifier = row.bienSo ?? row.tenTaiXe ?? row.id!;
             currentRecordIdentifier = identifier;
 
-            const scalarChanges = existing ? diffFields(existing, vehicleData) : [];
+            const scalarChanges = diffFields(existing, vehicleData);
             recordChanges(currentRecordId, row.rowNum, identifier, scalarChanges);
 
             if (row.soMooc) {
+              currentRecordMoocNames.add(row.soMooc);
               const moocChanges = await this.upsertMooc(currentRecordId, row.soMooc, {
                 hanDangKiem: row.moocHanDangKiem ?? null,
                 hanBaoHiem: row.moocHanBaoHiem ?? null,
@@ -144,7 +185,7 @@ export class ImportService {
             }
             updated++;
           } else {
-            // CREATE new record
+            // CREATE new record (no `id` cell, or `id` cell didn't match any existing record)
             const record = await this.prisma.vehicleRecord.create({
               data: {
                 ...vehicleData,
@@ -173,6 +214,7 @@ export class ImportService {
             errors.push(`Hàng ${row.rowNum}: mooc continuation nhưng chưa có xe nào, bỏ qua`);
             continue;
           }
+          if (row.soMooc) currentRecordMoocNames.add(row.soMooc);
           const moocChanges = await this.upsertMooc(currentRecordId, row.soMooc ?? "", {
             hanDangKiem: row.moocHanDangKiem ?? null,
             hanBaoHiem: row.moocHanBaoHiem ?? null,
@@ -185,6 +227,11 @@ export class ImportService {
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
       }
+    }
+    try {
+      await flushMoocSync();
+    } catch (err) {
+      errors.push(`Lỗi đồng bộ mooc cho xe cuối file: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     const changedRecords: ImportChangedRecord[] = [];
@@ -264,7 +311,7 @@ export class ImportService {
           carrierId = carrier.id;
         }
 
-        await this.prisma.$transaction(async (tx) => {
+        const wasUpdate = await this.prisma.$transaction(async (tx) => {
           const serviceTypeId = row.serviceTypeCode
             ? (
                 await this.lookupOrCreateServiceType(
@@ -280,11 +327,14 @@ export class ImportService {
             ? (await this.lookupOrCreateContainerSize(row.containerSizeCode, warnings, tx)).id
             : null;
 
-          let tripPlanId: string;
-          if (row.id) {
-            // UPDATE existing trip plan
-            const before = await tx.tripPlan.findUnique({ where: { id: row.id } });
+          const before = row.id ? await tx.tripPlan.findUnique({ where: { id: row.id } }) : null;
+          if (row.id && !before) {
+            warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — đã tạo mới`);
+          }
 
+          let tripPlanId: string;
+          if (before) {
+            // UPDATE existing trip plan
             const updateData = {
               tripDate: row.tripDate!,
               ...(row.tripNumber !== undefined && { tripNumber: row.tripNumber }),
@@ -341,46 +391,47 @@ export class ImportService {
               }),
             };
 
-            await tx.tripPlan.update({ where: { id: row.id }, data: updateData });
+            // listSortedAt is bumped on every import-touch (re-enters the "recent batch"
+            // ordering) but is excluded from the changed-field diff/audit log below —
+            // it always differs and isn't a meaningful business-data change.
+            await tx.tripPlan.update({
+              where: { id: before.id },
+              data: { ...updateData, listSortedAt: new Date() },
+            });
 
-            if (before) {
-              const changes = diffFields(before, updateData);
-              if (changes.length > 0) {
-                const identifier = `${row.vehiclePlate ?? "?"} - ${row.tripDate!.toISOString().slice(0, 10)}`;
-                await this.auditService.log(
-                  {
-                    action: "UPDATE",
-                    entityType: "TripPlan",
-                    entityId: row.id,
-                    summary: `Excel import cập nhật chuyến (${identifier}): ${changes.map((c) => c.field).join(", ")}`,
-                    beforeSnapshot: Object.fromEntries(
-                      changes.map((c) => [c.field, c.oldValue]),
-                    ),
-                    afterSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.newValue])),
-                  },
-                  tx,
-                );
-                changedRecords.push({
-                  rowNum: row.rowNum,
-                  identifier,
-                  entityId: row.id,
-                  changes,
-                });
-              }
+            const changes = diffFields(before, updateData);
+            if (changes.length > 0) {
+              const identifier = `${row.vehiclePlate ?? "?"} - ${row.tripDate!.toISOString().slice(0, 10)}`;
+              await this.auditService.log(
+                {
+                  action: "UPDATE",
+                  entityType: "TripPlan",
+                  entityId: before.id,
+                  summary: `Excel import cập nhật chuyến (${identifier}): ${changes.map((c) => c.field).join(", ")}`,
+                  beforeSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.oldValue])),
+                  afterSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.newValue])),
+                },
+                tx,
+              );
+              changedRecords.push({
+                rowNum: row.rowNum,
+                identifier,
+                entityId: before.id,
+                changes,
+              });
             }
 
             // Replace costs with what's in the file
-            await tx.tripPlanCost.deleteMany({ where: { tripPlanId: row.id } });
-            tripPlanId = row.id;
+            await tx.tripPlanCost.deleteMany({ where: { tripPlanId: before.id } });
+            tripPlanId = before.id;
           } else {
-            // CREATE new trip plan — STT cell is ignored; tripNumber is always auto-assigned
-            const maxResult = await tx.tripPlan.aggregate({ _max: { tripNumber: true } });
-            const tripNumber = (maxResult._max.tripNumber ?? 0) + 1;
-
+            // CREATE new trip plan — tripNumber is written verbatim from the STT cell
+            // (no auto-increment); listSortedAt puts it at the top of the default-sorted list
             const tripPlan = await tx.tripPlan.create({
               data: {
                 tripDate: row.tripDate!,
-                tripNumber,
+                tripNumber: row.tripNumber ?? null,
+                listSortedAt: new Date(),
                 serviceTypeId,
                 vehiclePlate: row.vehiclePlate ?? null,
                 customerId: customer.id,
@@ -430,9 +481,11 @@ export class ImportService {
               },
             });
           }
+
+          return !!before;
         });
 
-        if (row.id) updated++;
+        if (wasUpdate) updated++;
         else imported++;
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
@@ -477,13 +530,15 @@ export class ImportService {
         let recordChanges: ImportChangedField[] = [];
         let identifier = row.bienSo ?? row.id ?? `row-${row.rowNum}`;
 
-        if (row.id) {
+        const existing = row.id
+          ? await this.prisma.vehicleRecord.findUnique({ where: { id: row.id } })
+          : null;
+        if (row.id && !existing) {
+          warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — đã tạo mới`);
+        }
+
+        if (existing) {
           // Update existing VehicleRecord by ID
-          const existing = await this.prisma.vehicleRecord.findUnique({ where: { id: row.id } });
-          if (!existing) {
-            warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — bỏ qua`);
-            continue;
-          }
           const updateData = {
             ...(row.bienSo !== undefined && { bienSo: row.bienSo }),
             ...(row.tenTaiXe !== undefined && { tenTaiXe: row.tenTaiXe }),
@@ -495,15 +550,15 @@ export class ImportService {
             ...(row.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: row.ghiChuBaoDuong ?? null }),
           };
           await this.prisma.vehicleRecord.update({
-            where: { id: row.id },
+            where: { id: existing.id },
             data: updateData,
           });
-          vehicleRecordId = row.id;
-          identifier = existing.bienSo ?? row.id;
+          vehicleRecordId = existing.id;
+          identifier = existing.bienSo ?? existing.id;
           recordChanges = diffFields(existing, updateData);
           updated++;
         } else {
-          // Create new VehicleRecord
+          // Create new VehicleRecord (no `id` cell, or `id` cell didn't match any existing record)
           const newRecord = await this.prisma.vehicleRecord.create({
             data: {
               bienSo: row.bienSo ?? null,
@@ -551,7 +606,33 @@ export class ImportService {
           }
         }
 
-        if (row.id && recordChanges.length > 0) {
+        // Delete km rounds for columns this file knows about (has a "LẦN n" header)
+        // but whose cell was left blank for this row — a deliberate clear, not "file doesn't track this round"
+        if (existing) {
+          const presentRoundNumbers = new Set(row.kmRounds.map((r) => r.roundNumber));
+          const roundNumbersToClear = row.knownRoundNumbers.filter(
+            (rn) => !presentRoundNumbers.has(rn),
+          );
+          if (roundNumbersToClear.length > 0) {
+            const roundsToDelete = await this.prisma.vehicleMaintenanceKmRound.findMany({
+              where: { vehicleRecordId, roundNumber: { in: roundNumbersToClear } },
+            });
+            if (roundsToDelete.length > 0) {
+              await this.prisma.vehicleMaintenanceKmRound.deleteMany({
+                where: { vehicleRecordId, roundNumber: { in: roundNumbersToClear } },
+              });
+              for (const r of roundsToDelete) {
+                recordChanges.push({
+                  field: `kmRounds[Lần ${r.roundNumber}].kmCon`,
+                  oldValue: r.kmCon,
+                  newValue: null,
+                });
+              }
+            }
+          }
+        }
+
+        if (existing && recordChanges.length > 0) {
           try {
             await this.auditService.log({
               action: "UPDATE",

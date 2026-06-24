@@ -19,6 +19,8 @@ export interface ParsedMaintenanceRow {
   kmHienTai?: string;
   ghiChuBaoDuong?: string;
   kmRounds: ParsedKmRound[];
+  /** All round numbers this file has a "KM CÒN ... LẦN n" column for (not just the ones with a value on this row) — used to tell "column not in this file" apart from "column present but cleared for this row". */
+  knownRoundNumbers: number[];
 }
 
 function cellText(row: ExcelJS.Row, colIdx: number): string {
@@ -108,6 +110,7 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
 
     // Detect km round columns
     const kmColMap = detectKmRoundCols(headerRow);
+    const knownRoundNumbers = [...kmColMap.keys()];
 
     // ID column: last non-empty header column beyond km columns
     let lastCol = 0;
@@ -149,6 +152,7 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
         kmHienTai: COL_KM_HIEN_TAI > 0 ? cellText(row, COL_KM_HIEN_TAI) || undefined : undefined,
         ghiChuBaoDuong: COL_GHI_CHU > 0 ? cellText(row, COL_GHI_CHU) || undefined : undefined,
         kmRounds,
+        knownRoundNumbers,
       });
     });
   }

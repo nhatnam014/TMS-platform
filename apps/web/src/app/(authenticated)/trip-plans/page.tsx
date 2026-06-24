@@ -578,12 +578,13 @@ function defaultSlots(): FixedSlotsState {
   return result;
 }
 
-function slotsToPayload(slots: FixedSlotsState) {
+function slotsToPayload(slots: FixedSlotsState, isEdit = false) {
+  const empty = isEdit ? null : undefined;
   const toNum = (s: string) => {
     const n = Number(s);
-    return s && !isNaN(n) && n > 0 ? n : undefined;
+    return s && !isNaN(n) && n > 0 ? n : empty;
   };
-  const toStr = (s: string) => s.trim() || undefined;
+  const toStr = (s: string) => s.trim() || empty;
   return {
     phiNangName: toStr(slots.phiNang.name),
     phiNangAmount: toNum(slots.phiNang.amount),
@@ -1435,25 +1436,25 @@ function EditTripModal({
           tripDate,
           serviceTypeId,
           status,
-          vehiclePlate: vehiclePlate || undefined,
+          vehiclePlate: vehiclePlate || null,
           customerId,
-          carrierId: carrierId || undefined,
-          containerSizeId: containerSizeId || undefined,
-          outboundContainerNumber: outboundContainerNumber || undefined,
-          inboundContainerNumber: inboundContainerNumber || undefined,
-          pickupLocationName: pickupLocationName || undefined,
-          loadUnloadLocationName: loadUnloadLocationName || undefined,
-          dropoffLocationName: dropoffLocationName || undefined,
-          documentSentDate: documentSentDate || undefined,
-          description: description || undefined,
-          notes: notes || undefined,
-          ...slotsToPayload(slots),
+          carrierId: carrierId || null,
+          containerSizeId: containerSizeId || null,
+          outboundContainerNumber: outboundContainerNumber || null,
+          inboundContainerNumber: inboundContainerNumber || null,
+          pickupLocationName: pickupLocationName || null,
+          loadUnloadLocationName: loadUnloadLocationName || null,
+          dropoffLocationName: dropoffLocationName || null,
+          documentSentDate: documentSentDate || null,
+          description: description || null,
+          notes: notes || null,
+          ...slotsToPayload(slots, true),
           otherCosts: otherCosts
             .filter((r) => r.amount)
             .map((r) => ({
-              costName: r.name || undefined,
+              costName: r.name || null,
               amount: Number(r.amount),
-              invoiceNumber: r.invoiceNumber || undefined,
+              invoiceNumber: r.invoiceNumber || null,
             })),
         }),
       });
@@ -1884,7 +1885,7 @@ export default function TripPlansPage() {
                     return (
                       <tr key={trip.id} style={{ background: rowBg }}>
                         {/* Left sticky */}
-                        <td style={tdL(0, rowBg)}>{trip.tripNumber ?? "—"}</td>
+                        <td style={tdL(0, rowBg)}>{(filters.page - 1) * 10 + i + 1}</td>
                         <td style={tdL(1, rowBg)}>{formatDate(trip.tripDate)}</td>
                         <td style={{ ...tdL(2, rowBg), fontFamily: "monospace" }}>
                           {trip.vehiclePlate ?? "—"}

@@ -6,6 +6,8 @@ export interface ParsedVehicleRecordRow {
   type: "record" | "mooc_continuation";
   reason?: string;
   id?: string;
+  /** Whether this file has a "SỐ MOOC" column at all — used to tell "file doesn't track moocs" apart from "file lists zero moocs for this vehicle" (only set on "record" rows). */
+  hasMoocColumn?: boolean;
   // VehicleRecord fields
   tenTaiXe?: string;
   sdt?: string;
@@ -151,6 +153,7 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
       rowNum,
       type: "record",
       id: idVal,
+      hasMoocColumn: SO_MOOC > 0,
       tenTaiXe: HO_TEN > 0 ? cellText(row, HO_TEN) || undefined : undefined,
       sdt: DIEN_THOAI > 0 ? cellText(row, DIEN_THOAI) || undefined : undefined,
       loaiXe: LOAI_XE > 0 ? cellText(row, LOAI_XE) || undefined : undefined,

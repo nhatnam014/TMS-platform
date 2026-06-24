@@ -129,6 +129,7 @@ model TripPlan {
   id              String          @id @default(cuid())
   tripDate        DateTime        @map("trip_date") @db.Date
   tripNumber      Int?            @map("trip_number")              // STT
+  listSortedAt    DateTime        @default(now()) @map("list_sorted_at") // bumped on create/import-touch, default sort key
 
   // Service classification — FK to ServiceTypeMaster
   serviceTypeId   String?         @map("service_type_id")
