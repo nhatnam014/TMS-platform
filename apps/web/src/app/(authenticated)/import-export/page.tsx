@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useRef, useState } from "react";
-import type { ImportResult } from "@tms/shared";
+import type { ImportResult, ImportChangedRecord } from "@tms/shared";
 import { useToast } from "@/lib/toast-context";
 
 // ── Generic upload section (used for trip-plans) ─────────────────────────────
@@ -115,6 +115,8 @@ function ImportResultDisplay({
   result: ImportResult | null;
   error: string | null;
 }) {
+  const [showChangedPopup, setShowChangedPopup] = useState(false);
+
   return (
     <>
       {error && (
@@ -194,38 +196,167 @@ function ImportResultDisplay({
             </details>
           )}
           {result.changedRecords && result.changedRecords.length > 0 && (
-            <details>
-              <summary
-                style={{
-                  fontSize: 13,
-                  color: "#1d4ed8",
-                  cursor: "pointer",
-                  padding: "8px 12px",
-                  background: "#eff6ff",
-                  borderRadius: 6,
-                }}
-              >
-                {result.changedRecords.length} bản ghi đã thay đổi (bấm để xem)
-              </summary>
-              <ul style={{ margin: "6px 0 0 0", paddingLeft: 20 }}>
-                {result.changedRecords.map((rec, i) => (
-                  <li key={i} style={{ fontSize: 12, color: "#1e3a8a", marginBottom: 6 }}>
-                    <strong>{rec.identifier}</strong>
-                    <ul style={{ margin: "2px 0 0 0", paddingLeft: 16 }}>
-                      {rec.changes.map((c, j) => (
-                        <li key={j}>
-                          {c.field}: {String(c.oldValue ?? "—")} → {String(c.newValue ?? "—")}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            </details>
+            <button
+              type="button"
+              onClick={() => setShowChangedPopup(true)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                fontSize: 13,
+                color: "#1d4ed8",
+                cursor: "pointer",
+                padding: "8px 12px",
+                background: "#eff6ff",
+                borderRadius: 6,
+                border: "none",
+              }}
+            >
+              {result.changedRecords.length} bản ghi đã thay đổi (bấm để xem)
+            </button>
           )}
         </div>
       )}
+      {result?.changedRecords && result.changedRecords.length > 0 && showChangedPopup && (
+        <ChangedRecordsPopup
+          changedRecords={result.changedRecords}
+          onClose={() => setShowChangedPopup(false)}
+        />
+      )}
     </>
+  );
+}
+
+// ── ChangedRecordsPopup ───────────────────────────────────────────────────────
+
+function ChangedRecordsPopup({
+  changedRecords,
+  onClose,
+}: {
+  changedRecords: ImportChangedRecord[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 10,
+          padding: 24,
+          width: "min(95vw, 720px)",
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}
+        >
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+            {changedRecords.length} bản ghi đã thay đổi
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: 22,
+              cursor: "pointer",
+              color: "#6b7280",
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 10px",
+                    borderBottom: "2px solid #e5e7eb",
+                    background: "#f8fafc",
+                    width: "30%",
+                  }}
+                >
+                  Bản ghi
+                </th>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 10px",
+                    borderBottom: "2px solid #e5e7eb",
+                    background: "#f8fafc",
+                  }}
+                >
+                  Thay đổi
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {changedRecords.map((rec, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                  <td style={{ padding: "8px 10px", verticalAlign: "top", fontWeight: 600 }}>
+                    {rec.identifier}
+                  </td>
+                  <td style={{ padding: "8px 10px", verticalAlign: "top" }}>
+                    {rec.changes.map((c, j) => (
+                      <div key={j} style={{ marginBottom: 2 }}>
+                        <strong>{c.field}</strong>: {String(c.oldValue ?? "—")} →{" "}
+                        {String(c.newValue ?? "—")}
+                      </div>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            borderTop: "1px solid #e5e7eb",
+            paddingTop: 14,
+            marginTop: 14,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              background: "#fff",
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

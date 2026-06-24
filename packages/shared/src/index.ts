@@ -364,7 +364,7 @@ export interface ImportChangedField {
 export interface ImportChangedRecord {
   rowNum: number;
   identifier: string;
-  tripPlanId: string;
+  entityId: string;
   changes: ImportChangedField[];
 }
 

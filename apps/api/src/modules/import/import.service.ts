@@ -16,7 +16,7 @@ function normalizeForDiff(value: unknown): unknown {
   return value;
 }
 
-function diffTripPlanFields(
+function diffFields(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
 ): ImportChangedField[] {
@@ -81,6 +81,27 @@ export class ImportService {
     let imported = 0;
     let updated = 0;
     let currentRecordId: string | null = null;
+    let currentRecordIsUpdate = false;
+    let currentRecordIdentifier: string = "";
+    const changeGroups = new Map<
+      string,
+      { rowNum: number; identifier: string; changes: ImportChangedField[] }
+    >();
+
+    function recordChanges(
+      vehicleRecordId: string,
+      rowNum: number,
+      identifier: string,
+      changes: ImportChangedField[],
+    ) {
+      if (changes.length === 0) return;
+      const existing = changeGroups.get(vehicleRecordId);
+      if (existing) {
+        existing.changes.push(...changes);
+      } else {
+        changeGroups.set(vehicleRecordId, { rowNum, identifier, changes: [...changes] });
+      }
+    }
 
     for (const row of rows) {
       try {
@@ -98,17 +119,28 @@ export class ImportService {
 
           if (row.id) {
             // UPDATE existing record by ID
+            const existing = await this.prisma.vehicleRecord.findUnique({
+              where: { id: row.id },
+            });
             const record = await this.prisma.vehicleRecord.update({
               where: { id: row.id },
               data: vehicleData,
             });
             currentRecordId = record.id;
+            currentRecordIsUpdate = true;
+            const identifier = row.bienSo ?? row.tenTaiXe ?? row.id;
+            currentRecordIdentifier = identifier;
+
+            const scalarChanges = existing ? diffFields(existing, vehicleData) : [];
+            recordChanges(currentRecordId, row.rowNum, identifier, scalarChanges);
+
             if (row.soMooc) {
-              await this.upsertMooc(currentRecordId, row.soMooc, {
+              const moocChanges = await this.upsertMooc(currentRecordId, row.soMooc, {
                 hanDangKiem: row.moocHanDangKiem ?? null,
                 hanBaoHiem: row.moocHanBaoHiem ?? null,
                 hanCaVet: row.moocHanCaVet ?? null,
               });
+              recordChanges(currentRecordId, row.rowNum, identifier, moocChanges);
             }
             updated++;
           } else {
@@ -133,6 +165,7 @@ export class ImportService {
               },
             });
             currentRecordId = record.id;
+            currentRecordIsUpdate = false;
             imported++;
           }
         } else if (row.type === "mooc_continuation") {
@@ -140,15 +173,40 @@ export class ImportService {
             errors.push(`Hàng ${row.rowNum}: mooc continuation nhưng chưa có xe nào, bỏ qua`);
             continue;
           }
-          await this.upsertMooc(currentRecordId, row.soMooc ?? "", {
+          const moocChanges = await this.upsertMooc(currentRecordId, row.soMooc ?? "", {
             hanDangKiem: row.moocHanDangKiem ?? null,
             hanBaoHiem: row.moocHanBaoHiem ?? null,
             hanCaVet: row.moocHanCaVet ?? null,
           });
+          if (currentRecordIsUpdate) {
+            recordChanges(currentRecordId, row.rowNum, currentRecordIdentifier, moocChanges);
+          }
         }
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
       }
+    }
+
+    const changedRecords: ImportChangedRecord[] = [];
+    for (const [vehicleRecordId, group] of changeGroups) {
+      try {
+        await this.auditService.log({
+          action: "UPDATE",
+          entityType: "VehicleRecord",
+          entityId: vehicleRecordId,
+          summary: `Excel import cập nhật xe (${group.identifier}): ${group.changes.map((c) => c.field).join(", ")}`,
+          beforeSnapshot: Object.fromEntries(group.changes.map((c) => [c.field, c.oldValue])),
+          afterSnapshot: Object.fromEntries(group.changes.map((c) => [c.field, c.newValue])),
+        });
+      } catch (err) {
+        console.error("Audit log failed (non-fatal):", err);
+      }
+      changedRecords.push({
+        rowNum: group.rowNum,
+        identifier: group.identifier,
+        entityId: vehicleRecordId,
+        changes: group.changes,
+      });
     }
 
     try {
@@ -161,7 +219,13 @@ export class ImportService {
       console.error("Audit log failed (non-fatal):", err);
     }
 
-    return { imported, updated, warnings, errors };
+    return {
+      imported,
+      updated,
+      warnings,
+      errors,
+      ...(changedRecords.length > 0 && { changedRecords }),
+    };
   }
 
   async importTripPlans(buffer: Buffer): Promise<ImportResult> {
@@ -280,7 +344,7 @@ export class ImportService {
             await tx.tripPlan.update({ where: { id: row.id }, data: updateData });
 
             if (before) {
-              const changes = diffTripPlanFields(before, updateData);
+              const changes = diffFields(before, updateData);
               if (changes.length > 0) {
                 const identifier = `${row.vehiclePlate ?? "?"} - ${row.tripDate!.toISOString().slice(0, 10)}`;
                 await this.auditService.log(
@@ -299,7 +363,7 @@ export class ImportService {
                 changedRecords.push({
                   rowNum: row.rowNum,
                   identifier,
-                  tripPlanId: row.id,
+                  entityId: row.id,
                   changes,
                 });
               }
@@ -405,10 +469,13 @@ export class ImportService {
     const errors: string[] = [];
     let imported = 0;
     let updated = 0;
+    const changedRecords: ImportChangedRecord[] = [];
 
     for (const row of rows) {
       try {
         let vehicleRecordId: string;
+        let recordChanges: ImportChangedField[] = [];
+        let identifier = row.bienSo ?? row.id ?? `row-${row.rowNum}`;
 
         if (row.id) {
           // Update existing VehicleRecord by ID
@@ -417,20 +484,23 @@ export class ImportService {
             warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — bỏ qua`);
             continue;
           }
+          const updateData = {
+            ...(row.bienSo !== undefined && { bienSo: row.bienSo }),
+            ...(row.tenTaiXe !== undefined && { tenTaiXe: row.tenTaiXe }),
+            ...(row.sdt !== undefined && { sdt: row.sdt }),
+            ...(row.loaiXe !== undefined && { loaiXe: row.loaiXe }),
+            ...(row.donViSuaChua !== undefined && { donViSuaChua: row.donViSuaChua ?? null }),
+            ...(row.ngayLam !== undefined && { ngayLam: row.ngayLam ?? null }),
+            ...(row.kmHienTai !== undefined && { kmHienTai: row.kmHienTai ?? null }),
+            ...(row.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: row.ghiChuBaoDuong ?? null }),
+          };
           await this.prisma.vehicleRecord.update({
             where: { id: row.id },
-            data: {
-              ...(row.bienSo !== undefined && { bienSo: row.bienSo }),
-              ...(row.tenTaiXe !== undefined && { tenTaiXe: row.tenTaiXe }),
-              ...(row.sdt !== undefined && { sdt: row.sdt }),
-              ...(row.loaiXe !== undefined && { loaiXe: row.loaiXe }),
-              ...(row.donViSuaChua !== undefined && { donViSuaChua: row.donViSuaChua ?? null }),
-              ...(row.ngayLam !== undefined && { ngayLam: row.ngayLam ?? null }),
-              ...(row.kmHienTai !== undefined && { kmHienTai: row.kmHienTai ?? null }),
-              ...(row.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: row.ghiChuBaoDuong ?? null }),
-            },
+            data: updateData,
           });
           vehicleRecordId = row.id;
+          identifier = existing.bienSo ?? row.id;
+          recordChanges = diffFields(existing, updateData);
           updated++;
         } else {
           // Create new VehicleRecord
@@ -452,6 +522,14 @@ export class ImportService {
 
         // Upsert km rounds
         for (const kmRound of row.kmRounds) {
+          const existingRound = await this.prisma.vehicleMaintenanceKmRound.findUnique({
+            where: {
+              vehicleRecordId_roundNumber: {
+                vehicleRecordId,
+                roundNumber: kmRound.roundNumber,
+              },
+            },
+          });
           await this.prisma.vehicleMaintenanceKmRound.upsert({
             where: {
               vehicleRecordId_roundNumber: {
@@ -461,6 +539,36 @@ export class ImportService {
             },
             create: { vehicleRecordId, roundNumber: kmRound.roundNumber, kmCon: kmRound.kmCon },
             update: { kmCon: kmRound.kmCon },
+          });
+          if (existingRound) {
+            const roundChanges = diffFields(existingRound, { kmCon: kmRound.kmCon });
+            recordChanges.push(
+              ...roundChanges.map((c) => ({
+                ...c,
+                field: `kmRounds[Lần ${kmRound.roundNumber}].${c.field}`,
+              })),
+            );
+          }
+        }
+
+        if (row.id && recordChanges.length > 0) {
+          try {
+            await this.auditService.log({
+              action: "UPDATE",
+              entityType: "VehicleRecord",
+              entityId: vehicleRecordId,
+              summary: `Excel import cập nhật bảo dưỡng (${identifier}): ${recordChanges.map((c) => c.field).join(", ")}`,
+              beforeSnapshot: Object.fromEntries(recordChanges.map((c) => [c.field, c.oldValue])),
+              afterSnapshot: Object.fromEntries(recordChanges.map((c) => [c.field, c.newValue])),
+            });
+          } catch (err) {
+            console.error("Audit log failed (non-fatal):", err);
+          }
+          changedRecords.push({
+            rowNum: row.rowNum,
+            identifier,
+            entityId: vehicleRecordId,
+            changes: recordChanges,
           });
         }
       } catch (err) {
@@ -478,14 +586,20 @@ export class ImportService {
       console.error("Audit log failed (non-fatal):", err);
     }
 
-    return { imported, updated, warnings, errors };
+    return {
+      imported,
+      updated,
+      warnings,
+      errors,
+      ...(changedRecords.length > 0 && { changedRecords }),
+    };
   }
 
   private async upsertMooc(
     vehicleRecordId: string,
     soMooc: string,
     dates: { hanDangKiem: Date | null; hanBaoHiem: Date | null; hanCaVet: Date | null },
-  ) {
+  ): Promise<ImportChangedField[]> {
     const existing = await this.prisma.vehicleRecordMooc.findFirst({
       where: { vehicleRecordId, soMooc },
     });
@@ -494,10 +608,15 @@ export class ImportService {
         where: { id: existing.id },
         data: dates,
       });
+      return diffFields(existing, dates).map((c) => ({
+        ...c,
+        field: `mooc[${soMooc}].${c.field}`,
+      }));
     } else {
       await this.prisma.vehicleRecordMooc.create({
         data: { vehicleRecordId, soMooc, ...dates },
       });
+      return [];
     }
   }
 
