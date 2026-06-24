@@ -603,6 +603,12 @@ export class ImportService {
                 field: `kmRounds[Lần ${kmRound.roundNumber}].${c.field}`,
               })),
             );
+          } else {
+            recordChanges.push({
+              field: `kmRounds[Lần ${kmRound.roundNumber}].kmCon`,
+              oldValue: null,
+              newValue: kmRound.kmCon,
+            });
           }
         }
 
@@ -697,7 +703,13 @@ export class ImportService {
       await this.prisma.vehicleRecordMooc.create({
         data: { vehicleRecordId, soMooc, ...dates },
       });
-      return [];
+      return [
+        { field: `mooc[${soMooc}]`, oldValue: null, newValue: "present" },
+        ...diffFields({}, dates).map((c) => ({
+          ...c,
+          field: `mooc[${soMooc}].${c.field}`,
+        })),
+      ];
     }
   }
 

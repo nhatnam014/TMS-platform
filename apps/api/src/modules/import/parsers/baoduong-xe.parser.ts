@@ -56,13 +56,19 @@ function colIdx(hmap: Record<string, number>, ...candidates: string[]): number {
   return -1;
 }
 
+// Strips Vietnamese diacritics (e.g. "Ầ" U+1EA6 → "A") so header matching tolerates
+// any accented variant, instead of hand-listing every precomposed character.
+function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 // Detect km round columns: match "KM CÒN ... LẦN {n}" (diacritics-tolerant)
 function detectKmRoundCols(headerRow: ExcelJS.Row): Map<number, number> {
   // Returns Map<roundNumber, colIndex>
   const result = new Map<number, number>();
-  const kmRoundPattern = /KM\s*C[OÒ]N.{0,20}L[AÀ]N\s*(\d+)/i;
+  const kmRoundPattern = /KM\s*CON.{0,20}LAN\s*(\d+)/i;
   headerRow.eachCell({ includeEmpty: false }, (cell, colIndex) => {
-    const text = String(cell.value ?? "").trim();
+    const text = stripDiacritics(String(cell.value ?? "").trim());
     const match = text.match(kmRoundPattern);
     if (match) {
       const roundNum = parseInt(match[1], 10);
