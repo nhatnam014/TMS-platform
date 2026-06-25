@@ -291,7 +291,17 @@ export class ImportService {
     let imported = 0;
     let updated = 0;
 
-    for (const row of rows) {
+    // Rows are processed sequentially, so a plain `new Date()` per row would assign
+    // strictly increasing timestamps — and since the list defaults to sorting
+    // listSortedAt desc, that reverses the file's row order on screen. Instead we
+    // derive each row's timestamp from a single batch start time minus its index,
+    // so row 0 (top of the file) gets the latest (largest) timestamp and sorts first,
+    // while the whole batch still lands above older, pre-existing records.
+    const importBatchStartedAt = Date.now();
+
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const row = rows[rowIndex];
+      const listSortedAt = new Date(importBatchStartedAt - rowIndex);
       try {
         if (row.type === "skip") {
           if (row.reason) errors.push(row.reason);
@@ -392,11 +402,11 @@ export class ImportService {
             };
 
             // listSortedAt is bumped on every import-touch (re-enters the "recent batch"
-            // ordering) but is excluded from the changed-field diff/audit log below —
-            // it always differs and isn't a meaningful business-data change.
+            // ordering, in file order) but is excluded from the changed-field diff/audit
+            // log below — it always differs and isn't a meaningful business-data change.
             await tx.tripPlan.update({
               where: { id: before.id },
-              data: { ...updateData, listSortedAt: new Date() },
+              data: { ...updateData, listSortedAt },
             });
 
             const changes = diffFields(before, updateData);
@@ -431,7 +441,7 @@ export class ImportService {
               data: {
                 tripDate: row.tripDate!,
                 tripNumber: row.tripNumber ?? null,
-                listSortedAt: new Date(),
+                listSortedAt,
                 serviceTypeId,
                 vehiclePlate: row.vehiclePlate ?? null,
                 customerId: customer.id,
