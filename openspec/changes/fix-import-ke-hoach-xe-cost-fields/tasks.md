@@ -59,6 +59,27 @@
 - [x] 7.3 `importVehicleMaintenance` (baoduong-xe): currently on `!existing` it pushes a warning and `continue`s (skipping the row entirely, including its `kmRounds`). Change to fall through into the existing CREATE branch (the `else` block that builds `newRecord`) instead of `continue`, keeping a warning with the same "đã tạo mới" wording instead of "bỏ qua"
 - [x] 7.4 Confirm in all three flows that the fallback CREATE path never reuses the stale `id` value from the Excel cell — the new record always gets Prisma's auto-generated `id` (`@default(cuid())`)
 
+## 9. Export builder — kehoach-xe.builder.ts: redesign branded header to new 8-row layout
+
+- [x] 9.1 Change the logo image anchor from A1:F4 to A1:E7: implemented as `ws.addImage(imageId, "A1:E7")` (string-range form — the `{tl,br}` object form's TS typings require internal `Anchor` fields not meant for input, same fix applied in `excel-header-logo`)
+- [x] 9.2 Remove the old `ws.getRow(i).height = 30` loop for rows 1–4; set row heights for rows 1–8 (same values chosen in `excel-header-logo` task 4.3, to keep the three exports visually consistent)
+- [x] 9.3 Replace the old title merge/value (`mergeCells(1,7,2,HEADERS.length)` at G1) with: `ws.mergeCells(3, 8, 3, HEADERS.length < 15 ? 15 : HEADERS.length)` (row 3, cols H–O or wider if the table has more columns), value `"KẾ HOẠCH XE"`, font size 18, bold, color `FF003399`, center-aligned
+- [x] 9.4 Replace the old date merge/value (`mergeCells(3,7,4,HEADERS.length)` at G3) with: `ws.mergeCells(5, 8, 5, HEADERS.length < 15 ? 15 : HEADERS.length)` (row 5, same column range), keeping the existing `headerFrom`/`headerTo` fallback computation unchanged — only the cell position moves. Note: the `from`/`to` fallback logic (`headerFrom`/`headerTo` = explicit param or MIN(tripDate)/today) had never actually been implemented before this session (the function signature had `from?`/`to?` params but both were `void`-discarded, dead code) — implemented it now alongside the header move.
+- [x] 9.5 Leave row 8 blank (spacer); shift the `ws.addRow(HEADERS)` call so the column header row lands on row 9 (was row 5)
+- [x] 9.6 Verify data rows now start at row 10 (was row 6) — confirmed via a smoke script building a real workbook and reading cell positions back
+
+## 10. Import parser — kehoach-xe.parser.ts: convert fixed-index mapping to header-text matching
+
+- [x] 10.1 Added `buildHeaderMap()` + `colIdx()` helpers, plus a `stripDiacritics()` normalizer (handles "đ"/"Đ" explicitly, since Unicode NFD doesn't decompose it) so matching tolerates accent/case variants from a single canonical candidate string per column
+- [x] 10.2 Replaced the `COL = { STT: 1, NGAY: 2, ... }` fixed-index object with a `COLUMN_CANDIDATES` table (header text + occurrence index) resolved once per parse via `resolveColumns()`. **Found and handled a real ambiguity**: columns 18 and 21 in `HEADERS` are both literally `"SHĐ"` (invoice-number columns for PHÍ VỆ SINH and VÉ CỔNG respectively) — a plain first-match header-map would have silently resolved both to column 18. Changed `buildHeaderMap`/`colIdx` to store *all* column indices per header text (not just the first) and added an `occurrence` parameter (0 for `shdVeSinh`, 1 for `shdVeCong`) to disambiguate by left-to-right position among same-named columns.
+- [x] 10.3 Updated every `cellText(row, COL.X)` / `cellNum(row, COL.X)` call site to use the resolved `COL` object from `resolveColumns()`; added a `cellDate()` helper (mirroring `cellText`/`cellNum`'s `colIdx < 1` guard) for the two date columns instead of calling `parseExcelDate` directly on a possibly-invalid column index
+- [x] 10.4 Any `colIdx()` lookup returning `-1` is collected once in `resolveColumns()` and pushed as a single warning per missing column (not per row): `` `Không tìm thấy cột "<label>" trong file` ``
+- [x] 10.5 Verified via smoke test: cost-column handling (8 fixed slots + "CHI PHÍ PHÁT SINH KHÁC") still works correctly when resolved through header-text matching, including with columns swapped/reordered and with one column renamed (produces the expected warning and `undefined` value for that field, not a silent misread)
+
+## 11. Import parser — kehoach-xe.parser.ts: widen header-row detection window
+
+- [x] 11.1 Changed the scan condition from `if (rowNum > 15) return;` to `if (rowNum > 25) return;` so the "stt" search reaches row 9 (new header design) with margin, while still matching row 1 (legacy) and row 5 (prior 4-row design)
+
 ## 8. Verification
 
 - [x] 8.1 `cd apps/api && pnpm exec tsc --noEmit` — confirm no type errors introduced
@@ -76,3 +97,6 @@
 - [ ] 8.13 Manually confirm importing "quản lý xe" (vehicle records) with a row whose `id` cell doesn't match any existing record creates a new record and shows a warning, instead of failing the row
 - [ ] 8.14 Manually confirm importing "bảo dưỡng xe" (vehicle maintenance) with a row whose `id` cell doesn't match any existing record creates a new record (including its `kmRounds`) and shows a warning, instead of skipping the row
 - [ ] 8.15 Manually confirm all three import flows still behave unchanged for rows with no `id` cell at all (always create) and rows with a valid, existing `id` (always update)
+- [x] 8.16 Verified via a smoke script (`buildKeHoachXe()` → load buffer back with ExcelJS): 1 embedded image, title "KẾ HOẠCH XE" at row 3 col 8, date line `From: 10/01/2026  To: <today>` at row 5 col 8, row 8 has zero cells, header row at row 9, data at row 10, including correct disambiguation of the two same-named "SHĐ" columns (col 18 → shdVeSinh, col 21 → shdVeCong). Not visually opened in Excel/LibreOffice — recommend a spot-check before archive (same caveat as `excel-header-logo`).
+- [x] 8.17 Verified via the same smoke script: swapped SỐ XE/KHÁCH HÀNG column positions in the generated file and re-parsed — `vehiclePlate`/`customerName` still came back correct (not swapped). Also tested renaming a column header ("PHÍ NÂNG" → "RENAMED COLUMN") and confirmed the parser produces a `Không tìm thấy cột "PHÍ NÂNG" trong file` warning and leaves `phiNangAmount` as `undefined` for that import, rather than silently misreading another column.
+- [x] 8.18 Verified via the same smoke script: hand-built a workbook with the column-header row at row 1 (no branded header block, 29-column legacy layout) — parser correctly located row 1 as the header and parsed the data row.

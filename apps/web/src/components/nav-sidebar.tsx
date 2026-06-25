@@ -52,7 +52,7 @@ export function NavSidebar() {
       }}
     >
       <div style={{ padding: "0 20px 24px", fontSize: 16, fontWeight: 700, color: "#fff" }}>
-        TMS Platform
+        Anh Khôi Logistic
       </div>
 
       <nav style={{ flex: 1 }}>

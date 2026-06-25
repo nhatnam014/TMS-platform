@@ -4,7 +4,7 @@ import { ToastProvider } from "@/lib/toast-context";
 import { Toaster } from "@/components/toaster";
 
 export const metadata: Metadata = {
-  title: "TMS Platform",
+  title: "Anh Khôi logistic",
   description: "Transportation Management System",
 };
 

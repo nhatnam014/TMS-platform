@@ -1,3 +1,26 @@
+## ADDED Requirements
+
+### Requirement: Exported Excel embeds a branded header block (logo, title, date row)
+
+The "kế hoạch xe" Excel export SHALL prepend an 8-row branded header above the column header row, replacing the prior 4-row header. The header SHALL contain:
+- The company logo image (`apps/img/LogisticCompany.png`) anchored to cells A1:E7 (5 columns × 7 rows)
+- A report title ("KẾ HOẠCH XE"), in hoa, bold, font size 18, color `#003399`, merged across columns H3:O3 (row 3 only), center-aligned
+- A date line merged across columns H5:O5 (row 5 only), font size 11, center-aligned, reading `"From: DD/MM/YYYY  To: DD/MM/YYYY"` using the existing date-fallback logic (explicit `from`/`to` query params if provided, else `MIN(tripDate)` / today)
+- Row 8 SHALL be a blank spacer row
+- The column header row is row 9 (moved from row 5); data begins at row 10 (moved from row 6)
+
+This supersedes the row numbers referenced in the "31-column template layout" requirement below — that requirement's column *order* and field-mapping rules are unaffected by the header move; only the row positions noted there as "row 1" reflect a pre-existing documentation drift (the export has not had column headers at row 1 since the original branded-header change shipped) and should be read as "the column header row" wherever a literal row number is stale.
+
+#### Scenario: Logo, title, and date appear in the new layout
+
+- **WHEN** the kế hoạch xe Excel file is opened
+- **THEN** the logo spans A1:E7, the title "KẾ HOẠCH XE" is centered in a merged cell at row 3 (cols H–O), and a centered From/To date line appears in a merged cell at row 5 (cols H–O), with row 8 blank
+
+#### Scenario: Column headers and data move to rows 9/10
+
+- **WHEN** the export contains 10 TripPlan records
+- **THEN** row 9 contains the column headers and rows 10–19 contain the data
+
 ## MODIFIED Requirements
 
 ### Requirement: Exported Excel matches the actual 31-column template layout

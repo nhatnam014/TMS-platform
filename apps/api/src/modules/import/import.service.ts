@@ -291,12 +291,11 @@ export class ImportService {
     let imported = 0;
     let updated = 0;
 
+    // listSortedAt is no longer the default list sort key (the list now defaults to
+    // tripDate desc) but is kept populated for any future "most recently touched" view.
     // Rows are processed sequentially, so a plain `new Date()` per row would assign
-    // strictly increasing timestamps — and since the list defaults to sorting
-    // listSortedAt desc, that reverses the file's row order on screen. Instead we
-    // derive each row's timestamp from a single batch start time minus its index,
-    // so row 0 (top of the file) gets the latest (largest) timestamp and sorts first,
-    // while the whole batch still lands above older, pre-existing records.
+    // strictly increasing timestamps; deriving each row's timestamp from a single batch
+    // start time minus its index keeps row 0 (top of the file) at the latest timestamp.
     const importBatchStartedAt = Date.now();
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
@@ -436,7 +435,7 @@ export class ImportService {
             tripPlanId = before.id;
           } else {
             // CREATE new trip plan — tripNumber is written verbatim from the STT cell
-            // (no auto-increment); listSortedAt puts it at the top of the default-sorted list
+            // (no auto-increment); listSortedAt is kept populated but no longer drives default sort
             const tripPlan = await tx.tripPlan.create({
               data: {
                 tripDate: row.tripDate!,

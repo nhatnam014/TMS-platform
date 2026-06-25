@@ -1,4 +1,6 @@
 import * as ExcelJS from "exceljs";
+import * as fs from "fs";
+import * as path from "path";
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -7,6 +9,43 @@ function formatDate(d: Date | string | null | undefined): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}/${date.getFullYear()}`;
+}
+
+function addBrandedHeader(
+  ws: ExcelJS.Worksheet,
+  wb: ExcelJS.Workbook,
+  headerFrom: string,
+  headerTo: string,
+) {
+  // Header block is a fixed 8 columns wide (H–O), independent of how many data
+  // columns the table has — it does not stretch to match the table's width.
+  const endCol = 15;
+
+  for (let r = 1; r <= 8; r++) {
+    ws.getRow(r).height = 20;
+  }
+
+  try {
+    const logoPath = path.resolve(__dirname, "..", "..", "..", "..", "..", "img", "LogisticCompany.png");
+    if (fs.existsSync(logoPath)) {
+      const imageId = wb.addImage({ filename: logoPath, extension: "png" });
+      ws.addImage(imageId, "A1:E7");
+    }
+  } catch {
+    // Logo is optional branding — skip silently if missing/unreadable
+  }
+
+  ws.mergeCells(3, 8, 3, endCol);
+  const titleCell = ws.getCell(3, 8);
+  titleCell.value = "KẾ HOẠCH XE";
+  titleCell.font = { bold: true, size: 18, color: { argb: "FF003399" } };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  ws.mergeCells(5, 8, 5, endCol);
+  const dateCell = ws.getCell(5, 8);
+  dateCell.value = `From: ${headerFrom}  To: ${headerTo}`;
+  dateCell.font = { size: 11 };
+  dateCell.alignment = { horizontal: "center", vertical: "middle" };
 }
 
 const HEADERS = [
@@ -51,8 +90,12 @@ export async function buildKeHoachXe(
   from?: string,
   to?: string,
 ): Promise<Buffer> {
-  void from;
-  void to;
+  const headerFrom =
+    from ??
+    (tripPlans.length > 0
+      ? formatDate(new Date(Math.min(...tripPlans.map((t) => new Date(t.tripDate).getTime()))))
+      : "");
+  const headerTo = to ?? formatDate(new Date());
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("kế hoạch xe");
@@ -61,14 +104,16 @@ export async function buildKeHoachXe(
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  // Header at row 1
+  addBrandedHeader(ws, wb, headerFrom, headerTo);
+
+  // Column header row at row 9 (rows 1–8 are the branded header block)
   const headerRowObj = ws.addRow(HEADERS as unknown as any[]);
   headerRowObj.font = { bold: true };
   headerRowObj.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E1F2" } };
   headerRowObj.alignment = { horizontal: "center", wrapText: true };
   headerRowObj.height = 22;
 
-  // Data rows from row 2
+  // Data rows from row 10
   tripPlans.forEach((tp, idx) => {
     const sizeCode = tp.containerSize?.code ?? null;
     const serviceTypeLabel = tp.serviceType?.code ?? "";

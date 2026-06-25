@@ -50,8 +50,7 @@ export class TripPlanService {
   ): Promise<PaginatedResponse<any>> {
     const page = Number(pagination.page) || 1;
     const limit = Number(pagination.limit) || 20;
-    const isDefaultSort = !pagination.sortBy;
-    const sortBy = pagination.sortBy ?? "listSortedAt";
+    const sortBy = pagination.sortBy ?? "tripDate";
     const sortOrder = pagination.sortOrder ?? "desc";
     const skip = (page - 1) * limit;
 
@@ -111,9 +110,7 @@ export class TripPlanService {
         where,
         skip,
         take: limit,
-        orderBy: isDefaultSort
-          ? [{ [sortBy]: sortOrder }, { tripNumber: "asc" }]
-          : { [sortBy]: sortOrder },
+        orderBy: { [sortBy]: sortOrder },
         include: TRIP_PLAN_INCLUDE,
       }),
       this.prisma.tripPlan.count({ where }),

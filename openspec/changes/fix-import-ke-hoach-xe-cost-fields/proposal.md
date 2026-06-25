@@ -10,6 +10,8 @@ While investigating, two related defects in the same import path were found:
 
 All three defects live in the same `importTripPlans` flow and are being fixed together to avoid re-touching this code path multiple times.
 
+**Scope addition (header redesign + parser robustness):** a separate, customer-driven change (`excel-header-logo`) is redesigning the branded header block (logo + title + date) on the `quanly-xe` and `bao-duong-xe` exports to a new layout (7-row logo block, 8-column header with separate title/date rows, column headers at row 9). `kehoach-xe` needs the identical layout, but since this change is already mid-flight on `kehoach-xe.builder.ts` and `kehoach-xe.parser.ts`, the header work for `kehoach-xe` is done **here** instead of in `excel-header-logo`, to avoid two changes racing on the same files. While reworking `kehoach-xe.parser.ts`'s column mapping (already in scope for the cost-field fix above), this change also converts it from fixed column-index mapping to header-text matching (the same approach already used by `quanly-xe.parser.ts`/`baoduong-xe.parser.ts`), so that a user who inserts, removes, or reorders columns in an exported file before re-importing it no longer gets silently misaligned data — a real risk given this flow's columns are mostly financial (phí nâng, phí hạ, vé cổng, cầu đường, ...).
+
 Additionally, several follow-up requirements were raised for the same area. The STT/`tripNumber` design went through two revisions during exploration — see `design.md` Decisions 3'/5'/7'/8/9 for the full history; only the **current (final)** behavior is summarized below:
 
 - The import flow surfaces which existing records were actually changed by an import: each updated `TripPlan` row gets its own Audit Log entry (with before/after snapshots), and the import API response includes a summary of changed records so the import UI can display it immediately after upload.
@@ -32,6 +34,9 @@ Additionally, several follow-up requirements were raised for the same area. The 
 - Extend the shared `ImportResult` type (`packages/shared/src/index.ts`) with an optional `changedRecords` array, and update the import UI (`apps/web/src/app/(authenticated)/import-export/page.tsx`'s `ImportResultDisplay`) to render this list when present.
 - Unify "id cell present but not found in DB" handling across all three import flows (`importVehicles`, `importTripPlans`, `importVehicleMaintenance`): fall back to CREATE (fresh auto-generated `id`) with a warning, instead of erroring (`importVehicles`/`importTripPlans` today) or silently skipping (`importVehicleMaintenance` today).
 - **BREAKING** (data semantics only, no API shape change for existing fields): re-importing a previously exported "kế hoạch xe" file against existing trip plans will now actually update the 8 fixed cost fields, where previously they silently didn't update. The trip plans list's default sort and the meaning of `tripNumber` also change as described above. Any external scripts or saved files relying on the old (no-op for costs) behavior, or assuming `id`-not-found rows error/skip, will see a behavior change.
+- Replace the existing 4-row branded header in `kehoach-xe.builder.ts` (logo A1:F4, title G1:last rows1-2, date G3:last row4, column headers at row 5) with the new 8-row layout matching `excel-header-logo`'s design: logo A1:E7 (5×7), title merged H3:O3 (row 3 only), date merged H5:O5 (row 5 only), blank spacer row 8, column headers at row 9, data from row 10.
+- Convert `kehoach-xe.parser.ts` from fixed column-index mapping (`COL = { STT: 1, NGAY: 2, ... }`) to header-text matching (same `buildHeaderMap`/keyword-lookup approach as `quanly-xe.parser.ts`/`baoduong-xe.parser.ts`), so columns inserted/removed/reordered by a user before re-import still map correctly by header text instead of silently shifting.
+- Widen `kehoach-xe.parser.ts`'s header-row detection window from `rowNum > 15` to `rowNum > 25`, so it finds the column-header row whether it's at row 1 (legacy file), row 5 (prior 4-row design), or row 9 (new 8-row design) — same content-based-detection reasoning as `excel-header-logo`'s parser changes for the other two exports.
 
 ## Capabilities
 
@@ -39,8 +44,8 @@ Additionally, several follow-up requirements were raised for the same area. The 
 (none)
 
 ### Modified Capabilities
-- `trip-plan-excel-import`: cost column mapping for the 8 fixed cost slots changes from "create generic TripPlanCost rows" to "write to dedicated TripPlan scalar fields"; STT is written verbatim into `tripNumber` on both create and update (no auto-increment); `documentSentDate` is now persisted; updates to existing rows are diffed and reported via `changedRecords` + per-record Audit Log entries; a row whose `id` isn't found falls back to CREATE with a warning instead of erroring.
-- `trip-plan-excel-export`: STT column now writes the real `tripNumber` (falling back to row position when null) instead of always writing row position.
+- `trip-plan-excel-import`: cost column mapping for the 8 fixed cost slots changes from "create generic TripPlanCost rows" to "write to dedicated TripPlan scalar fields"; STT is written verbatim into `tripNumber` on both create and update (no auto-increment); `documentSentDate` is now persisted; updates to existing rows are diffed and reported via `changedRecords` + per-record Audit Log entries; a row whose `id` isn't found falls back to CREATE with a warning instead of erroring; column mapping changes from fixed-index to header-text matching; header-row detection window widened to tolerate the header at row 1, 5, or 9.
+- `trip-plan-excel-export`: STT column now writes the real `tripNumber` (falling back to row position when null) instead of always writing row position; branded header redesigned to the new 8-row layout (logo A1:E7, title row 3, date row 5, spacer row 8), column headers move from row 5 to row 9, data from row 10.
 - `trip-plan-crud`: default sort order for `GET /trip-plans` changes from `tripDate desc` to `listSortedAt desc, tripNumber asc`; creating a trip plan via `POST /trip-plans` now sets `listSortedAt = now()`.
 - `vehicle-record-excel-import` (quanly-xe): a row whose `id` isn't found falls back to CREATE with a warning instead of erroring.
 - `vehicle-maintenance-excel-import` (baoduong-xe): a row whose `id` isn't found falls back to CREATE with a warning instead of being silently skipped.
@@ -48,11 +53,12 @@ Additionally, several follow-up requirements were raised for the same area. The 
 ## Impact
 
 - `apps/api/src/modules/import/import.service.ts` (`importTripPlans`, `importVehicles`, `importVehicleMaintenance` — id-not-found fallback in all three; `listSortedAt`/`tripNumber` handling in `importTripPlans`)
-- `apps/api/src/modules/import/parsers/kehoach-xe.parser.ts` (`ParsedTripPlanRow`, column mapping)
-- `apps/api/src/modules/export/builders/kehoach-xe.builder.ts` (STT column source)
+- `apps/api/src/modules/import/parsers/kehoach-xe.parser.ts` (`ParsedTripPlanRow`, column mapping — now header-text-matching instead of fixed indices; header-row detection scan window widened)
+- `apps/api/src/modules/export/builders/kehoach-xe.builder.ts` (STT column source; branded header redesigned to the new 8-row layout)
 - `apps/api/src/modules/trip-plan/trip-plan.service.ts` (`findAll` default sort, `create()` sets `listSortedAt`)
 - `packages/shared/src/index.ts` (`ImportResult.changedRecords`)
 - `apps/web/src/app/(authenticated)/import-export/page.tsx` (`ImportResultDisplay` renders changed records)
 - `apps/web/src/app/(authenticated)/trip-plans/page.tsx` (STT column renders computed display position instead of `tripNumber`)
 - **Database migration required**: add `TripPlan.listSortedAt` (`DateTime`, default `now()`). The dedicated cost columns already exist from `trip-plan-refactor`; `tripNumber` keeps its existing nullable shape.
+- Coordinates with `excel-header-logo`, which applies the identical header layout to `quanly-xe.builder.ts`/`baoduong-xe.builder.ts` and the matching parser scan-range widening to `quanly-xe.parser.ts`/`baoduong-xe.parser.ts`.
 - Note: `openspec/specs/trip-plan-excel-export/spec.md` also still documents the pre-refactor "read from TripPlanCost" model for cost columns even though the actual export code already reads from the fixed-slot fields. This is a pre-existing documentation drift, out of scope for this change, but worth a follow-up doc-only correction.

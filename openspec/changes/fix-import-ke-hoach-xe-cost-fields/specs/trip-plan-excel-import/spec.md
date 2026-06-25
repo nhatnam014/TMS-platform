@@ -1,3 +1,38 @@
+## ADDED Requirements
+
+### Requirement: Column mapping is by header text, not fixed position
+
+The "kế hoạch xe" import parser SHALL map each column by matching the actual header row's cell text against known Vietnamese header labels (case-insensitive, diacritics-tolerant, with known variants per column — same approach as the "quản lý xe" and "bảo dưỡng xe" parsers), instead of assuming each field lives at a fixed column index. This means a file where the user has inserted, removed, or reordered columns before re-importing still maps each known field to its correct data, instead of silently reading the wrong column.
+
+#### Scenario: Reordered columns still map correctly
+
+- **WHEN** an admin re-imports a previously exported "kế hoạch xe" file where the "SỐ XE" and "KHÁCH HÀNG" columns have been swapped
+- **THEN** the imported data has the correct vehicle plate and customer name for each row (not swapped)
+
+#### Scenario: An inserted column does not shift subsequent fields
+
+- **WHEN** an admin re-imports a file where a new column was inserted between "SỐ XE" and "KHÁCH HÀNG"
+- **THEN** all columns after the insertion point (including the 8 fixed cost columns) still map to their correct fields, not shifted by one position
+
+#### Scenario: A renamed/missing expected column produces a warning
+
+- **WHEN** an admin imports a file where a column's header text doesn't match any known variant for a required field
+- **THEN** the import result includes a warning identifying the missing column, rather than silently treating every row's value for that field as absent
+
+### Requirement: Header-row detection tolerates the branded header block or its absence
+
+The "kế hoạch xe" import parser SHALL locate the column-header row by scanning rows for the text "stt" (case-insensitive) in columns 1–5, within the first **25** rows (widened from 15), so it correctly finds the header row whether it's at row 1 (legacy file, no branded header), row 5 (prior 4-row header design), or row 9 (current 8-row header design).
+
+#### Scenario: Import succeeds for a freshly-exported file under the current header design
+
+- **WHEN** an admin imports a "kế hoạch xe" file exported under the current 8-row header design (column headers at row 9)
+- **THEN** the parser locates the header row at row 9 and imports all data rows correctly
+
+#### Scenario: Import succeeds for a legacy file with no header block
+
+- **WHEN** an admin imports a "kế hoạch xe" file with column headers at row 1 (exported before any branded header existed)
+- **THEN** the parser locates the header row at row 1 and imports all data rows correctly
+
 ## MODIFIED Requirements
 
 ### Requirement: Admin can bulk-import trip plans from Excel

@@ -68,7 +68,7 @@ export default function LoginPage() {
         }}
       >
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
-          TMS Platform
+          Anh Khôi Logistic
         </h1>
         <p style={{ color: "#64748b", marginBottom: 28, fontSize: 14 }}>Hệ thống quản lý vận tải</p>
 

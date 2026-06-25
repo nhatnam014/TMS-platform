@@ -65,10 +65,11 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
     workbook.worksheets[0];
   if (!ws) return [];
 
-  // Find header row (first row with STT in col 1, within first 3 rows)
+  // Find header row (first row with STT in col 1, within first 25 rows —
+  // wide enough to cover both legacy files (row 1) and branded-header exports (row 9)
   let headerRowNum = 1;
   ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
-    if (headerRowNum === 1 && rowNum <= 10) {
+    if (headerRowNum === 1 && rowNum <= 25) {
       const text = String(row.getCell(1).value ?? "").toLowerCase();
       if (text === "stt" || text.includes("stt")) headerRowNum = rowNum;
     }

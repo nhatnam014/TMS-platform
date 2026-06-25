@@ -82,10 +82,11 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
   const results: ParsedMaintenanceRow[] = [];
 
   for (const ws of workbook.worksheets) {
-    // Find header row: first row with identifiable header keywords, within first 5 rows
+    // Find header row: first row with identifiable header keywords, within first 25 rows —
+    // wide enough to cover both legacy files (row 1) and branded-header exports (row 9)
     let headerRowNum = 1;
     ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
-      if (headerRowNum === 1 && rowNum <= 5) {
+      if (headerRowNum === 1 && rowNum <= 25) {
         let found = false;
         row.eachCell({ includeEmpty: false }, (cell) => {
           const txt = String(cell.value ?? "").toUpperCase().trim();
