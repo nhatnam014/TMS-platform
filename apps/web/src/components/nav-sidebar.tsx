@@ -16,6 +16,7 @@ const BASE_NAV_ITEMS = [
   { href: "/service-types", label: "Loại dịch vụ" },
   { href: "/container-sizes", label: "Size cont" },
   { href: "/cost-templates", label: "Danh mục chi phí" },
+  { href: "/import-export", label: "Nhập / Xuất Excel" },
 ];
 
 export function NavSidebar() {
@@ -28,7 +29,6 @@ export function NavSidebar() {
       ? [
           { href: "/audit-logs", label: "Nhật ký kiểm tra" },
           { href: "/users", label: "Người dùng" },
-          { href: "/import-export", label: "Nhập / Xuất Excel" },
         ]
       : []),
   ];
