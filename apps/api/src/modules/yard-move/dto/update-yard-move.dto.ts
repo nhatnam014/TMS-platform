@@ -1,42 +1,51 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, Matches } from "class-validator";
-import { FactoryZone } from "@tms/shared";
-
-const FACTORY_ZONE_VALUES = Object.values(FactoryZone) as string[];
+import { IsBoolean, IsOptional, IsString } from "class-validator";
 
 export class UpdateYardMoveDto {
-  @ApiPropertyOptional({ example: "2026-05-19" })
+  @ApiPropertyOptional({ example: "24/06" })
   @IsOptional()
-  @IsDateString()
+  @IsString()
   date?: string;
 
-  @ApiPropertyOptional({ example: "ABCD1234567" })
+  @ApiPropertyOptional({ example: "AK" })
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Z]{4}\d{7}$/, {
-    message: "Container number must be 4 uppercase letters followed by 7 digits",
-  })
+  gps?: string;
+
+  @ApiPropertyOptional({ example: "PHAN VĂN TÍNH" })
+  @IsOptional()
+  @IsString()
+  fullName?: string;
+
+  @ApiPropertyOptional({ example: "60H21349" })
+  @IsOptional()
+  @IsString()
+  truck?: string;
+
+  @ApiPropertyOptional({ example: "60RM03615" })
+  @IsOptional()
+  @IsString()
+  mooc?: string;
+
+  @ApiPropertyOptional({ example: "SGN3247340" })
+  @IsOptional()
+  @IsString()
+  booking?: string;
+
+  @ApiPropertyOptional({ example: "TXGU6684130" })
+  @IsOptional()
+  @IsString()
   containerNumber?: string;
 
-  @ApiPropertyOptional({ enum: FACTORY_ZONE_VALUES })
-  @IsOptional()
-  @IsEnum(FactoryZone, { message: `fromZone must be one of: ${FACTORY_ZONE_VALUES.join(", ")}` })
-  fromZone?: string;
-
-  @ApiPropertyOptional({ enum: FACTORY_ZONE_VALUES })
-  @IsOptional()
-  @IsEnum(FactoryZone, { message: `toZone must be one of: ${FACTORY_ZONE_VALUES.join(", ")}` })
-  toZone?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  locationId?: string;
-
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: "XONG K3" })
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  daKeo?: string;
 
   @ApiPropertyOptional({ description: "Set to false to soft-delete the yard move" })
   @IsOptional()

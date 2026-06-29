@@ -1,37 +1,49 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, Matches } from "class-validator";
-import { FactoryZone } from "@tms/shared";
-
-const FACTORY_ZONE_VALUES = Object.values(FactoryZone) as string[];
+import { IsNotEmpty, IsOptional, IsString } from "class-validator";
 
 export class CreateYardMoveDto {
-  @ApiProperty({ example: "2026-05-19" })
-  @IsDateString()
+  @ApiProperty({ example: "24/06" })
+  @IsString()
+  @IsNotEmpty()
   date!: string;
 
-  @ApiProperty({ example: "ABCD1234567" })
+  @ApiPropertyOptional({ example: "AK" })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @Matches(/^[A-Z]{4}\d{7}$/, {
-    message: "Container number must be 4 uppercase letters followed by 7 digits",
-  })
-  containerNumber!: string;
+  gps?: string;
 
-  @ApiProperty({ enum: FACTORY_ZONE_VALUES })
-  @IsEnum(FactoryZone, { message: `fromZone must be one of: ${FACTORY_ZONE_VALUES.join(", ")}` })
-  fromZone!: string;
-
-  @ApiProperty({ enum: FACTORY_ZONE_VALUES })
-  @IsEnum(FactoryZone, { message: `toZone must be one of: ${FACTORY_ZONE_VALUES.join(", ")}` })
-  toZone!: string;
-
-  @ApiProperty()
+  @ApiPropertyOptional({ example: "PHAN VĂN TÍNH" })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  locationId!: string;
+  fullName?: string;
+
+  @ApiPropertyOptional({ example: "60H21349" })
+  @IsOptional()
+  @IsString()
+  truck?: string;
+
+  @ApiPropertyOptional({ example: "60RM03615" })
+  @IsOptional()
+  @IsString()
+  mooc?: string;
+
+  @ApiPropertyOptional({ example: "SGN3247340" })
+  @IsOptional()
+  @IsString()
+  booking?: string;
+
+  @ApiPropertyOptional({ example: "TXGU6684130" })
+  @IsOptional()
+  @IsString()
+  containerNumber?: string;
+
+  @ApiPropertyOptional({ example: "XONG K3" })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  notes?: string;
+  daKeo?: string;
 }

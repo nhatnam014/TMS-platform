@@ -2,73 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/lib/toast-context";
-import { formatDate } from "@/lib/date-utils";
-import { SelectInput } from "@/components/SelectInput";
-
-type YardMoveStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-type YardCostType = "YARD_HANDLING" | "FORKLIFT" | "OVERTIME" | "OTHER";
-type FactoryZone = "STAGING_DROP" | "LOADING_DOCK" | "STAGING_READY";
-
-interface YardMoveCost {
-  id: string;
-  type: YardCostType;
-  amount: number;
-  note: string | null;
-}
 
 interface YardMoveRow {
   id: string;
   date: string;
-  status: YardMoveStatus;
-  fromZone: FactoryZone;
-  toZone: FactoryZone;
+  gps: string | null;
+  fullName: string | null;
+  truck: string | null;
+  mooc: string | null;
+  booking: string | null;
+  containerNumber: string | null;
   notes: string | null;
+  daKeo: string | null;
+}
+
+interface YardMoveFormValues {
+  date: string;
+  gps: string;
+  fullName: string;
+  truck: string;
+  mooc: string;
+  booking: string;
   containerNumber: string;
-  location: { id: string; code: string; name: string } | null;
-  costs: YardMoveCost[];
+  notes: string;
+  daKeo: string;
 }
-
-interface LocationOption {
-  id: string;
-  code: string;
-  name: string;
-}
-
-const STATUS_LABELS: Record<YardMoveStatus, string> = {
-  PENDING: "Chờ xử lý",
-  IN_PROGRESS: "Đang thực hiện",
-  COMPLETED: "Hoàn thành",
-  CANCELLED: "Đã hủy",
-};
-
-const STATUS_COLORS: Record<YardMoveStatus, { bg: string; color: string }> = {
-  PENDING: { bg: "#f1f5f9", color: "#64748b" },
-  IN_PROGRESS: { bg: "#dbeafe", color: "#1d4ed8" },
-  COMPLETED: { bg: "#dcfce7", color: "#166534" },
-  CANCELLED: { bg: "#fee2e2", color: "#b91c1c" },
-};
-
-const ZONE_LABELS: Record<FactoryZone, string> = {
-  STAGING_DROP: "Khu nhập",
-  LOADING_DOCK: "Bến đóng hàng",
-  STAGING_READY: "Khu xuất",
-};
-
-const FACTORY_ZONES: FactoryZone[] = ["STAGING_DROP", "LOADING_DOCK", "STAGING_READY"];
-
-const COST_TYPE_LABELS: Record<YardCostType, string> = {
-  YARD_HANDLING: "Xếp dỡ bãi",
-  FORKLIFT: "Xe nâng",
-  OVERTIME: "Ngoài giờ",
-  OTHER: "Khác",
-};
-
-const NEXT_STATUS: Partial<Record<YardMoveStatus, { status: YardMoveStatus; label: string }>> = {
-  PENDING: { status: "IN_PROGRESS", label: "Bắt đầu" },
-  IN_PROGRESS: { status: "COMPLETED", label: "Hoàn thành" },
-};
-
-const TERMINAL: YardMoveStatus[] = ["COMPLETED", "CANCELLED"];
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 
@@ -196,6 +154,121 @@ function YmField({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+const EMPTY_FORM: YardMoveFormValues = {
+  date: "",
+  gps: "",
+  fullName: "",
+  truck: "",
+  mooc: "",
+  booking: "",
+  containerNumber: "",
+  notes: "",
+  daKeo: "",
+};
+
+function YardMoveFormFields({
+  values,
+  onChange,
+}: {
+  values: YardMoveFormValues;
+  onChange: (next: YardMoveFormValues) => void;
+}) {
+  function setField(key: keyof YardMoveFormValues, value: string) {
+    onChange({ ...values, [key]: value });
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "0 20px",
+        border: "1px solid #e2e8f0",
+        borderRadius: 8,
+        padding: "16px 20px",
+        marginBottom: 16,
+      }}
+    >
+      <YmField label="Ngày *">
+        <input
+          type="text"
+          value={values.date}
+          onChange={(e) => setField("date", e.target.value)}
+          placeholder="24/06"
+          style={ymInputStyle}
+          required
+        />
+      </YmField>
+      <YmField label="GPS">
+        <input
+          type="text"
+          value={values.gps}
+          onChange={(e) => setField("gps", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <YmField label="Full Name">
+        <input
+          type="text"
+          value={values.fullName}
+          onChange={(e) => setField("fullName", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <YmField label="Truck">
+        <input
+          type="text"
+          value={values.truck}
+          onChange={(e) => setField("truck", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <YmField label="Mooc">
+        <input
+          type="text"
+          value={values.mooc}
+          onChange={(e) => setField("mooc", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <YmField label="Booking">
+        <input
+          type="text"
+          value={values.booking}
+          onChange={(e) => setField("booking", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <YmField label="Container">
+        <input
+          type="text"
+          value={values.containerNumber}
+          onChange={(e) => setField("containerNumber", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <YmField label="Đã kéo">
+        <input
+          type="text"
+          value={values.daKeo}
+          onChange={(e) => setField("daKeo", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <YmField label="Ghi chú">
+          <textarea
+            value={values.notes}
+            onChange={(e) => setField("notes", e.target.value)}
+            rows={2}
+            style={{ ...ymInputStyle, resize: "vertical" }}
+          />
+        </YmField>
+      </div>
+    </div>
+  );
+}
+
 // ─── CREATE MODAL ─────────────────────────────────────────────────────────────
 
 function CreateYardMoveModal({
@@ -206,37 +279,14 @@ function CreateYardMoveModal({
   onCreated: () => void;
 }) {
   const toast = useToast();
-  const [locations, setLocations] = useState<LocationOption[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate] = useState(today);
-  const [containerNumber, setContainerNumber] = useState("");
-  const [fromZone, setFromZone] = useState("");
-  const [toZone, setToZone] = useState("");
-  const [locationId, setLocationId] = useState("");
-  const [notes, setNotes] = useState("");
-
-  const zoneOptions = FACTORY_ZONES.map((z) => ({ value: z, label: ZONE_LABELS[z] }));
-  const locationSelectOptions = locations.map((l) => ({
-    value: l.id,
-    label: `${l.name} (${l.code})`,
-  }));
-
-  useEffect(() => {
-    fetch("/api/locations?limit=500")
-      .then((r) => r.json())
-      .then((res) => setLocations(res.data ?? res))
-      .catch(() => {})
-      .finally(() => setLoadingOptions(false));
-  }, []);
+  const [values, setValues] = useState<YardMoveFormValues>(EMPTY_FORM);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!date || !containerNumber || !fromZone || !toZone || !locationId) {
-      setFormError("Vui lòng điền đầy đủ các trường bắt buộc.");
+    if (!values.date.trim()) {
+      setFormError("Vui lòng nhập ngày.");
       return;
     }
     setSubmitting(true);
@@ -246,12 +296,15 @@ function CreateYardMoveModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date,
-          containerNumber,
-          fromZone,
-          toZone,
-          locationId,
-          notes: notes || undefined,
+          date: values.date,
+          gps: values.gps || undefined,
+          fullName: values.fullName || undefined,
+          truck: values.truck || undefined,
+          mooc: values.mooc || undefined,
+          booking: values.booking || undefined,
+          containerNumber: values.containerNumber || undefined,
+          notes: values.notes || undefined,
+          daKeo: values.daKeo || undefined,
         }),
       });
       if (!res.ok) {
@@ -271,223 +324,23 @@ function CreateYardMoveModal({
 
   return (
     <Modal title="Tạo lệnh bãi mới" onClose={onClose} wide>
-      {loadingOptions ? (
-        <p style={{ textAlign: "center", color: "#94a3b8", padding: "24px 0" }}>
-          Đang tải dữ liệu...
-        </p>
-      ) : (
-        <form onSubmit={handleSubmit}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "0 20px",
-              border: "1px solid #e2e8f0",
-              borderRadius: 8,
-              padding: "16px 20px",
-              marginBottom: 16,
-            }}
+      <form onSubmit={handleSubmit}>
+        <YardMoveFormFields values={values} onChange={setValues} />
+        {formError && (
+          <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>
+        )}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button type="button" onClick={onClose} style={ymBtnSecondary}>
+            Hủy
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{ ...ymBtnPrimary, opacity: submitting ? 0.7 : 1 }}
           >
-            <YmField label="Ngày *">
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                style={ymInputStyle}
-                required
-              />
-            </YmField>
-            <YmField label="Số Container * (VD: ABCD1234567)">
-              <input
-                type="text"
-                value={containerNumber}
-                onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
-                pattern="[A-Z]{4}[0-9]{7}"
-                placeholder="ABCD1234567"
-                style={ymInputStyle}
-                required
-              />
-            </YmField>
-            <YmField label="Từ khu vực *">
-              <SelectInput
-                options={zoneOptions}
-                value={fromZone}
-                onChange={setFromZone}
-                placeholder="— Chọn khu vực —"
-                required
-              />
-            </YmField>
-            <YmField label="Đến khu vực *">
-              <SelectInput
-                options={zoneOptions}
-                value={toZone}
-                onChange={setToZone}
-                placeholder="— Chọn khu vực —"
-                required
-              />
-            </YmField>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <YmField label="Địa điểm *">
-                <SelectInput
-                  options={locationSelectOptions}
-                  value={locationId}
-                  onChange={setLocationId}
-                  placeholder="— Chọn địa điểm —"
-                  required
-                />
-              </YmField>
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <YmField label="Ghi chú">
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  style={{ ...ymInputStyle, resize: "vertical" }}
-                />
-              </YmField>
-            </div>
-          </div>
-          {formError && (
-            <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>
-          )}
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button type="button" onClick={onClose} style={ymBtnSecondary}>
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{ ...ymBtnPrimary, opacity: submitting ? 0.7 : 1 }}
-            >
-              {submitting ? "Đang tạo..." : "Tạo lệnh bãi"}
-            </button>
-          </div>
-        </form>
-      )}
-    </Modal>
-  );
-}
-
-// ─── COST MODAL ───────────────────────────────────────────────────────────────
-
-function CostModal({
-  moveId,
-  onClose,
-  onAdded,
-}: {
-  moveId: string;
-  onClose: () => void;
-  onAdded: () => void;
-}) {
-  const toast = useToast();
-  const [type, setType] = useState<YardCostType>("YARD_HANDLING");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const amt = Number(amount);
-    if (!amount || isNaN(amt) || amt <= 0) {
-      setFormError("Vui lòng nhập số tiền hợp lệ.");
-      return;
-    }
-    setSubmitting(true);
-    setFormError(null);
-    try {
-      const res = await fetch(`/api/yard-moves/${moveId}/costs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, amount: amt, note: note || undefined }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.message ?? `Lỗi ${res.status}`);
-      }
-      toast.success("Thêm chi phí bãi thành công");
-      onAdded();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-      setFormError(msg);
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: "1px solid #e2e8f0",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#475569",
-    marginBottom: 4,
-  };
-
-  return (
-    <Modal title="Thêm chi phí lệnh bãi" onClose={onClose}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <label style={labelStyle}>Loại chi phí *</label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as YardCostType)}
-            style={inputStyle}
-          >
-            {(Object.entries(COST_TYPE_LABELS) as [YardCostType, string][]).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+            {submitting ? "Đang tạo..." : "Tạo lệnh bãi"}
+          </button>
         </div>
-        <div>
-          <label style={labelStyle}>Số tiền (VNĐ) *</label>
-          <input
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            style={inputStyle}
-            placeholder="500000"
-            required
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Ghi chú</label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            style={{ ...inputStyle, resize: "vertical" }}
-          />
-        </div>
-        {formError && <p style={{ color: "#dc2626", fontSize: 13 }}>{formError}</p>}
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            padding: "9px 18px",
-            background: "#10b981",
-            color: "#fff",
-            border: "none",
-            borderRadius: 7,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          {submitting ? "Đang lưu..." : "Thêm chi phí"}
-        </button>
       </form>
     </Modal>
   );
@@ -505,32 +358,26 @@ function EditYardMoveModal({
   onSaved: () => void;
 }) {
   const toast = useToast();
-  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const [date, setDate] = useState(move.date.slice(0, 10));
-  const [containerNumber, setContainerNumber] = useState(move.containerNumber);
-  const [fromZone, setFromZone] = useState(move.fromZone as string);
-  const [toZone, setToZone] = useState(move.toZone as string);
-  const [locationId, setLocationId] = useState(move.location?.id ?? "");
-  const [notes, setNotes] = useState(move.notes ?? "");
-
-  const zoneOptions = FACTORY_ZONES.map((z) => ({ value: z, label: ZONE_LABELS[z] }));
-  const locationSelectOptions = locations.map((l) => ({
-    value: l.id,
-    label: `${l.name} (${l.code})`,
-  }));
-
-  useEffect(() => {
-    fetch("/api/locations?limit=500")
-      .then((r) => r.json())
-      .then((res) => setLocations(res.data ?? res))
-      .catch(() => {});
-  }, []);
+  const [values, setValues] = useState<YardMoveFormValues>({
+    date: move.date ?? "",
+    gps: move.gps ?? "",
+    fullName: move.fullName ?? "",
+    truck: move.truck ?? "",
+    mooc: move.mooc ?? "",
+    booking: move.booking ?? "",
+    containerNumber: move.containerNumber ?? "",
+    notes: move.notes ?? "",
+    daKeo: move.daKeo ?? "",
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!values.date.trim()) {
+      setFormError("Vui lòng nhập ngày.");
+      return;
+    }
     setSubmitting(true);
     setFormError(null);
     try {
@@ -538,12 +385,15 @@ function EditYardMoveModal({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date,
-          containerNumber,
-          fromZone,
-          toZone,
-          locationId,
-          notes: notes || undefined,
+          date: values.date,
+          gps: values.gps || undefined,
+          fullName: values.fullName || undefined,
+          truck: values.truck || undefined,
+          mooc: values.mooc || undefined,
+          booking: values.booking || undefined,
+          containerNumber: values.containerNumber || undefined,
+          notes: values.notes || undefined,
+          daKeo: values.daKeo || undefined,
         }),
       });
       if (!res.ok) {
@@ -564,77 +414,7 @@ function EditYardMoveModal({
   return (
     <Modal title="Sửa lệnh bãi" onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "0 20px",
-            border: "1px solid #e2e8f0",
-            borderRadius: 8,
-            padding: "16px 20px",
-            marginBottom: 16,
-          }}
-        >
-          <YmField label="Ngày *">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={ymInputStyle}
-              required
-            />
-          </YmField>
-          <YmField label="Số Container * (VD: ABCD1234567)">
-            <input
-              type="text"
-              value={containerNumber}
-              onChange={(e) => setContainerNumber(e.target.value.toUpperCase())}
-              pattern="[A-Z]{4}[0-9]{7}"
-              placeholder="ABCD1234567"
-              style={ymInputStyle}
-              required
-            />
-          </YmField>
-          <YmField label="Từ khu vực *">
-            <SelectInput
-              options={zoneOptions}
-              value={fromZone}
-              onChange={setFromZone}
-              placeholder="— Chọn khu vực —"
-              required
-            />
-          </YmField>
-          <YmField label="Đến khu vực *">
-            <SelectInput
-              options={zoneOptions}
-              value={toZone}
-              onChange={setToZone}
-              placeholder="— Chọn khu vực —"
-              required
-            />
-          </YmField>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <YmField label="Địa điểm *">
-              <SelectInput
-                options={locationSelectOptions}
-                value={locationId}
-                onChange={setLocationId}
-                placeholder="— Chọn địa điểm —"
-                required
-              />
-            </YmField>
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <YmField label="Ghi chú">
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                style={{ ...ymInputStyle, resize: "vertical" }}
-              />
-            </YmField>
-          </div>
-        </div>
+        <YardMoveFormFields values={values} onChange={setValues} />
         {formError && (
           <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>
         )}
@@ -659,6 +439,20 @@ function EditYardMoveModal({
 
 const PAGE_SIZE_YARD = 10;
 
+const TABLE_HEADERS = [
+  "STT",
+  "Ngày",
+  "GPS",
+  "Full Name",
+  "Truck",
+  "Mooc",
+  "Booking",
+  "Container",
+  "Ghi chú",
+  "Đã kéo",
+  "Thao tác",
+];
+
 export default function YardMovesPage() {
   const toast = useToast();
   const [moves, setMoves] = useState<YardMoveRow[]>([]);
@@ -667,24 +461,16 @@ export default function YardMovesPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [costMoveId, setCostMoveId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editMove, setEditMove] = useState<YardMoveRow | null>(null);
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [statusFilter, setStatusFilter] = useState<YardMoveStatus | "">("");
 
   function fetchMoves(currentPage = page) {
     const params = new URLSearchParams();
     params.set("page", String(currentPage));
     params.set("limit", String(PAGE_SIZE_YARD));
     if (search.trim()) params.set("search", search.trim());
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
-    if (statusFilter) params.set("status", statusFilter);
     fetch(`/api/yard-moves?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -692,7 +478,6 @@ export default function YardMovesPage() {
         setMoves(data.data);
         setTotal(data.meta.total);
         setTotalPages(data.meta.totalPages);
-        setActionError(null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Lỗi không xác định"))
       .finally(() => setLoading(false));
@@ -700,7 +485,7 @@ export default function YardMovesPage() {
 
   useEffect(() => {
     fetchMoves(page);
-  }, [page, search, dateFrom, dateTo, statusFilter]);
+  }, [page, search]);
 
   async function handleSoftDelete(id: string) {
     setConfirmDeleteId(null);
@@ -718,27 +503,6 @@ export default function YardMovesPage() {
       fetchMoves(page);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Lỗi xoá lệnh bãi");
-    }
-  }
-
-  async function handleStatusChange(id: string, status: YardMoveStatus) {
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/yard-moves/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.message ?? `Lỗi ${res.status}`);
-      }
-      toast.success("Cập nhật trạng thái lệnh bãi thành công");
-      fetchMoves(page);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-      setActionError(msg);
-      toast.error(msg);
     }
   }
 
@@ -793,7 +557,7 @@ export default function YardMovesPage() {
       >
         <input
           type="text"
-          placeholder="Tìm container, khu vực, địa điểm..."
+          placeholder="Tìm theo GPS, tên, truck, mooc, booking, container..."
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -804,58 +568,10 @@ export default function YardMovesPage() {
             border: "1px solid #e2e8f0",
             borderRadius: 6,
             fontSize: 13,
-            minWidth: 240,
-            flex: "1 1 240px",
+            minWidth: 280,
+            flex: "1 1 280px",
           }}
         />
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => {
-            setDateFrom(e.target.value);
-            setPage(1);
-          }}
-          style={{
-            padding: "7px 10px",
-            border: "1px solid #e2e8f0",
-            borderRadius: 6,
-            fontSize: 13,
-          }}
-        />
-        <span style={{ fontSize: 13, color: "#64748b" }}>—</span>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => {
-            setDateTo(e.target.value);
-            setPage(1);
-          }}
-          style={{
-            padding: "7px 10px",
-            border: "1px solid #e2e8f0",
-            borderRadius: 6,
-            fontSize: 13,
-          }}
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as YardMoveStatus | "");
-            setPage(1);
-          }}
-          style={{
-            padding: "7px 10px",
-            border: "1px solid #e2e8f0",
-            borderRadius: 6,
-            fontSize: 13,
-          }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="PENDING">Chờ xử lý</option>
-          <option value="IN_PROGRESS">Đang thực hiện</option>
-          <option value="COMPLETED">Hoàn thành</option>
-          <option value="CANCELLED">Đã hủy</option>
-        </select>
       </div>
 
       {error && (
@@ -871,20 +587,6 @@ export default function YardMovesPage() {
           {error}
         </p>
       )}
-      {actionError && (
-        <p
-          style={{
-            color: "#dc2626",
-            background: "#fef2f2",
-            padding: "10px 14px",
-            borderRadius: 8,
-            marginBottom: 16,
-            fontSize: 13,
-          }}
-        >
-          {actionError}
-        </p>
-      )}
 
       <div
         style={{
@@ -894,18 +596,10 @@ export default function YardMovesPage() {
           overflowX: "auto",
         }}
       >
-        <table style={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", minWidth: 1100, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-              {[
-                "Ngày",
-                "Container",
-                "Từ khu vực",
-                "Đến khu vực",
-                "Địa điểm",
-                "Trạng thái",
-                "Thao tác",
-              ].map((h) => (
+              {TABLE_HEADERS.map((h) => (
                 <th
                   key={h}
                   style={{
@@ -926,23 +620,25 @@ export default function YardMovesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                <td
+                  colSpan={TABLE_HEADERS.length}
+                  style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}
+                >
                   Đang tải...
                 </td>
               </tr>
             ) : moves.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                <td
+                  colSpan={TABLE_HEADERS.length}
+                  style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}
+                >
                   Không có dữ liệu
                 </td>
               </tr>
             ) : (
               moves.map((m, i) => {
-                const { bg, color } = STATUS_COLORS[m.status];
-                const next = NEXT_STATUS[m.status];
-                const isTerminal = TERMINAL.includes(m.status);
-                const showCost = m.status === "IN_PROGRESS" || m.status === "COMPLETED";
-
+                const stt = (page - 1) * PAGE_SIZE_YARD + i + 1;
                 return (
                   <tr
                     key={m.id}
@@ -951,45 +647,24 @@ export default function YardMovesPage() {
                       background: i % 2 === 0 ? "#fff" : "#fafafa",
                     }}
                   >
-                    <td
-                      style={{
-                        padding: "10px 14px",
-                        fontSize: 12,
-                        color: "#64748b",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {formatDate(m.date)}
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b" }}>{stt}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13, whiteSpace: "nowrap" }}>
+                      {m.date || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", fontSize: 13 }}>
-                      <span style={{ fontWeight: 600, fontFamily: "monospace" }}>
-                        {m.containerNumber || "—"}
-                      </span>
+                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.gps || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.fullName || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13, fontFamily: "monospace" }}>
+                      {m.truck || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b" }}>
-                      {ZONE_LABELS[m.fromZone]}
+                    <td style={{ padding: "10px 14px", fontSize: 13, fontFamily: "monospace" }}>
+                      {m.mooc || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b" }}>
-                      {ZONE_LABELS[m.toZone]}
+                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.booking || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13, fontFamily: "monospace" }}>
+                      {m.containerNumber || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", fontSize: 13 }}>
-                      {m.location?.name ?? "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px" }}>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          padding: "3px 8px",
-                          borderRadius: 4,
-                          background: bg,
-                          color,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {STATUS_LABELS[m.status]}
-                      </span>
-                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.notes || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.daKeo || "—"}</td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button
@@ -1014,35 +689,6 @@ export default function YardMovesPage() {
                         >
                           Xoá
                         </button>
-                        {false && !isTerminal && next && (
-                          <button
-                            onClick={() => handleStatusChange(m.id, next!.status)}
-                            style={{ ...btnBase, background: "#3b82f6", color: "#fff" }}
-                          >
-                            {next!.label}
-                          </button>
-                        )}
-                        {false && !isTerminal && (
-                          <button
-                            onClick={() => handleStatusChange(m.id, "CANCELLED")}
-                            style={{ ...btnBase, background: "#fee2e2", color: "#b91c1c" }}
-                          >
-                            Hủy
-                          </button>
-                        )}
-                        {false && showCost && (
-                          <button
-                            onClick={() => setCostMoveId(m.id)}
-                            style={{
-                              ...btnBase,
-                              background: "#f0fdf4",
-                              color: "#166534",
-                              border: "1px solid #bbf7d0",
-                            }}
-                          >
-                            + Chi phí
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1139,16 +785,6 @@ export default function YardMovesPage() {
           onClose={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);
-            fetchMoves(page);
-          }}
-        />
-      )}
-      {costMoveId && (
-        <CostModal
-          moveId={costMoveId}
-          onClose={() => setCostMoveId(null)}
-          onAdded={() => {
-            setCostMoveId(null);
             fetchMoves(page);
           }}
         />

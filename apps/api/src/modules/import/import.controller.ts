@@ -55,4 +55,22 @@ export class ImportController {
     if (!file) throw new BadRequestException("No file uploaded");
     return this.importService.importVehicleMaintenance(file.buffer);
   }
+
+  @Post("yard-moves")
+  @ApiOperation({
+    summary:
+      "Import yard moves from lệnh bãi sheet (ADMIN only). Without ?confirm=true returns a preview with create/update counts.",
+  })
+  @ApiQuery({
+    name: "confirm",
+    required: false,
+    type: Boolean,
+    description: "Set to true to execute the import; omit for preview only",
+  })
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  importYardMoves(@UploadedFile() file: Express.Multer.File, @Query("confirm") confirm?: string) {
+    if (!file) throw new BadRequestException("No file uploaded");
+    return this.importService.importYardMoves(file.buffer, confirm === "true");
+  }
 }

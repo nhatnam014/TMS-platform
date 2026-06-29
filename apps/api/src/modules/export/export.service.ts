@@ -3,6 +3,7 @@ import { PrismaService } from "../../config/prisma.service";
 import { TripPlanService } from "../trip-plan/trip-plan.service";
 import { buildBaoDuongXe } from "./builders/baoduong-xe.builder";
 import { buildKeHoachXe } from "./builders/kehoach-xe.builder";
+import { buildLenhBai } from "./builders/lenh-bai.builder";
 import { buildQuanLyXe } from "./builders/quanly-xe.builder";
 
 @Injectable()
@@ -43,5 +44,13 @@ export class ExportService {
     });
 
     return buildBaoDuongXe(records, selectedLoaiXe);
+  }
+
+  async exportYardMoves(): Promise<Buffer> {
+    const records = await this.prisma.yardMove.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return buildLenhBai(records);
   }
 }

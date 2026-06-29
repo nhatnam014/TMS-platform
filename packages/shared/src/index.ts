@@ -293,14 +293,11 @@ export interface TripsTrendItem {
 export type TripStatus = "PLANNED" | "DISPATCHED" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
 export type TripMode = "STANDARD" | "DROP_AND_HOOK";
 export type LocationType = "PORT" | "DEPOT" | "ICD" | "INDUSTRIAL_ZONE" | "WAREHOUSE" | "OTHER";
-export type YardMoveStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-export type YardCostType = "YARD_HANDLING" | "FORKLIFT" | "OVERTIME" | "OTHER";
 export type AuditAction =
   | "CREATE"
   | "UPDATE"
   | "DELETE"
   | "STATUS_CHANGE"
-  | "COST_ADDED"
   | "LOGIN"
   | "LOGIN_FAILED"
   | "LOGOUT"
@@ -310,7 +307,6 @@ export type AuditAction =
 export const ENTITY_TYPES = {
   TRIP_PLAN: "TripPlan",
   YARD_MOVE: "YardMove",
-  YARD_MOVE_COST: "YardMoveCost",
   USER: "User",
   CUSTOMER: "Customer",
   CARRIER: "Carrier",
@@ -328,30 +324,34 @@ export interface AuditLogFilters {
   dateTo?: string;
 }
 
-// ---------- Factory zones ----------
-export const FactoryZone = {
-  STAGING_DROP: "STAGING_DROP",
-  LOADING_DOCK: "LOADING_DOCK",
-  STAGING_READY: "STAGING_READY",
-} as const;
-export type FactoryZoneValue = (typeof FactoryZone)[keyof typeof FactoryZone];
-
 // ---------- YardMove DTOs ----------
 export interface CreateYardMoveDto {
   date: string;
-  containerNumber: string;
-  fromZone: FactoryZoneValue;
-  toZone: FactoryZoneValue;
-  locationId: string;
+  gps?: string;
+  fullName?: string;
+  truck?: string;
+  mooc?: string;
+  booking?: string;
+  containerNumber?: string;
   notes?: string;
+  daKeo?: string;
+}
+
+export interface UpdateYardMoveDto {
+  date?: string;
+  gps?: string;
+  fullName?: string;
+  truck?: string;
+  mooc?: string;
+  booking?: string;
+  containerNumber?: string;
+  notes?: string;
+  daKeo?: string;
+  isActive?: boolean;
 }
 
 export interface YardMoveFilters {
-  locationId?: string;
-  status?: YardMoveStatus;
   search?: string;
-  dateFrom?: string;
-  dateTo?: string;
 }
 
 // ---------- Excel Import/Export ----------
@@ -368,12 +368,19 @@ export interface ImportChangedRecord {
   changes: ImportChangedField[];
 }
 
+export interface ImportCreatedRecord {
+  rowNum: number;
+  identifier: string;
+  entityId: string;
+}
+
 export interface ImportResult {
   imported: number;
   updated?: number;
   warnings: string[];
   errors: string[];
   changedRecords?: ImportChangedRecord[];
+  createdRecords?: ImportCreatedRecord[];
 }
 
 // ---------- Vehicle Record Filters ----------

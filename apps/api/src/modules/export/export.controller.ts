@@ -55,4 +55,16 @@ export class ExportController {
     });
     res.end(buffer);
   }
+
+  @Get("yard-moves")
+  @ApiOperation({ summary: "Export yard moves (lệnh bãi) as Excel (ADMIN only)" })
+  async exportYardMoves(@Res() res: Response) {
+    const buffer = await this.exportService.exportYardMoves();
+    res.set({
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": 'attachment; filename="lenh-bai.xlsx"',
+      "Content-Length": buffer.length,
+    });
+    res.end(buffer);
+  }
 }

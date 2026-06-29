@@ -2,10 +2,17 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
-import type { ImportResult, ImportChangedRecord, ImportChangedField } from "@tms/shared";
+import type {
+  ImportResult,
+  ImportChangedRecord,
+  ImportChangedField,
+  ImportCreatedRecord,
+} from "@tms/shared";
 import { parseQuanLyXe } from "./parsers/quanly-xe.parser";
 import { parseKeHoachXe } from "./parsers/kehoach-xe.parser";
 import { parseBaoDuongXe } from "./parsers/baoduong-xe.parser";
+import { parseLenhBai } from "./parsers/lenh-bai.parser";
+import { stripDrawingsFromXlsx } from "./utils/strip-drawings";
 
 function normalizeForDiff(value: unknown): unknown {
   if (value === null || value === undefined) return null;
@@ -45,7 +52,8 @@ export class ImportService {
     let rows: ReturnType<typeof parseQuanLyXe>;
     try {
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      const cleanedBuffer = await stripDrawingsFromXlsx(buffer);
+      await workbook.xlsx.load(cleanedBuffer as unknown as ArrayBuffer);
       rows = parseQuanLyXe(workbook);
     } catch (err) {
       console.error("[import/vehicles] xlsx parse failed:", err);
@@ -78,6 +86,7 @@ export class ImportService {
 
     // ── Phase 2: Execute (writes) ─────────────────────────────────────────────
     const warnings: string[] = [];
+    const createdRecords: ImportCreatedRecord[] = [];
     let imported = 0;
     let updated = 0;
     let currentRecordId: string | null = null;
@@ -208,6 +217,11 @@ export class ImportService {
             currentRecordId = record.id;
             currentRecordIsUpdate = false;
             imported++;
+            createdRecords.push({
+              rowNum: row.rowNum,
+              identifier: row.bienSo ?? row.tenTaiXe ?? record.id,
+              entityId: record.id,
+            });
           }
         } else if (row.type === "mooc_continuation") {
           if (!currentRecordId) {
@@ -272,6 +286,7 @@ export class ImportService {
       warnings,
       errors,
       ...(changedRecords.length > 0 && { changedRecords }),
+      ...(createdRecords.length > 0 && { createdRecords }),
     };
   }
 
@@ -280,7 +295,8 @@ export class ImportService {
     let rows: ReturnType<typeof parseKeHoachXe>;
     try {
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      const cleanedBuffer = await stripDrawingsFromXlsx(buffer);
+      await workbook.xlsx.load(cleanedBuffer as unknown as ArrayBuffer);
       rows = parseKeHoachXe(workbook, warnings);
     } catch (err) {
       console.error("[import/trip-plans] xlsx parse failed:", err);
@@ -288,6 +304,7 @@ export class ImportService {
     }
     const errors: string[] = [];
     const changedRecords: ImportChangedRecord[] = [];
+    const createdRecords: ImportCreatedRecord[] = [];
     let imported = 0;
     let updated = 0;
 
@@ -320,7 +337,7 @@ export class ImportService {
           carrierId = carrier.id;
         }
 
-        const wasUpdate = await this.prisma.$transaction(async (tx) => {
+        const txResult = await this.prisma.$transaction(async (tx) => {
           const serviceTypeId = row.serviceTypeCode
             ? (
                 await this.lookupOrCreateServiceType(
@@ -491,11 +508,16 @@ export class ImportService {
             });
           }
 
-          return !!before;
+          return { wasUpdate: !!before, tripPlanId };
         });
 
-        if (wasUpdate) updated++;
-        else imported++;
+        if (txResult.wasUpdate) {
+          updated++;
+        } else {
+          imported++;
+          const identifier = `${row.vehiclePlate ?? "?"} - ${row.tripDate!.toISOString().slice(0, 10)}`;
+          createdRecords.push({ rowNum: row.rowNum, identifier, entityId: txResult.tripPlanId });
+        }
       } catch (err) {
         errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -513,6 +535,7 @@ export class ImportService {
       warnings,
       errors,
       ...(changedRecords.length > 0 && { changedRecords }),
+      ...(createdRecords.length > 0 && { createdRecords }),
     };
   }
 
@@ -521,7 +544,8 @@ export class ImportService {
     let rows: ReturnType<typeof parseBaoDuongXe>;
     try {
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+      const cleanedBuffer = await stripDrawingsFromXlsx(buffer);
+      await workbook.xlsx.load(cleanedBuffer as unknown as ArrayBuffer);
       rows = parseBaoDuongXe(workbook);
     } catch (err) {
       console.error("[import/vehicle-maintenance] xlsx parse failed:", err);
@@ -532,6 +556,7 @@ export class ImportService {
     let imported = 0;
     let updated = 0;
     const changedRecords: ImportChangedRecord[] = [];
+    const createdRecords: ImportCreatedRecord[] = [];
 
     for (const row of rows) {
       try {
@@ -582,6 +607,11 @@ export class ImportService {
           });
           vehicleRecordId = newRecord.id;
           imported++;
+          createdRecords.push({
+            rowNum: row.rowNum,
+            identifier: row.bienSo ?? newRecord.id,
+            entityId: newRecord.id,
+          });
         }
 
         // Upsert km rounds
@@ -688,6 +718,117 @@ export class ImportService {
       warnings,
       errors,
       ...(changedRecords.length > 0 && { changedRecords }),
+      ...(createdRecords.length > 0 && { createdRecords }),
+    };
+  }
+
+  async importYardMoves(
+    buffer: Buffer,
+    confirm: boolean,
+  ): Promise<
+    ImportResult | { toCreate: number; toUpdate: number; warnings: string[]; errors: string[] }
+  > {
+    const warnings: string[] = [];
+    let rows: ReturnType<typeof parseLenhBai>;
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const cleanedBuffer = await stripDrawingsFromXlsx(buffer);
+      await workbook.xlsx.load(cleanedBuffer as unknown as ArrayBuffer);
+      rows = parseLenhBai(workbook, warnings);
+    } catch (err) {
+      console.error("[import/yard-moves] xlsx parse failed:", err);
+      throw new BadRequestException("File không hợp lệ hoặc không đúng định dạng .xlsx");
+    }
+
+    const errors: string[] = [];
+    for (const row of rows) {
+      if (row.type === "skip" && row.reason) errors.push(row.reason);
+    }
+
+    // ── Phase 1: Preview (no writes) ──────────────────────────────────────────
+    if (!confirm) {
+      let toCreate = 0;
+      let toUpdate = 0;
+      for (const row of rows) {
+        if (row.type !== "data") continue;
+        if (row.id) {
+          const existing = await this.prisma.yardMove.findUnique({ where: { id: row.id } });
+          if (existing) {
+            toUpdate++;
+            continue;
+          }
+        }
+        toCreate++;
+      }
+      return { toCreate, toUpdate, warnings, errors };
+    }
+
+    // ── Phase 2: Execute (writes) ─────────────────────────────────────────────
+    const changedRecords: ImportChangedRecord[] = [];
+    const createdRecords: ImportCreatedRecord[] = [];
+    let imported = 0;
+    let updated = 0;
+
+    for (const row of rows) {
+      if (row.type !== "data") continue;
+      try {
+        const data = {
+          date: row.date!,
+          gps: row.gps ?? null,
+          fullName: row.fullName ?? null,
+          truck: row.truck ?? null,
+          mooc: row.mooc ?? null,
+          booking: row.booking ?? null,
+          containerNumber: row.containerNumber ?? null,
+          notes: row.notes ?? null,
+          daKeo: row.daKeo ?? null,
+        };
+        const identifier = `${row.date}${row.fullName ? ` - ${row.fullName}` : ""}`;
+
+        const before = row.id ? await this.prisma.yardMove.findUnique({ where: { id: row.id } }) : null;
+        if (row.id && !before) {
+          warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — đã tạo mới`);
+        }
+
+        if (before) {
+          await this.prisma.yardMove.update({ where: { id: before.id }, data });
+
+          const changes = diffFields(before, data);
+          if (changes.length > 0) {
+            await this.auditService.log({
+              action: "UPDATE",
+              entityType: "YardMove",
+              entityId: before.id,
+              summary: `Excel import cập nhật lệnh bãi (${identifier}): ${changes.map((c) => c.field).join(", ")}`,
+              beforeSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.oldValue])),
+              afterSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.newValue])),
+            });
+            changedRecords.push({ rowNum: row.rowNum, identifier, entityId: before.id, changes });
+          }
+          updated++;
+        } else {
+          const created = await this.prisma.yardMove.create({ data });
+          createdRecords.push({ rowNum: row.rowNum, identifier, entityId: created.id });
+          imported++;
+        }
+      } catch (err) {
+        errors.push(`Hàng ${row.rowNum}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    await this.auditService.log({
+      action: "CREATE",
+      entityType: "YardMove",
+      summary: `Excel import: ${imported} tạo mới, ${updated} cập nhật, ${warnings.length} cảnh báo, ${errors.length} lỗi`,
+    });
+
+    return {
+      imported,
+      updated,
+      warnings,
+      errors,
+      ...(changedRecords.length > 0 && { changedRecords }),
+      ...(createdRecords.length > 0 && { createdRecords }),
     };
   }
 
