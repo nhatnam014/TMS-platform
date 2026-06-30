@@ -776,9 +776,9 @@ export default function ImportExportPage() {
       />
 
       <UploadSection
-        title="Nhập lệnh bãi"
+        title="Nhập tiến độ vận tải"
         endpoint="/api/import/yard-moves?confirm=true"
-        description="Tải lên sheet 'lệnh bãi'. Hàng có ID → cập nhật; hàng không có ID → tạo mới."
+        description="Tải lên sheet 'tiến độ vận tải'. Hàng có ID → cập nhật; hàng không có ID → tạo mới."
       />
 
       <h2
@@ -895,14 +895,14 @@ export default function ImportExportPage() {
           marginBottom: 24,
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất lệnh bãi</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất tiến độ vận tải</h2>
         <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
-          Xuất danh sách lệnh bãi ra file Excel.
+          Xuất danh sách tiến độ vận tải ra file Excel.
         </p>
         <DownloadButton
-          label="Tải xuống lenh-bai.xlsx"
+          label="Tải xuống tien-do-van-tai.xlsx"
           endpoint="/api/export/yard-moves"
-          filename="lenh-bai.xlsx"
+          filename="tien-do-van-tai.xlsx"
         />
       </div>
     </div>

@@ -63,13 +63,13 @@ const COL_WIDTHS = [6, 12, 10, 24, 14, 14, 18, 16, 30, 14, 30];
 
 export async function buildLenhBai(records: any[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("lệnh bãi");
+  const ws = wb.addWorksheet("tiến độ vận tải");
 
   HEADERS.forEach((_, i) => {
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  addBrandedHeader(ws, wb, "LỆNH BÃI");
+  addBrandedHeader(ws, wb, "TIẾN ĐỘ VẬN TẢI");
 
   // Column header row at row 9 (rows 1–8 are the branded header block)
   const headerRowObj = ws.addRow(HEADERS);

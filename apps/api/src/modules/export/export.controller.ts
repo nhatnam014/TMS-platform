@@ -62,7 +62,7 @@ export class ExportController {
     const buffer = await this.exportService.exportYardMoves();
     res.set({
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": 'attachment; filename="lenh-bai.xlsx"',
+      "Content-Disposition": 'attachment; filename="tien-do-van-tai.xlsx"',
       "Content-Length": buffer.length,
     });
     res.end(buffer);

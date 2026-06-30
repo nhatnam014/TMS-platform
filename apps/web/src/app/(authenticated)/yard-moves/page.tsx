@@ -311,7 +311,7 @@ function CreateYardMoveModal({
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
-      toast.success("Tạo lệnh bãi thành công");
+      toast.success("Tạo tiến độ vận tải thành công");
       onCreated();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Lỗi không xác định";
@@ -323,7 +323,7 @@ function CreateYardMoveModal({
   }
 
   return (
-    <Modal title="Tạo lệnh bãi mới" onClose={onClose} wide>
+    <Modal title="Tạo tiến độ vận tải mới" onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         <YardMoveFormFields values={values} onChange={setValues} />
         {formError && (
@@ -338,7 +338,7 @@ function CreateYardMoveModal({
             disabled={submitting}
             style={{ ...ymBtnPrimary, opacity: submitting ? 0.7 : 1 }}
           >
-            {submitting ? "Đang tạo..." : "Tạo lệnh bãi"}
+            {submitting ? "Đang tạo..." : "Tạo tiến độ vận tải"}
           </button>
         </div>
       </form>
@@ -400,7 +400,7 @@ function EditYardMoveModal({
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
-      toast.success("Cập nhật lệnh bãi thành công");
+      toast.success("Cập nhật tiến độ vận tải thành công");
       onSaved();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Lỗi không xác định";
@@ -412,7 +412,7 @@ function EditYardMoveModal({
   }
 
   return (
-    <Modal title="Sửa lệnh bãi" onClose={onClose} wide>
+    <Modal title="Sửa tiến độ vận tải" onClose={onClose} wide>
       <form onSubmit={handleSubmit}>
         <YardMoveFormFields values={values} onChange={setValues} />
         {formError && (
@@ -499,10 +499,10 @@ export default function YardMovesPage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? `Lỗi ${res.status}`);
       }
-      toast.success("Đã xoá lệnh bãi");
+      toast.success("Đã xoá tiến độ vận tải");
       fetchMoves(page);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Lỗi xoá lệnh bãi");
+      toast.error(err instanceof Error ? err.message : "Lỗi xoá tiến độ vận tải");
     }
   }
 
@@ -525,7 +525,7 @@ export default function YardMovesPage() {
           marginBottom: 24,
         }}
       >
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Lệnh bãi</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Tiến độ vận tải</h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <span style={{ fontSize: 13, color: "#64748b" }}>{total} lệnh</span>
           <button
@@ -816,7 +816,7 @@ export default function YardMovesPage() {
           <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 360 }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Xác nhận xoá</h2>
             <p style={{ fontSize: 14, color: "#374151", marginBottom: 20 }}>
-              Bạn có chắc muốn xoá lệnh bãi này?
+              Bạn có chắc muốn xoá tiến độ vận tải này?
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button

@@ -799,7 +799,7 @@ export class ImportService {
               action: "UPDATE",
               entityType: "YardMove",
               entityId: before.id,
-              summary: `Excel import cập nhật lệnh bãi (${identifier}): ${changes.map((c) => c.field).join(", ")}`,
+              summary: `Excel import cập nhật tiến độ vận tải (${identifier}): ${changes.map((c) => c.field).join(", ")}`,
               beforeSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.oldValue])),
               afterSnapshot: Object.fromEntries(changes.map((c) => [c.field, c.newValue])),
             });
