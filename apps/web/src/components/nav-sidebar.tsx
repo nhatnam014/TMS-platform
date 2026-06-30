@@ -9,7 +9,7 @@ const BASE_NAV_ITEMS = [
   { href: "/trip-plans", label: "Kế hoạch chuyến" },
   { href: "/vehicle-records", label: "Quản lý xe" },
   { href: "/vehicle-maintenance", label: "Bảo dưỡng xe" },
-  { href: "/yard-moves", label: "Lệnh bãi" },
+  { href: "/yard-moves", label: "Tiến độ vận tải" },
   { href: "/customers", label: "Khách hàng" },
   { href: "/carriers", label: "VENDOR" },
   { href: "/locations", label: "Địa điểm" },
