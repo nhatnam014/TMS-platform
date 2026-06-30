@@ -30,12 +30,7 @@ function rowIsEmpty(row: ExcelJS.Row, cols: number[]): boolean {
 // Strips Vietnamese diacritics (including "đ"/"Đ", which Unicode NFD doesn't decompose)
 // so header-text matching tolerates accented vs. unaccented variants.
 function stripDiacritics(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim();
+  return s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 }
 
 function buildHeaderMap(headerRow: ExcelJS.Row): Record<string, number> {
@@ -57,8 +52,8 @@ const COLUMN_CANDIDATES: Record<string, string[]> = {
   MOOC: ["MOOC"],
   BOOKING: ["BOOKING"],
   CONTAINER: ["CONTAINER"],
-  GHI_CHU: ["GHI CHÚ"],
   DA_KEO: ["ĐÃ KÉO"],
+  GHI_CHU: ["GHI CHÚ"],
   ID: ["ID"],
 };
 

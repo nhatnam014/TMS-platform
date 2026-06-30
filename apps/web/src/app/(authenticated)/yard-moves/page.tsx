@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useToast } from "@/lib/toast-context";
+import { useEffect, useState } from "react";
 
 interface YardMoveRow {
   id: string;
@@ -247,14 +247,7 @@ function YardMoveFormFields({
           style={ymInputStyle}
         />
       </YmField>
-      <YmField label="Đã kéo">
-        <input
-          type="text"
-          value={values.daKeo}
-          onChange={(e) => setField("daKeo", e.target.value)}
-          style={ymInputStyle}
-        />
-      </YmField>
+
       <div style={{ gridColumn: "1 / -1" }}>
         <YmField label="Ghi chú">
           <textarea
@@ -265,6 +258,14 @@ function YardMoveFormFields({
           />
         </YmField>
       </div>
+      <YmField label="Đã kéo">
+        <input
+          type="text"
+          value={values.daKeo}
+          onChange={(e) => setField("daKeo", e.target.value)}
+          style={ymInputStyle}
+        />
+      </YmField>
     </div>
   );
 }
@@ -448,8 +449,8 @@ const TABLE_HEADERS = [
   "Mooc",
   "Booking",
   "Container",
-  "Ghi chú",
   "Đã kéo",
+  "Ghi chú",
   "Thao tác",
 ];
 
@@ -663,8 +664,8 @@ export default function YardMovesPage() {
                     <td style={{ padding: "10px 14px", fontSize: 13, fontFamily: "monospace" }}>
                       {m.containerNumber || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.notes || "—"}</td>
                     <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.daKeo || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.notes || "—"}</td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button

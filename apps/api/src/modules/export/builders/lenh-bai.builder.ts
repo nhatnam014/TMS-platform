@@ -21,7 +21,16 @@ function addBrandedHeader(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook, title: st
   }
 
   try {
-    const logoPath = path.resolve(__dirname, "..", "..", "..", "..", "..", "img", "LogisticCompany.png");
+    const logoPath = path.resolve(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "..",
+      "..",
+      "img",
+      "LogisticCompany.png",
+    );
     if (fs.existsSync(logoPath)) {
       const imageId = wb.addImage({ filename: logoPath, extension: "png" });
       ws.addImage(imageId, "A1:E7");
@@ -54,8 +63,8 @@ const HEADERS = [
   "MOOC",
   "BOOKING",
   "CONTAINER",
-  "GHI CHÚ",
   "ĐÃ KÉO",
+  "GHI CHÚ",
   "ID",
 ];
 
