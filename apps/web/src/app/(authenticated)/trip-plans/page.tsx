@@ -804,7 +804,10 @@ function TripFormBody({
   error: string | null;
 }) {
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      onKeyDown={(e) => { const tag = (e.target as HTMLElement).tagName; if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "BUTTON") e.preventDefault(); }}
+    >
       <div
         style={{
           display: "grid",

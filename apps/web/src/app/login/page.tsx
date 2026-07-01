@@ -62,17 +62,28 @@ export default function LoginPage() {
         style={{
           background: "#fff",
           borderRadius: 12,
-          padding: 40,
-          width: 360,
+          padding: "clamp(28px, 5vw, 60px)",
+          width: "clamp(320px, 90vw, 520px)",
           boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
         }}
       >
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/AnhKhoiLogisticLogo.png"
+            alt="Anh Khôi Logistic"
+            style={{ width: "clamp(140px, 38vw, 220px)", height: "auto", display: "block" }}
+          />
+        </div>
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: "#0f172a" }}>
           Anh Khôi Logistic
         </h1>
         <p style={{ color: "#64748b", marginBottom: 28, fontSize: 14 }}>Hệ thống quản lý vận tải</p>
 
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => { const tag = (e.target as HTMLElement).tagName; if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "BUTTON") e.preventDefault(); }}
+        >
           <label style={{ display: "block", marginBottom: 16 }}>
             <span
               style={{

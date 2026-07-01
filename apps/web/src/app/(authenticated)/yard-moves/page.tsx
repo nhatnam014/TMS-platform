@@ -325,7 +325,10 @@ function CreateYardMoveModal({
 
   return (
     <Modal title="Tạo tiến độ vận tải mới" onClose={onClose} wide>
-      <form onSubmit={handleSubmit}>
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => { const tag = (e.target as HTMLElement).tagName; if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "BUTTON") e.preventDefault(); }}
+      >
         <YardMoveFormFields values={values} onChange={setValues} />
         {formError && (
           <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>
@@ -414,7 +417,10 @@ function EditYardMoveModal({
 
   return (
     <Modal title="Sửa tiến độ vận tải" onClose={onClose} wide>
-      <form onSubmit={handleSubmit}>
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => { const tag = (e.target as HTMLElement).tagName; if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "BUTTON") e.preventDefault(); }}
+      >
         <YardMoveFormFields values={values} onChange={setValues} />
         {formError && (
           <p style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formError}</p>

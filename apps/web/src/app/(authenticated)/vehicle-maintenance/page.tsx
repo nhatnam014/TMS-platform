@@ -241,7 +241,10 @@ function EditModal({
 
         {error && <p style={{ color: "#dc2626", background: "#fef2f2", padding: "8px 12px", borderRadius: 6, fontSize: 13, marginBottom: 14 }}>{error}</p>}
 
-        <form onSubmit={handleSave}>
+        <form
+          onSubmit={handleSave}
+          onKeyDown={(e) => { const tag = (e.target as HTMLElement).tagName; if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "BUTTON") e.preventDefault(); }}
+        >
           {/* Section A: Maintenance fields */}
           <div style={{ background: "#dcfce7", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Đơn vị sửa chữa</div>

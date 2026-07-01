@@ -289,7 +289,10 @@ function Modal({ title, onClose, onSubmit, error, children }: ModalProps) {
             {error}
           </p>
         )}
-        <form onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => { const tag = (e.target as HTMLElement).tagName; if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "BUTTON") e.preventDefault(); }}
+        >
           {children}
           <div
             style={{
