@@ -232,7 +232,7 @@ model TripPlanCost {
 
 model YardMove {
   id              String          @id @default(cuid())
-  date            String                                            // free-text date entry, e.g. "24/06"
+  date            DateTime        @db.Date
   gps             String?
   fullName        String?         @map("full_name")
   truck           String?

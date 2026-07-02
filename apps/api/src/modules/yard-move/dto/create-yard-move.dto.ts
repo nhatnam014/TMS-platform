@@ -1,10 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty, IsOptional, IsString } from "class-validator";
+import { IsDateString, IsOptional, IsString } from "class-validator";
 
 export class CreateYardMoveDto {
-  @ApiProperty({ example: "24/06" })
-  @IsString()
-  @IsNotEmpty()
+  @ApiProperty({ example: "2026-06-24" })
+  @IsDateString()
   date!: string;
 
   @ApiPropertyOptional({ example: "AK" })

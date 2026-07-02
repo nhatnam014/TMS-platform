@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
+import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
+import type { BulkDeleteResult } from "@tms/shared";
 
 interface MoocRow {
   id?: string;
@@ -722,6 +724,9 @@ export default function VehicleRecordsPage() {
   const [editTarget, setEditTarget] = useState<VehicleRecord | null>(null);
   const [editForm, setEditForm] = useState<RecordForm>(EMPTY_FORM);
   const [editError, setEditError] = useState<string | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const selection = useRowSelection(records.map((r) => r.id));
 
   // Debounce search: delay fetch by 300ms after user stops typing
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -786,6 +791,10 @@ export default function VehicleRecordsPage() {
     };
   }, [page, refresh, expiryScope, expiryType, expiryFrom, expiryTo]);
 
+  useEffect(() => {
+    selection.clear();
+  }, [page, refresh, expiryScope, expiryType, expiryFrom, expiryTo, selection.clear]);
+
   function openCreate() {
     setCreateForm(EMPTY_FORM);
     setCreateError(null);
@@ -847,6 +856,30 @@ export default function VehicleRecordsPage() {
       toast.error("Lỗi xóa biên bản");
     }
     setRefresh((n) => n + 1);
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selection.selected);
+    const res = await fetch("/api/vehicle-records/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setShowBulkConfirm(false);
+    if (!res.ok) {
+      toast.error("Lỗi xoá hàng loạt");
+      return;
+    }
+    const result: BulkDeleteResult = await res.json();
+    setRefresh((n) => n + 1);
+    if (result.skipped.length === 0) {
+      toast.success(`Đã xoá ${result.deleted.length} biên bản`);
+    } else {
+      const reasons = Array.from(new Set(result.skipped.map((s) => s.reason))).join("; ");
+      toast.error(
+        `Đã xoá ${result.deleted.length}, bỏ qua ${result.skipped.length}: ${reasons}`,
+      );
+    }
   }
 
   return (
@@ -976,6 +1009,12 @@ export default function VehicleRecordsPage() {
         </p>
       )}
 
+      <BulkActionBar
+        selectedCount={selection.selectedCount}
+        onDelete={() => setShowBulkConfirm(true)}
+        onClear={selection.clear}
+      />
+
       {/* Table */}
       <div
         style={{
@@ -988,6 +1027,13 @@ export default function VehicleRecordsPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0" }}>
+              <TH width={32}>
+                <SelectionCheckbox
+                  checked={selection.isAllSelected}
+                  onChange={selection.toggleAll}
+                  ariaLabel="Chọn tất cả biên bản"
+                />
+              </TH>
               <TH width={36}>STT</TH>
               <TH>Tên TX</TH>
               <TH>SĐT</TH>
@@ -1007,13 +1053,13 @@ export default function VehicleRecordsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                <td colSpan={15} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
                   Đang tải...
                 </td>
               </tr>
             ) : records.length === 0 ? (
               <tr>
-                <td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                <td colSpan={15} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
                   Chưa có dữ liệu
                 </td>
               </tr>
@@ -1035,6 +1081,13 @@ export default function VehicleRecordsPage() {
                 if (moocCount === 0) {
                   return (
                     <tr key={rec.id} style={{ background: bg, borderTop }}>
+                      <TD>
+                        <SelectionCheckbox
+                          checked={selection.isSelected(rec.id)}
+                          onChange={() => selection.toggle(rec.id)}
+                          ariaLabel={`Chọn biên bản ${rec.bienSo ?? rec.tenTaiXe ?? recNum}`}
+                        />
+                      </TD>
                       <TD style={{ color: "#94a3b8" }}>{recNum}</TD>
                       <TD style={{ fontWeight: 500 }}>
                         {rec.tenTaiXe ?? <span style={{ color: "#94a3b8" }}>—</span>}
@@ -1108,6 +1161,13 @@ export default function VehicleRecordsPage() {
                   >
                     {mIdx === 0 && (
                       <>
+                        <TD rowSpan={rowSpan > 1 ? rowSpan : undefined}>
+                          <SelectionCheckbox
+                            checked={selection.isSelected(rec.id)}
+                            onChange={() => selection.toggle(rec.id)}
+                            ariaLabel={`Chọn biên bản ${rec.bienSo ?? rec.tenTaiXe ?? recNum}`}
+                          />
+                        </TD>
                         <TD
                           style={{ color: "#94a3b8" }}
                           rowSpan={rowSpan > 1 ? rowSpan : undefined}
@@ -1262,6 +1322,16 @@ export default function VehicleRecordsPage() {
         >
           <RecordFormFields form={editForm} setForm={setEditForm} />
         </Modal>
+      )}
+
+      {showBulkConfirm && (
+        <ConfirmDialog
+          title="Xác nhận xoá hàng loạt"
+          message={`Bạn có chắc muốn xoá vĩnh viễn ${selection.selectedCount} biên bản đã chọn? Hành động này không thể hoàn tác.`}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkConfirm(false)}
+        />
       )}
     </div>
   );

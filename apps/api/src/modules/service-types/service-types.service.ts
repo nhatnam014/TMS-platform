@@ -5,6 +5,7 @@ import type {
   UpdateServiceTypeDto,
   PaginationQuery,
   PaginatedResponse,
+  BulkDeleteResult,
 } from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 
@@ -91,5 +92,34 @@ export class ServiceTypesService {
     }
 
     return this.prisma.serviceTypeMaster.delete({ where: { id } });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.serviceTypeMaster.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        const tripPlanCount = await tx.tripPlan.count({ where: { serviceTypeId: id } });
+        if (tripPlanCount > 0) {
+          skipped.push({
+            id,
+            reason: `Referenced by ${tripPlanCount} trip plan(s)`,
+          });
+          continue;
+        }
+
+        await tx.serviceTypeMaster.delete({ where: { id } });
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

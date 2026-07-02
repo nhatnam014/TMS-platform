@@ -4,6 +4,7 @@ import type {
   UpdateCostTemplateDto,
   PaginationQuery,
   PaginatedResponse,
+  BulkDeleteResult,
 } from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 
@@ -56,5 +57,25 @@ export class CostTemplatesService {
     const existing = await this.prisma.costTemplate.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Cost template ${id} not found`);
     return this.prisma.costTemplate.delete({ where: { id } });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.costTemplate.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        await tx.costTemplate.delete({ where: { id } });
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

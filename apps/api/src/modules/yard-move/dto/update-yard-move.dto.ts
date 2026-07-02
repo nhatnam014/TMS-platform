@@ -1,10 +1,10 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsDateString, IsOptional, IsString } from "class-validator";
 
 export class UpdateYardMoveDto {
-  @ApiPropertyOptional({ example: "24/06" })
+  @ApiPropertyOptional({ example: "2026-06-24" })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   date?: string;
 
   @ApiPropertyOptional({ example: "AK" })

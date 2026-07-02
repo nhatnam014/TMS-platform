@@ -2,6 +2,8 @@
 
 import { useToast } from "@/lib/toast-context";
 import { useEffect, useState } from "react";
+import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
+import type { BulkDeleteResult } from "@tms/shared";
 
 function fmtInput(raw: string): string {
   const digits = raw.replace(/\./g, "");
@@ -202,6 +204,9 @@ export default function CostTemplatesPage() {
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const selection = useRowSelection(rows.map((r) => r.id));
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +235,10 @@ export default function CostTemplatesPage() {
       cancelled = true;
     };
   }, [refresh, search, page]);
+
+  useEffect(() => {
+    selection.clear();
+  }, [refresh, search, page, selection.clear]);
 
   function parseAmount(v: string): number | undefined {
     const n = parseFloat(v.replace(/,/g, ""));
@@ -296,6 +305,30 @@ export default function CostTemplatesPage() {
     }
   }
 
+  async function handleBulkDelete() {
+    const ids = Array.from(selection.selected);
+    const res = await fetch("/api/cost-templates/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setShowBulkConfirm(false);
+    if (!res.ok) {
+      toast.error("Lỗi xoá hàng loạt");
+      return;
+    }
+    const result: BulkDeleteResult = await res.json();
+    setRefresh((r) => r + 1);
+    if (result.skipped.length === 0) {
+      toast.success(`Đã xoá ${result.deleted.length} danh mục chi phí`);
+    } else {
+      const reasons = Array.from(new Set(result.skipped.map((s) => s.reason))).join("; ");
+      toast.error(
+        `Đã xoá ${result.deleted.length}, bỏ qua ${result.skipped.length}: ${reasons}`,
+      );
+    }
+  }
+
   return (
     <div>
       <div
@@ -356,6 +389,12 @@ export default function CostTemplatesPage() {
       )}
 
       {!loading && !error && (
+        <>
+        <BulkActionBar
+          selectedCount={selection.selectedCount}
+          onDelete={() => setShowBulkConfirm(true)}
+          onClear={selection.clear}
+        />
         <div
           style={{
             background: "#fff",
@@ -367,6 +406,13 @@ export default function CostTemplatesPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <th style={{ padding: "10px 14px", width: 32 }}>
+                  <SelectionCheckbox
+                    checked={selection.isAllSelected}
+                    onChange={selection.toggleAll}
+                    ariaLabel="Chọn tất cả danh mục chi phí"
+                  />
+                </th>
                 {["Tên chi phí", "Số tiền mặc định", "Trạng thái", ""].map((h) => (
                   <th
                     key={h}
@@ -387,7 +433,7 @@ export default function CostTemplatesPage() {
               {rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     style={{ padding: "24px 14px", textAlign: "center", color: "#94a3b8" }}
                   >
                     Chưa có danh mục chi phí
@@ -396,6 +442,13 @@ export default function CostTemplatesPage() {
               )}
               {rows.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "10px 14px" }}>
+                    <SelectionCheckbox
+                      checked={selection.isSelected(r.id)}
+                      onChange={() => selection.toggle(r.id)}
+                      ariaLabel={`Chọn danh mục chi phí ${r.name}`}
+                    />
+                  </td>
                   <td style={{ padding: "10px 14px", fontWeight: 500 }}>{r.name}</td>
                   <td
                     style={{
@@ -547,6 +600,7 @@ export default function CostTemplatesPage() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {showCreate && (
@@ -687,6 +741,16 @@ export default function CostTemplatesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBulkConfirm && (
+        <ConfirmDialog
+          title="Xác nhận xoá hàng loạt"
+          message={`Bạn có chắc muốn xoá vĩnh viễn ${selection.selectedCount} danh mục chi phí đã chọn? Hành động này không thể hoàn tác.`}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkConfirm(false)}
+        />
       )}
     </div>
   );

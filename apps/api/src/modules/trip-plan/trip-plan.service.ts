@@ -8,7 +8,7 @@ import type {
   PaginationQuery,
   PaginatedResponse,
 } from "@tms/shared";
-import { ENTITY_TYPES } from "@tms/shared";
+import { ENTITY_TYPES, type BulkDeleteResult } from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 
 const TRIP_PLAN_INCLUDE = {
@@ -368,5 +368,37 @@ export class TripPlanService {
 
       return deleted;
     });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.tripPlan.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        await tx.tripPlan.delete({ where: { id } });
+
+        await this.auditService.log(
+          {
+            action: "DELETE",
+            entityType: ENTITY_TYPES.TRIP_PLAN,
+            entityId: id,
+            summary: `Deleted trip plan`,
+            beforeSnapshot: existing as object,
+          },
+          tx,
+        );
+
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

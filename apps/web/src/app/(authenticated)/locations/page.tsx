@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { LocationType } from "@tms/shared";
+import type { BulkDeleteResult, LocationType } from "@tms/shared";
 import { useToast } from "@/lib/toast-context";
+import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
 
 interface LocationRow {
   id: string;
@@ -264,6 +265,9 @@ export default function LocationsPage() {
 
   const [deactivating, setDeactivating] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const selection = useRowSelection(locations.map((l) => l.id));
 
   useEffect(() => {
     let cancelled = false;
@@ -296,6 +300,10 @@ export default function LocationsPage() {
       cancelled = true;
     };
   }, [refresh, search, typeFilter, page]);
+
+  useEffect(() => {
+    selection.clear();
+  }, [refresh, search, typeFilter, page, selection.clear]);
 
   async function handleCreate() {
     setCreateError(null);
@@ -378,6 +386,30 @@ export default function LocationsPage() {
       setRefresh((r) => r + 1);
     } else {
       toast.error("Lỗi xoá địa điểm");
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selection.selected);
+    const res = await fetch("/api/locations/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setShowBulkConfirm(false);
+    if (!res.ok) {
+      toast.error("Lỗi xoá hàng loạt");
+      return;
+    }
+    const result: BulkDeleteResult = await res.json();
+    setRefresh((r) => r + 1);
+    if (result.skipped.length === 0) {
+      toast.success(`Đã xoá ${result.deleted.length} địa điểm`);
+    } else {
+      const reasons = Array.from(new Set(result.skipped.map((s) => s.reason))).join("; ");
+      toast.error(
+        `Đã xoá ${result.deleted.length}, bỏ qua ${result.skipped.length}: ${reasons}`,
+      );
     }
   }
 
@@ -470,6 +502,12 @@ export default function LocationsPage() {
       )}
 
       {!loading && !error && (
+        <>
+        <BulkActionBar
+          selectedCount={selection.selectedCount}
+          onDelete={() => setShowBulkConfirm(true)}
+          onClear={selection.clear}
+        />
         <div
           style={{
             background: "#fff",
@@ -481,6 +519,13 @@ export default function LocationsPage() {
           <table style={{ width: "100%", minWidth: 680, borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <th style={{ padding: "10px 14px", width: 32 }}>
+                  <SelectionCheckbox
+                    checked={selection.isAllSelected}
+                    onChange={selection.toggleAll}
+                    ariaLabel="Chọn tất cả địa điểm"
+                  />
+                </th>
                 {["Mã", "Tên", "Loại", "Địa chỉ", ""].map((h) => (
                   <th
                     key={h}
@@ -501,7 +546,7 @@ export default function LocationsPage() {
               {locations.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     style={{ padding: "24px 14px", textAlign: "center", color: "#94a3b8" }}
                   >
                     Chưa có địa điểm
@@ -510,6 +555,13 @@ export default function LocationsPage() {
               )}
               {locations.map((l) => (
                 <tr key={l.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "10px 14px" }}>
+                    <SelectionCheckbox
+                      checked={selection.isSelected(l.id)}
+                      onChange={() => selection.toggle(l.id)}
+                      ariaLabel={`Chọn địa điểm ${l.name}`}
+                    />
+                  </td>
                   <td style={{ padding: "10px 14px", fontWeight: 600 }}>{l.code}</td>
                   <td style={{ padding: "10px 14px" }}>{l.name}</td>
                   <td style={{ padding: "10px 14px" }}>
@@ -645,6 +697,7 @@ export default function LocationsPage() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {showCreate && (
@@ -863,6 +916,16 @@ export default function LocationsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBulkConfirm && (
+        <ConfirmDialog
+          title="Xác nhận xoá hàng loạt"
+          message={`Bạn có chắc muốn xoá vĩnh viễn ${selection.selectedCount} địa điểm đã chọn? Hành động này không thể hoàn tác.`}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkConfirm(false)}
+        />
       )}
     </div>
   );

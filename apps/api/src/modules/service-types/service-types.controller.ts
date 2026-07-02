@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateServiceTypeDto } from "./dto/create-service-type.dto";
 import { UpdateServiceTypeDto } from "./dto/update-service-type.dto";
 import { ServiceTypesService } from "./service-types.service";
@@ -54,5 +55,11 @@ export class ServiceTypesController {
   @ApiOperation({ summary: "Delete a service type (409 if referenced by trip plans)" })
   remove(@Param("id") id: string) {
     return this.serviceTypesService.remove(id);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Delete multiple service types by id (skips those referenced by trip plans)" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.serviceTypesService.bulkDelete(dto.ids);
   }
 }

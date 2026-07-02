@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@ne
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 import { CustomerService } from "./customer.service";
@@ -32,5 +33,11 @@ export class CustomerController {
   @ApiOperation({ summary: "Update a customer (or soft-deactivate with isActive: false)" })
   update(@Param("id") id: string, @Body() dto: UpdateCustomerDto) {
     return this.customerService.update(id, dto);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Permanently delete multiple customers by id (skips those referenced by trip plans)" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.customerService.bulkDelete(dto.ids);
   }
 }

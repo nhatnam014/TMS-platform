@@ -1,6 +1,41 @@
+## ADDED Requirements
+
+### Requirement: GET /yard-moves returns yard moves with pagination and text search
+
+The system SHALL expose `GET /api/v1/yard-moves` protected by `JwtAuthGuard`. Query parameters `page` and `limit` control pagination (default `limit` 10). An optional `search` query parameter filters records by case-insensitive substring match across `fullName`, `truck`, `mooc`, `booking`, `containerNumber`, and `gps`. There is NO `locationId` or `status` filter.
+
+#### Scenario: GET without filters returns paginated yard moves
+
+- **WHEN** `GET /api/v1/yard-moves?page=1&limit=10` is called without `search`
+- **THEN** up to 10 yard move records are returned along with pagination metadata (`total`, `totalPages`, `page`, `limit`)
+
+#### Scenario: GET with search filters by text match
+
+- **WHEN** `GET /api/v1/yard-moves?search=AK` is called
+- **THEN** only yard moves whose `gps`, `fullName`, `truck`, `mooc`, `booking`, or `containerNumber` contains "AK" (case-insensitive) are returned
+
+### Requirement: PATCH /yard-moves/:id updates fields or soft-deletes a yard move
+
+The system SHALL expose `PATCH /api/v1/yard-moves/:id` protected by `JwtAuthGuard`. The request body MUST accept `UpdateYardMoveDto` with all fields from `CreateYardMoveDto` made optional, plus an optional `isActive` boolean. Setting `isActive: false` performs a soft-delete. This is the only update/delete endpoint for yard moves.
+
+#### Scenario: Update changes a subset of fields
+
+- **WHEN** `PATCH /api/v1/yard-moves/:id` is called with `{ notes: "XONG K3" }`
+- **THEN** the response is `200 OK` with `notes` updated and all other fields unchanged
+
+#### Scenario: Soft-delete via isActive false
+
+- **WHEN** `PATCH /api/v1/yard-moves/:id` is called with `{ isActive: false }`
+- **THEN** the record's `isActive` becomes `false` and it is excluded from default `GET /yard-moves` results
+
+#### Scenario: Update on non-existent YardMove returns 404
+
+- **WHEN** `PATCH /api/v1/yard-moves/<nonexistent-id>` is called
+- **THEN** the response is `404 Not Found`
+
 ## MODIFIED Requirements
 
-### Requirement: YardMove Prisma model tracks yard order trip records
+### Requirement: YardMove Prisma model tracks internal factory yard shuttle operations
 
 The system SHALL have a `YardMove` model in the Prisma schema with fields:
 
@@ -53,39 +88,6 @@ The system SHALL expose `POST /api/v1/yard-moves` protected by `JwtAuthGuard`. T
 - **WHEN** `POST /api/v1/yard-moves` is called without an Authorization header
 - **THEN** the response is `401 Unauthorized`
 
-### Requirement: GET /yard-moves returns yard moves with pagination and text search
-
-The system SHALL expose `GET /api/v1/yard-moves` protected by `JwtAuthGuard`. Query parameters `page` and `limit` control pagination (default `limit` 10). An optional `search` query parameter filters records by case-insensitive substring match across `fullName`, `truck`, `mooc`, `booking`, `containerNumber`, and `gps`. There is NO `locationId` or `status` filter.
-
-#### Scenario: GET without filters returns paginated yard moves
-
-- **WHEN** `GET /api/v1/yard-moves?page=1&limit=10` is called without `search`
-- **THEN** up to 10 yard move records are returned along with pagination metadata (`total`, `totalPages`, `page`, `limit`)
-
-#### Scenario: GET with search filters by text match
-
-- **WHEN** `GET /api/v1/yard-moves?search=AK` is called
-- **THEN** only yard moves whose `gps`, `fullName`, `truck`, `mooc`, `booking`, or `containerNumber` contains "AK" (case-insensitive) are returned
-
-### Requirement: PATCH /yard-moves/:id updates fields or soft-deletes a yard move
-
-The system SHALL expose `PATCH /api/v1/yard-moves/:id` protected by `JwtAuthGuard`. The request body MUST accept `UpdateYardMoveDto` with all fields from `CreateYardMoveDto` made optional, plus an optional `isActive` boolean. Setting `isActive: false` performs a soft-delete. This is the only update/delete endpoint for yard moves.
-
-#### Scenario: Update changes a subset of fields
-
-- **WHEN** `PATCH /api/v1/yard-moves/:id` is called with `{ notes: "XONG K3" }`
-- **THEN** the response is `200 OK` with `notes` updated and all other fields unchanged
-
-#### Scenario: Soft-delete via isActive false
-
-- **WHEN** `PATCH /api/v1/yard-moves/:id` is called with `{ isActive: false }`
-- **THEN** the record's `isActive` becomes `false` and it is excluded from default `GET /yard-moves` results
-
-#### Scenario: Update on non-existent YardMove returns 404
-
-- **WHEN** `PATCH /api/v1/yard-moves/<nonexistent-id>` is called
-- **THEN** the response is `404 Not Found`
-
 ## REMOVED Requirements
 
 ### Requirement: YardMoveStatus enum defines the yard move lifecycle
@@ -115,5 +117,5 @@ The system SHALL expose `PATCH /api/v1/yard-moves/:id` protected by `JwtAuthGuar
 
 ### Requirement: GET /yard-moves returns yard moves with optional filters
 
-**Reason**: Superseded by the MODIFIED requirement above — filtering by `locationId`/`status` no longer applies since those fields are removed; the endpoint now supports pagination and free-text `search` instead.
-**Migration**: Remove `locationId`/`status` query parameter handling from `YardMoveController.findAll()` and `YardMoveService.findAll()`; add `search`/pagination handling per the MODIFIED requirement.
+**Reason**: Superseded by the ADDED requirement above — filtering by `locationId`/`status` no longer applies since those fields are removed; the endpoint now supports pagination and free-text `search` instead.
+**Migration**: Remove `locationId`/`status` query parameter handling from `YardMoveController.findAll()` and `YardMoveService.findAll()`; add `search`/pagination handling per the ADDED requirement.

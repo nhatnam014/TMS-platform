@@ -5,6 +5,7 @@ import type {
   UpdateContainerSizeDto,
   PaginationQuery,
   PaginatedResponse,
+  BulkDeleteResult,
 } from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 
@@ -86,5 +87,34 @@ export class ContainerSizesService {
     }
 
     return this.prisma.containerSize.delete({ where: { id } });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.containerSize.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        const tripPlanCount = await tx.tripPlan.count({ where: { containerSizeId: id } });
+        if (tripPlanCount > 0) {
+          skipped.push({
+            id,
+            reason: `Referenced by ${tripPlanCount} trip plan(s)`,
+          });
+          continue;
+        }
+
+        await tx.containerSize.delete({ where: { id } });
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

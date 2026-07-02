@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@ne
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateCarrierDto } from "./dto/create-carrier.dto";
 import { UpdateCarrierDto } from "./dto/update-carrier.dto";
 import { CarrierService } from "./carrier.service";
@@ -32,5 +33,11 @@ export class CarrierController {
   @ApiOperation({ summary: "Update a carrier (or soft-deactivate with isActive: false)" })
   update(@Param("id") id: string, @Body() dto: UpdateCarrierDto) {
     return this.carrierService.update(id, dto);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Permanently delete multiple carriers by id (skips those referenced by trip plans)" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.carrierService.bulkDelete(dto.ids);
   }
 }

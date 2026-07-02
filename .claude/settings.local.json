@@ -21,7 +21,10 @@
       "Bash(pnpm --filter @tms/api start)",
       "Bash(curl -s http://localhost:4001/docs)",
       "Bash(xargs kill -9)",
-      "Bash(chmod +x /Users/macbook/TMS-platform/start-pm2.sh)"
+      "Bash(chmod +x /Users/macbook/TMS-platform/start-pm2.sh)",
+      "Bash(node -e 'console.log\\(Intl.DateTimeFormat\\(\\).resolvedOptions\\(\\).timeZone\\); console.log\\(new Date\\(\\).getTimezoneOffset\\(\\)\\)')",
+      "Bash(TZ=Asia/Saigon node -e 'console.log\\(new Date\\(\"2026-06-24\"\\).toISOString\\(\\)\\); console.log\\(new Date\\(2026,5,24\\).toISOString\\(\\)\\)')",
+      "Bash(curl -s -X POST http://localhost:4000/api/v1/import/yard-moves?confirm=true -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjbXBkc2thZXEwMDBrdmhmNzdnb3VlZnMwIiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4Mjk4MDg3MiwiZXhwIjoxNzgzNTg1NjcyfQ.ESBuPSF_HUtN2LZt07AYTCZH6RQ33NMo14rNwVu1ddw' -F file=@/private/tmp/claude-501/-Users-admin-Downloads-tms-platform/c62b4992-6e51-428f-921a-3f3a75aa7988/scratchpad/lenh-bai.xlsx)"
     ]
   }
 }

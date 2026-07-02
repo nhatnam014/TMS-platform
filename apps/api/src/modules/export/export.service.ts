@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Prisma } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { TripPlanService } from "../trip-plan/trip-plan.service";
 import { buildBaoDuongXe } from "./builders/baoduong-xe.builder";
@@ -46,11 +47,18 @@ export class ExportService {
     return buildBaoDuongXe(records, selectedLoaiXe);
   }
 
-  async exportYardMoves(): Promise<Buffer> {
+  async exportYardMoves(from?: string, to?: string): Promise<Buffer> {
+    const where: Prisma.YardMoveWhereInput = { isActive: true };
+    if (from || to) {
+      where.date = {};
+      if (from) where.date.gte = new Date(from);
+      if (to) where.date.lte = new Date(to);
+    }
+
     const records = await this.prisma.yardMove.findMany({
-      where: { isActive: true },
+      where,
       orderBy: { createdAt: "asc" },
     });
-    return buildLenhBai(records);
+    return buildLenhBai(records, from, to);
   }
 }

@@ -1,11 +1,22 @@
 import * as ExcelJS from "exceljs";
+import { parseExcelDate } from "../utils/excel-date";
+
+// For text input, parseExcelDate builds the date with the local-timezone Date(y, m, d)
+// constructor, which shifts the stored value by a day in some timezones once serialized to the
+// `@db.Date` column. Re-anchor to UTC midnight of the same local calendar day to cancel that out.
+// (Native Excel date cells and numeric serials are already UTC-anchored by parseExcelDate, so
+// this re-anchoring is only applied to the text-parsed path — applying it to an already-UTC value
+// would itself introduce a shift in the opposite direction for negative-UTC-offset timezones.)
+function toUtcDateOnly(d: Date): Date {
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
 
 export interface ParsedYardMoveRow {
   rowNum: number;
   type: "data" | "skip";
   reason?: string;
   id?: string;
-  date?: string;
+  date?: Date;
   gps?: string;
   fullName?: string;
   truck?: string;
@@ -127,9 +138,25 @@ export function parseLenhBai(
     if (rowNum <= headerRowNum) return;
     if (rowIsEmpty(row, dataCols)) return;
 
-    const date = cellText(row, COL.NGAY);
-    if (!date) {
+    const dateText = cellText(row, COL.NGAY);
+    if (!dateText) {
       results.push({ rowNum, type: "skip", reason: `Hàng ${rowNum}: thiếu ngày, bỏ qua` });
+      return;
+    }
+
+    const rawDateValue = row.getCell(COL.NGAY).value;
+    const parsedDate = parseExcelDate(rawDateValue);
+    const date = parsedDate
+      ? typeof rawDateValue === "string"
+        ? toUtcDateOnly(parsedDate)
+        : parsedDate
+      : null;
+    if (!date) {
+      results.push({
+        rowNum,
+        type: "skip",
+        reason: `Hàng ${rowNum}: ngày "${dateText}" không đúng định dạng, bỏ qua`,
+      });
       return;
     }
 

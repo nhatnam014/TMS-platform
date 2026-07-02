@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@ne
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
 import { UpdateYardMoveDto } from "./dto/update-yard-move.dto";
 import { YardMoveService } from "./yard-move.service";
@@ -32,5 +33,11 @@ export class YardMoveController {
   @ApiOperation({ summary: "Update yard move fields or soft-delete with { isActive: false }" })
   update(@Param("id") id: string, @Body() dto: UpdateYardMoveDto) {
     return this.yardMoveService.update(id, dto);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Permanently delete multiple yard moves by id" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.yardMoveService.bulkDelete(dto.ids);
   }
 }

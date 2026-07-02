@@ -2,7 +2,12 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@tms/db";
 import { PrismaService } from "../../config/prisma.service";
 import { ENTITY_TYPES } from "@tms/shared";
-import type { YardMoveFilters, PaginationQuery, PaginatedResponse } from "@tms/shared";
+import type {
+  YardMoveFilters,
+  PaginationQuery,
+  PaginatedResponse,
+  BulkDeleteResult,
+} from "@tms/shared";
 import { AuditService } from "../audit/audit.service";
 import { CreateYardMoveDto } from "./dto/create-yard-move.dto";
 import { UpdateYardMoveDto } from "./dto/update-yard-move.dto";
@@ -18,7 +23,7 @@ export class YardMoveService {
     return this.prisma.$transaction(async (tx) => {
       const move = await tx.yardMove.create({
         data: {
-          date: dto.date,
+          date: new Date(dto.date),
           gps: dto.gps,
           fullName: dto.fullName,
           truck: dto.truck,
@@ -35,7 +40,7 @@ export class YardMoveService {
           action: "CREATE",
           entityType: ENTITY_TYPES.YARD_MOVE,
           entityId: move.id,
-          summary: `Created yard move: ${dto.date}${dto.fullName ? ` - ${dto.fullName}` : ""}`,
+          summary: `Created yard move: ${new Date(dto.date).toISOString().slice(0, 10)}${dto.fullName ? ` - ${dto.fullName}` : ""}`,
           afterSnapshot: move as object,
         },
         tx,
@@ -95,7 +100,7 @@ export class YardMoveService {
       const updated = await tx.yardMove.update({
         where: { id },
         data: {
-          ...(dto.date !== undefined ? { date: dto.date } : {}),
+          ...(dto.date !== undefined ? { date: new Date(dto.date) } : {}),
           ...(dto.gps !== undefined ? { gps: dto.gps } : {}),
           ...(dto.fullName !== undefined ? { fullName: dto.fullName } : {}),
           ...(dto.truck !== undefined ? { truck: dto.truck } : {}),
@@ -121,5 +126,37 @@ export class YardMoveService {
 
       return updated;
     });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.yardMove.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        await tx.yardMove.delete({ where: { id } });
+
+        await this.auditService.log(
+          {
+            action: "DELETE",
+            entityType: ENTITY_TYPES.YARD_MOVE,
+            entityId: id,
+            summary: `Deleted yard move: ${existing.date.toISOString().slice(0, 10)}${existing.fullName ? ` - ${existing.fullName}` : ""}`,
+            beforeSnapshot: existing as object,
+          },
+          tx,
+        );
+
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

@@ -7,6 +7,7 @@ import {
   type VehicleRecordFilters,
   type PaginationQuery,
   type PaginatedResponse,
+  type BulkDeleteResult,
 } from "@tms/shared";
 import { CreateVehicleRecordDto } from "./dto/create-vehicle-record.dto";
 import { UpdateVehicleRecordDto } from "./dto/update-vehicle-record.dto";
@@ -233,5 +234,37 @@ export class VehicleRecordService {
         tx,
       );
     });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.vehicleRecord.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        await tx.vehicleRecord.delete({ where: { id } });
+
+        await this.auditService.log(
+          {
+            action: "DELETE",
+            entityType: ENTITY_TYPES.VEHICLE_RECORD,
+            entityId: id,
+            summary: `Deleted vehicle record: ${existing.bienSo ?? "(no plate)"} — ${existing.tenTaiXe ?? "(no driver)"}`,
+            beforeSnapshot: existing as object,
+          },
+          tx,
+        );
+
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

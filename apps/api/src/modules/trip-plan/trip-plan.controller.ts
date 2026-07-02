@@ -12,6 +12,7 @@ import {
 import { ApiOperation, ApiQuery, ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import type { PaginationQuery, TripPlanFilters } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateTripPlanDto } from "./dto/create-trip-plan.dto";
 import { UpdateTripPlanDto } from "./dto/update-trip-plan.dto";
 import { TripPlanService } from "./trip-plan.service";
@@ -65,5 +66,11 @@ export class TripPlanController {
   @ApiOperation({ summary: "Delete a trip plan" })
   delete(@Param("id") id: string) {
     return this.tripPlanService.delete(id);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Delete multiple trip plans by id" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.tripPlanService.bulkDelete(dto.ids);
   }
 }

@@ -58,8 +58,14 @@ export class ExportController {
 
   @Get("yard-moves")
   @ApiOperation({ summary: "Export yard moves (lệnh bãi) as Excel (ADMIN only)" })
-  async exportYardMoves(@Res() res: Response) {
-    const buffer = await this.exportService.exportYardMoves();
+  @ApiQuery({ name: "from", required: false })
+  @ApiQuery({ name: "to", required: false })
+  async exportYardMoves(
+    @Query("from") from: string | undefined,
+    @Query("to") to: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.exportService.exportYardMoves(from, to);
     res.set({
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": 'attachment; filename="tien-do-van-tai.xlsx"',

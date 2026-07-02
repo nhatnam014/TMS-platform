@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateCostTemplateDto } from "./dto/create-cost-template.dto";
 import { UpdateCostTemplateDto } from "./dto/update-cost-template.dto";
 import { CostTemplatesService } from "./cost-templates.service";
@@ -48,5 +49,11 @@ export class CostTemplatesController {
   @ApiOperation({ summary: "Delete a cost template" })
   remove(@Param("id") id: string) {
     return this.costTemplatesService.remove(id);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Delete multiple cost templates by id" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.costTemplatesService.bulkDelete(dto.ids);
   }
 }

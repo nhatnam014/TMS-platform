@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
-import type { PaginatedResponse, TripStatus, TripPlanCostItem } from "@tms/shared";
+import type { BulkDeleteResult, PaginatedResponse, TripStatus, TripPlanCostItem } from "@tms/shared";
+import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
@@ -1559,6 +1560,9 @@ export default function TripPlansPage() {
   const [rawSearch, setRawSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTrip, setEditingTrip] = useState<TripPlanRow | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const selection = useRowSelection(trips.map((t) => t.id));
 
   useEffect(() => {
     const timer = setTimeout(() => setFilters((f) => ({ ...f, search: rawSearch, page: 1 })), 400);
@@ -1596,6 +1600,10 @@ export default function TripPlansPage() {
     };
   }, [filters]);
 
+  useEffect(() => {
+    selection.clear();
+  }, [filters, selection.clear]);
+
   function setFilterField<K extends keyof FilterState>(key: K, value: FilterState[K]) {
     setFilters((f) => ({ ...f, [key]: value, page: 1 }));
   }
@@ -1612,6 +1620,30 @@ export default function TripPlansPage() {
       setFilters((f) => ({ ...f }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Lỗi không xác định");
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selection.selected);
+    const res = await fetch("/api/trip-plans/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setShowBulkConfirm(false);
+    if (!res.ok) {
+      toast.error("Lỗi xoá hàng loạt");
+      return;
+    }
+    const result: BulkDeleteResult = await res.json();
+    setFilters((f) => ({ ...f }));
+    if (result.skipped.length === 0) {
+      toast.success(`Đã xoá ${result.deleted.length} chuyến`);
+    } else {
+      const reasons = Array.from(new Set(result.skipped.map((s) => s.reason))).join("; ");
+      toast.error(
+        `Đã xoá ${result.deleted.length}, bỏ qua ${result.skipped.length}: ${reasons}`,
+      );
     }
   }
 
@@ -1647,8 +1679,8 @@ export default function TripPlansPage() {
   };
   const tdMono: React.CSSProperties = { ...tdStyle, fontFamily: "monospace" };
 
-  // Sticky column widths (px) — left columns STT→SIZE CONT, right columns Trạng thái + Thao tác
-  const LW = [50, 88, 100, 128, 96, 108, 72]; // STT, NGÀY, SỐ XE, KH, LOẠI HÌNH, ĐƠN VỊ, SIZE CONT
+  // Sticky column widths (px) — checkbox + left columns STT→SIZE CONT, right columns Trạng thái + Thao tác
+  const LW = [32, 50, 88, 100, 128, 96, 108, 72]; // checkbox, STT, NGÀY, SỐ XE, KH, LOẠI HÌNH, ĐƠN VỊ, SIZE CONT
   const LL = LW.reduce<number[]>((acc, _w, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + LW[i - 1]);
     return acc;
@@ -1833,6 +1865,11 @@ export default function TripPlansPage() {
         </p>
       ) : (
         <>
+          <BulkActionBar
+            selectedCount={selection.selectedCount}
+            onDelete={() => setShowBulkConfirm(true)}
+            onClear={selection.clear}
+          />
           <div
             style={{
               background: "#fff",
@@ -1845,13 +1882,20 @@ export default function TripPlansPage() {
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
                   {/* Left sticky */}
-                  <th style={thL(0)}>STT</th>
-                  <th style={thL(1)}>NGÀY</th>
-                  <th style={thL(2)}>SỐ XE</th>
-                  <th style={thL(3)}>KHÁCH HÀNG</th>
-                  <th style={thL(4)}>LOẠI HÌNH</th>
-                  <th style={thL(5)}>ĐƠN VỊ</th>
-                  <th style={thL(6)}>SIZE CONT</th>
+                  <th style={thL(0)}>
+                    <SelectionCheckbox
+                      checked={selection.isAllSelected}
+                      onChange={selection.toggleAll}
+                      ariaLabel="Chọn tất cả kế hoạch chuyến"
+                    />
+                  </th>
+                  <th style={thL(1)}>STT</th>
+                  <th style={thL(2)}>NGÀY</th>
+                  <th style={thL(3)}>SỐ XE</th>
+                  <th style={thL(4)}>KHÁCH HÀNG</th>
+                  <th style={thL(5)}>LOẠI HÌNH</th>
+                  <th style={thL(6)}>ĐƠN VỊ</th>
+                  <th style={thL(7)}>SIZE CONT</th>
                   {/* Scrollable */}
                   <th style={thStyle}>CONT ĐI</th>
                   <th style={thStyle}>CONT VỀ</th>
@@ -1876,7 +1920,7 @@ export default function TripPlansPage() {
               <tbody>
                 {trips.length === 0 ? (
                   <tr>
-                    <td colSpan={40} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                    <td colSpan={41} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
                       Không có dữ liệu
                     </td>
                   </tr>
@@ -1888,17 +1932,24 @@ export default function TripPlansPage() {
                     return (
                       <tr key={trip.id} style={{ background: rowBg }}>
                         {/* Left sticky */}
-                        <td style={tdL(0, rowBg)}>{(filters.page - 1) * 10 + i + 1}</td>
-                        <td style={tdL(1, rowBg)}>{formatDate(trip.tripDate)}</td>
-                        <td style={{ ...tdL(2, rowBg), fontFamily: "monospace" }}>
+                        <td style={tdL(0, rowBg)}>
+                          <SelectionCheckbox
+                            checked={selection.isSelected(trip.id)}
+                            onChange={() => selection.toggle(trip.id)}
+                            ariaLabel={`Chọn chuyến ${trip.vehiclePlate ?? trip.id}`}
+                          />
+                        </td>
+                        <td style={tdL(1, rowBg)}>{(filters.page - 1) * 10 + i + 1}</td>
+                        <td style={tdL(2, rowBg)}>{formatDate(trip.tripDate)}</td>
+                        <td style={{ ...tdL(3, rowBg), fontFamily: "monospace" }}>
                           {trip.vehiclePlate ?? "—"}
                         </td>
-                        <td style={tdL(3, rowBg)}>{trip.customer?.name ?? "—"}</td>
-                        <td style={tdL(4, rowBg)}>
+                        <td style={tdL(4, rowBg)}>{trip.customer?.name ?? "—"}</td>
+                        <td style={tdL(5, rowBg)}>
                           {trip.serviceType ? trip.serviceType.code : "—"}
                         </td>
-                        <td style={tdL(5, rowBg)}>{trip.carrier?.name ?? "—"}</td>
-                        <td style={{ ...tdL(6, rowBg), fontFamily: "monospace" }}>
+                        <td style={tdL(6, rowBg)}>{trip.carrier?.name ?? "—"}</td>
+                        <td style={{ ...tdL(7, rowBg), fontFamily: "monospace" }}>
                           {trip.containerSize?.code ?? ""}
                         </td>
                         {/* Scrollable */}
@@ -2023,6 +2074,16 @@ export default function TripPlansPage() {
             </div>
           )}
         </>
+      )}
+
+      {showBulkConfirm && (
+        <ConfirmDialog
+          title="Xác nhận xoá hàng loạt"
+          message={`Bạn có chắc muốn xoá vĩnh viễn ${selection.selectedCount} chuyến đã chọn? Hành động này không thể hoàn tác.`}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkConfirm(false)}
+        />
       )}
     </div>
   );

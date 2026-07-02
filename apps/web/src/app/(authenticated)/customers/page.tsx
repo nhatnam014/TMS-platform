@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/lib/toast-context";
+import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
+import type { BulkDeleteResult } from "@tms/shared";
 
 interface CustomerRow {
   id: string;
@@ -187,6 +189,9 @@ export default function CustomersPage() {
 
   const [deactivating, setDeactivating] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const selection = useRowSelection(customers.map((c) => c.id));
 
   useEffect(() => {
     let cancelled = false;
@@ -218,6 +223,10 @@ export default function CustomersPage() {
       cancelled = true;
     };
   }, [refresh, search, page]);
+
+  useEffect(() => {
+    selection.clear();
+  }, [refresh, search, page, selection.clear]);
 
   async function handleCreate() {
     setCreateError(null);
@@ -303,6 +312,30 @@ export default function CustomersPage() {
     }
   }
 
+  async function handleBulkDelete() {
+    const ids = Array.from(selection.selected);
+    const res = await fetch("/api/customers/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setShowBulkConfirm(false);
+    if (!res.ok) {
+      toast.error("Lỗi xoá hàng loạt");
+      return;
+    }
+    const result: BulkDeleteResult = await res.json();
+    setRefresh((r) => r + 1);
+    if (result.skipped.length === 0) {
+      toast.success(`Đã xoá ${result.deleted.length} khách hàng`);
+    } else {
+      const reasons = Array.from(new Set(result.skipped.map((s) => s.reason))).join("; ");
+      toast.error(
+        `Đã xoá ${result.deleted.length}, bỏ qua ${result.skipped.length}: ${reasons}`,
+      );
+    }
+  }
+
   return (
     <div>
       <div
@@ -363,6 +396,11 @@ export default function CustomersPage() {
               }}
             />
           </div>
+          <BulkActionBar
+            selectedCount={selection.selectedCount}
+            onDelete={() => setShowBulkConfirm(true)}
+            onClear={selection.clear}
+          />
           <div
             style={{
               background: "#fff",
@@ -376,6 +414,13 @@ export default function CustomersPage() {
             >
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ padding: "10px 14px", width: 32 }}>
+                    <SelectionCheckbox
+                      checked={selection.isAllSelected}
+                      onChange={selection.toggleAll}
+                      ariaLabel="Chọn tất cả khách hàng"
+                    />
+                  </th>
                   {["Mã", "Tên", "SĐT", "Email", "Mã số thuế", ""].map((h) => (
                     <th
                       key={h}
@@ -396,7 +441,7 @@ export default function CustomersPage() {
                 {customers.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       style={{ padding: "24px 14px", textAlign: "center", color: "#94a3b8" }}
                     >
                       Chưa có khách hàng
@@ -405,6 +450,13 @@ export default function CustomersPage() {
                 )}
                 {customers.map((c) => (
                   <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                    <td style={{ padding: "10px 14px" }}>
+                      <SelectionCheckbox
+                        checked={selection.isSelected(c.id)}
+                        onChange={() => selection.toggle(c.id)}
+                        ariaLabel={`Chọn khách hàng ${c.name}`}
+                      />
+                    </td>
                     <td style={{ padding: "10px 14px", fontWeight: 600 }}>{c.code}</td>
                     <td style={{ padding: "10px 14px" }}>{c.name}</td>
                     <td style={{ padding: "10px 14px", color: "#64748b" }}>{c.phone ?? "—"}</td>
@@ -640,6 +692,16 @@ export default function CustomersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBulkConfirm && (
+        <ConfirmDialog
+          title="Xác nhận xoá hàng loạt"
+          message={`Bạn có chắc muốn xoá vĩnh viễn ${selection.selectedCount} khách hàng đã chọn? Hành động này không thể hoàn tác.`}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkConfirm(false)}
+        />
       )}
     </div>
   );

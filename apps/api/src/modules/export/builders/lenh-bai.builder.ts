@@ -11,7 +11,13 @@ function formatDate(d: Date | string | null | undefined): string {
   return `${dd}/${mm}/${date.getFullYear()}`;
 }
 
-function addBrandedHeader(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook, title: string) {
+function addBrandedHeader(
+  ws: ExcelJS.Worksheet,
+  wb: ExcelJS.Workbook,
+  title: string,
+  headerFrom: string,
+  headerTo: string,
+) {
   // Header block is a fixed 8 columns wide (H–O), independent of how many data
   // columns the table has — it does not stretch to match the table's width.
   const endCol = 15;
@@ -39,8 +45,6 @@ function addBrandedHeader(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook, title: st
     // Logo is optional branding — skip silently if missing/unreadable
   }
 
-  const today = formatDate(new Date());
-
   ws.mergeCells(3, 8, 3, endCol);
   const titleCell = ws.getCell(3, 8);
   titleCell.value = title;
@@ -49,7 +53,7 @@ function addBrandedHeader(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook, title: st
 
   ws.mergeCells(5, 8, 5, endCol);
   const dateCell = ws.getCell(5, 8);
-  dateCell.value = `Ngày xuất: ${today}`;
+  dateCell.value = `From: ${headerFrom}  To: ${headerTo}`;
   dateCell.font = { size: 11 };
   dateCell.alignment = { horizontal: "center", vertical: "middle" };
 }
@@ -63,14 +67,25 @@ const HEADERS = [
   "MOOC",
   "BOOKING",
   "CONTAINER",
-  "ĐÃ KÉO",
   "GHI CHÚ",
+  "ĐÃ KÉO",
   "ID",
 ];
 
-const COL_WIDTHS = [6, 12, 10, 24, 14, 14, 18, 16, 30, 14, 30];
+const COL_WIDTHS = [6, 14, 10, 24, 14, 14, 18, 16, 30, 14, 30];
 
-export async function buildLenhBai(records: any[]): Promise<Buffer> {
+export async function buildLenhBai(
+  records: any[],
+  from?: string,
+  to?: string,
+): Promise<Buffer> {
+  const headerFrom =
+    from ??
+    (records.length > 0
+      ? formatDate(new Date(Math.min(...records.map((r) => new Date(r.date).getTime()))))
+      : "");
+  const headerTo = to ?? formatDate(new Date());
+
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("tiến độ vận tải");
 
@@ -78,7 +93,7 @@ export async function buildLenhBai(records: any[]): Promise<Buffer> {
     ws.getColumn(i + 1).width = COL_WIDTHS[i];
   });
 
-  addBrandedHeader(ws, wb, "TIẾN ĐỘ VẬN TẢI");
+  addBrandedHeader(ws, wb, "TIẾN ĐỘ VẬN TẢI", headerFrom, headerTo);
 
   // Column header row at row 9 (rows 1–8 are the branded header block)
   const headerRowObj = ws.addRow(HEADERS);
@@ -91,7 +106,7 @@ export async function buildLenhBai(records: any[]): Promise<Buffer> {
   records.forEach((rec, idx) => {
     const row = ws.addRow([
       idx + 1,
-      rec.date ?? "",
+      rec.date ?? null,
       rec.gps ?? "",
       rec.fullName ?? "",
       rec.truck ?? "",
@@ -102,6 +117,9 @@ export async function buildLenhBai(records: any[]): Promise<Buffer> {
       rec.daKeo ?? "",
       rec.id,
     ]);
+    // Real date value so the sheet displays "dd-mm" while the full date remains
+    // in the underlying value (visible in the formula bar / on re-import).
+    row.getCell(2).numFmt = "dd-mm";
     // Style the ID cell to indicate it's system-managed
     row.getCell(HEADERS.length).font = { color: { argb: "FF9CA3AF" }, size: 9 };
   });

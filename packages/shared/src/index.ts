@@ -16,6 +16,16 @@ export interface UpdateUserDto {
   isActive?: boolean;
 }
 
+// ---------- Bulk Delete ----------
+export interface BulkDeleteDto {
+  ids: string[];
+}
+
+export interface BulkDeleteResult {
+  deleted: string[];
+  skipped: { id: string; reason: string }[];
+}
+
 // ---------- Reference Data DTOs ----------
 export interface CreateCustomerDto {
   code: string;

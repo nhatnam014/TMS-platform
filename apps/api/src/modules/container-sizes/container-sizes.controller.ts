@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import type { PaginationQuery } from "@tms/shared";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateContainerSizeDto } from "./dto/create-container-size.dto";
 import { UpdateContainerSizeDto } from "./dto/update-container-size.dto";
 import { ContainerSizesService } from "./container-sizes.service";
@@ -54,5 +55,11 @@ export class ContainerSizesController {
   @ApiOperation({ summary: "Delete a container size (409 if referenced by trip plans)" })
   remove(@Param("id") id: string) {
     return this.containerSizesService.remove(id);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Delete multiple container sizes by id (skips those referenced by trip plans)" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.containerSizesService.bulkDelete(dto.ids);
   }
 }

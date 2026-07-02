@@ -6,6 +6,7 @@ import type {
   UpdateLocationDto,
   PaginationQuery,
   PaginatedResponse,
+  BulkDeleteResult,
 } from "@tms/shared";
 import { PrismaService } from "../../config/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -117,5 +118,37 @@ export class LocationService {
         throw e;
       }
     });
+  }
+
+  async bulkDelete(ids: string[]): Promise<BulkDeleteResult> {
+    const deleted: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ids) {
+        const existing = await tx.location.findUnique({ where: { id } });
+        if (!existing) {
+          skipped.push({ id, reason: "Not found" });
+          continue;
+        }
+
+        await tx.location.delete({ where: { id } });
+
+        await this.auditService.log(
+          {
+            action: "DELETE",
+            entityType: ENTITY_TYPES.LOCATION,
+            entityId: id,
+            summary: `Deleted location: ${existing.code} — ${existing.name}`,
+            beforeSnapshot: existing as object,
+          },
+          tx,
+        );
+
+        deleted.push(id);
+      }
+    });
+
+    return { deleted, skipped };
   }
 }

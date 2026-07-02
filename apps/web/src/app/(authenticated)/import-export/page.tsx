@@ -731,6 +731,8 @@ export default function ImportExportPage() {
   const { role } = useAuth();
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [yardFromDate, setYardFromDate] = useState("");
+  const [yardToDate, setYardToDate] = useState("");
 
   if (role && role !== "ADMIN") {
     return (
@@ -897,12 +899,59 @@ export default function ImportExportPage() {
       >
         <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất tiến độ vận tải</h2>
         <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
-          Xuất danh sách tiến độ vận tải ra file Excel.
+          Xuất danh sách tiến độ vận tải ra file Excel. Lọc theo ngày (tùy chọn).
         </p>
         <DownloadButton
           label="Tải xuống tien-do-van-tai.xlsx"
           endpoint="/api/export/yard-moves"
           filename="tien-do-van-tai.xlsx"
+          buildUrl={() => {
+            const params = new URLSearchParams();
+            if (yardFromDate) params.set("from", yardFromDate);
+            if (yardToDate) params.set("to", yardToDate);
+            const qs = params.toString();
+            return `/api/export/yard-moves${qs ? `?${qs}` : ""}`;
+          }}
+          extraInputs={
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div>
+                <label
+                  style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}
+                >
+                  Từ ngày
+                </label>
+                <input
+                  type="date"
+                  value={yardFromDate}
+                  onChange={(e) => setYardFromDate(e.target.value)}
+                  style={{
+                    padding: "6px 10px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 6,
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+              <div>
+                <label
+                  style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}
+                >
+                  Đến ngày
+                </label>
+                <input
+                  type="date"
+                  value={yardToDate}
+                  onChange={(e) => setYardToDate(e.target.value)}
+                  style={{
+                    padding: "6px 10px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 6,
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+            </div>
+          }
         />
       </div>
     </div>

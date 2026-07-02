@@ -2,6 +2,8 @@
 
 import { useToast } from "@/lib/toast-context";
 import { useEffect, useState } from "react";
+import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
+import type { BulkDeleteResult } from "@tms/shared";
 
 interface ServiceTypeRow {
   id: string;
@@ -191,6 +193,9 @@ export default function ServiceTypesPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [isActiveFilter, setIsActiveFilter] = useState("");
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  const selection = useRowSelection(rows.map((r) => r.id));
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +225,10 @@ export default function ServiceTypesPage() {
       cancelled = true;
     };
   }, [refresh, page, search, isActiveFilter]);
+
+  useEffect(() => {
+    selection.clear();
+  }, [refresh, page, search, isActiveFilter, selection.clear]);
 
   async function handleCreate() {
     setCreateError(null);
@@ -272,6 +281,30 @@ export default function ServiceTypesPage() {
     } else {
       const body = await res.json().catch(() => ({}));
       toast.error(body.message ?? "Lỗi xoá loại dịch vụ");
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selection.selected);
+    const res = await fetch("/api/service-types/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setShowBulkConfirm(false);
+    if (!res.ok) {
+      toast.error("Lỗi xoá hàng loạt");
+      return;
+    }
+    const result: BulkDeleteResult = await res.json();
+    setRefresh((r) => r + 1);
+    if (result.skipped.length === 0) {
+      toast.success(`Đã xoá ${result.deleted.length} loại dịch vụ`);
+    } else {
+      const reasons = Array.from(new Set(result.skipped.map((s) => s.reason))).join("; ");
+      toast.error(
+        `Đã xoá ${result.deleted.length}, bỏ qua ${result.skipped.length}: ${reasons}`,
+      );
     }
   }
 
@@ -362,6 +395,12 @@ export default function ServiceTypesPage() {
       )}
 
       {!loading && !error && (
+        <>
+        <BulkActionBar
+          selectedCount={selection.selectedCount}
+          onDelete={() => setShowBulkConfirm(true)}
+          onClear={selection.clear}
+        />
         <div
           style={{
             background: "#fff",
@@ -373,6 +412,13 @@ export default function ServiceTypesPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <th style={{ padding: "10px 14px", width: 32 }}>
+                  <SelectionCheckbox
+                    checked={selection.isAllSelected}
+                    onChange={selection.toggleAll}
+                    ariaLabel="Chọn tất cả loại dịch vụ"
+                  />
+                </th>
                 {["Mã dịch vụ", "Mô tả", "Trạng thái", ""].map((h) => (
                   <th
                     key={h}
@@ -393,7 +439,7 @@ export default function ServiceTypesPage() {
               {rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     style={{ padding: "24px 14px", textAlign: "center", color: "#94a3b8" }}
                   >
                     Chưa có loại dịch vụ
@@ -402,6 +448,13 @@ export default function ServiceTypesPage() {
               )}
               {rows.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "10px 14px" }}>
+                    <SelectionCheckbox
+                      checked={selection.isSelected(r.id)}
+                      onChange={() => selection.toggle(r.id)}
+                      ariaLabel={`Chọn loại dịch vụ ${r.code}`}
+                    />
+                  </td>
                   <td style={{ padding: "10px 14px", fontWeight: 600 }}>{r.code}</td>
                   <td style={{ padding: "10px 14px" }}>{r.description}</td>
                   <td style={{ padding: "10px 14px" }}>
@@ -541,6 +594,7 @@ export default function ServiceTypesPage() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {showCreate && (
@@ -636,6 +690,16 @@ export default function ServiceTypesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBulkConfirm && (
+        <ConfirmDialog
+          title="Xác nhận xoá hàng loạt"
+          message={`Bạn có chắc muốn xoá vĩnh viễn ${selection.selectedCount} loại dịch vụ đã chọn? Những mục đang được sử dụng trong kế hoạch chuyến sẽ được bỏ qua.`}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkConfirm(false)}
+        />
       )}
     </div>
   );

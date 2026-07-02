@@ -783,7 +783,7 @@ export class ImportService {
           notes: row.notes ?? null,
           daKeo: row.daKeo ?? null,
         };
-        const identifier = `${row.date}${row.fullName ? ` - ${row.fullName}` : ""}`;
+        const identifier = `${row.date!.toISOString().slice(0, 10)}${row.fullName ? ` - ${row.fullName}` : ""}`;
 
         const before = row.id ? await this.prisma.yardMove.findUnique({ where: { id: row.id } }) : null;
         if (row.id && !before) {

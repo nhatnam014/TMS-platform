@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { VehicleRecordService } from "./vehicle-record.service";
+import { BulkDeleteDto } from "./dto/bulk-delete.dto";
 import { CreateVehicleRecordDto } from "./dto/create-vehicle-record.dto";
 import { UpdateVehicleRecordDto } from "./dto/update-vehicle-record.dto";
 
@@ -61,5 +62,11 @@ export class VehicleRecordController {
   @ApiOperation({ summary: "Delete a vehicle record and all its moocs" })
   delete(@Param("id") id: string) {
     return this.vehicleRecordService.delete(id);
+  }
+
+  @Post("bulk-delete")
+  @ApiOperation({ summary: "Delete multiple vehicle records by id" })
+  bulkDelete(@Body() dto: BulkDeleteDto) {
+    return this.vehicleRecordService.bulkDelete(dto.ids);
   }
 }
