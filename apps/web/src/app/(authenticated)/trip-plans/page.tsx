@@ -1803,6 +1803,11 @@ export default function TripPlansPage() {
               label="Tải xuống ke-hoach-xe.xlsx"
               endpoint="/api/export/trip-plans"
               filename="ke-hoach-xe.xlsx"
+              emptyResultMessage={
+                exportFromDate || exportToDate
+                  ? `Không có chuyến nào${exportFromDate ? ` từ ${formatDate(exportFromDate)}` : ""}${exportToDate ? ` đến ${formatDate(exportToDate)}` : ""}.`
+                  : "Không có chuyến nào phù hợp."
+              }
               buildUrl={() => {
                 const params = new URLSearchParams();
                 if (exportFromDate) params.set("from", exportFromDate);

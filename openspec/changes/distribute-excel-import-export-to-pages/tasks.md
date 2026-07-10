@@ -57,3 +57,17 @@
 - [ ] 9.2 As a non-ADMIN user, confirm all 4 pages' import/export buttons are visible and functional (upload succeeds, download succeeds) — this is the intended behavior change, not a regression
 - [ ] 9.3 Confirm `user.controller.ts` and `audit.controller.ts` endpoints still correctly reject non-ADMIN callers (RolesGuard unaffected there)
 - [ ] 9.4 Confirm navigating to `/import-export` no longer shows the old page
+
+## 10. Empty-result export feedback (X-Export-Row-Count)
+
+- [x] 10.1 In `apps/api/src/modules/export/export.service.ts`, change `exportTripPlans` to return `{ buffer: Buffer; count: number }` (`count` = `result.data.length` from the existing `TripPlanService.findAll` call, captured before calling `buildKeHoachXe`)
+- [x] 10.2 In the same file, change `exportYardMoves` to return `{ buffer: Buffer; count: number }` (`count` = `records.length`, captured before calling `buildLenhBai`) — combined effect of `isActive` + `from`/`to` + `daKeoStatus` filtering already applied to that query
+- [x] 10.3 In `apps/api/src/modules/export/export.controller.ts`, update `exportTripPlans` and `exportYardMoves` handlers to destructure `{ buffer, count }` from the service call and add `res.set("X-Export-Row-Count", String(count))` alongside the existing `Content-Disposition`/`Content-Type` headers, before `res.end(buffer)`
+- [x] 10.4 Confirm `exportVehicles` and `exportVehicleMaintenance` (controller + service) are left unchanged — out of scope per design.md Decision 6
+- [x] 10.5 In `apps/web/src/components/import-export/download-button.tsx`, add an optional `emptyResultMessage?: string` prop; after a successful fetch, read `res.headers.get("X-Export-Row-Count")` and show `emptyResultMessage` (if provided, else a generic fallback) via `toast` as a warning when the count is `0`, otherwise keep the existing generic success toast — the file download itself is triggered in both cases, unchanged (uses `toast.error(...)` since the shared toast system only supports `success`/`error`, no dedicated `warning` tier — adding one was out of scope for this task)
+- [x] 10.6 In `apps/web/src/app/(authenticated)/trip-plans/page.tsx`, compute `emptyResultMessage` from `exportFromDate`/`exportToDate` state (e.g. "Không có chuyến nào từ {từ ngày} đến {đến ngày}" when dates are set, or a generic "Không có chuyến nào phù hợp" fallback when neither is set) and pass it to the trip-plans `DownloadButton`
+- [x] 10.7 In `apps/web/src/app/(authenticated)/yard-moves/page.tsx`, compute `emptyResultMessage` from `exportFromDate`/`exportToDate`/`exportDaKeoStatus` state, echoing back whichever of the three are actually active (omit unset ones), and pass it to the yard-moves `DownloadButton`
+- [ ] 10.8 Manually verify: exporting trip-plans with a date range matching 0 rows still downloads a valid (header-only) file and shows the filter-aware warning toast, not "Tải xuống thành công"
+- [ ] 10.9 Manually verify: exporting yard-moves with a date range + đã kéo/tồn combination that intersects to 0 rows (but each filter alone would match something) still downloads a valid file and shows a warning toast listing both active filters
+- [ ] 10.10 Manually verify: exporting either page with filters that do match rows shows the unchanged generic success toast (no regression)
+- [x] 10.11 Run `apps/web` and `apps/api` type-check after these changes — both pass clean

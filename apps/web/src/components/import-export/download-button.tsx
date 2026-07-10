@@ -9,9 +9,18 @@ interface DownloadButtonProps {
   filename: string;
   extraInputs?: React.ReactNode;
   buildUrl?: () => string;
+  /** Shown instead of the generic success toast when the response's X-Export-Row-Count is 0. The file still downloads either way. */
+  emptyResultMessage?: string;
 }
 
-export function DownloadButton({ label, endpoint, filename, extraInputs, buildUrl }: DownloadButtonProps) {
+export function DownloadButton({
+  label,
+  endpoint,
+  filename,
+  extraInputs,
+  buildUrl,
+  emptyResultMessage,
+}: DownloadButtonProps) {
   const toast = useToast();
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,13 +37,19 @@ export function DownloadButton({ label, endpoint, filename, extraInputs, buildUr
         toast.error(msg);
         return;
       }
+      const rowCountHeader = res.headers.get("X-Export-Row-Count");
+      const rowCount = rowCountHeader !== null ? Number(rowCountHeader) : null;
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = filename;
       a.click();
       URL.revokeObjectURL(a.href);
-      toast.success("Tải xuống thành công");
+      if (rowCount === 0) {
+        toast.error(emptyResultMessage ?? "Không có bản ghi nào phù hợp bộ lọc đã chọn.");
+      } else {
+        toast.success("Tải xuống thành công");
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Lỗi không xác định";
       setError(msg);

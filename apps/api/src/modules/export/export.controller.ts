@@ -20,11 +20,12 @@ export class ExportController {
     @Query("to") to: string | undefined,
     @Res() res: Response,
   ) {
-    const buffer = await this.exportService.exportTripPlans(from, to);
+    const { buffer, count } = await this.exportService.exportTripPlans(from, to);
     res.set({
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": 'attachment; filename="ke-hoach-xe.xlsx"',
       "Content-Length": buffer.length,
+      "X-Export-Row-Count": String(count),
     });
     res.end(buffer);
   }
@@ -71,11 +72,12 @@ export class ExportController {
     @Query("daKeoStatus") daKeoStatus: "hauled" | "pending" | undefined,
     @Res() res: Response,
   ) {
-    const buffer = await this.exportService.exportYardMoves(from, to, daKeoStatus);
+    const { buffer, count } = await this.exportService.exportYardMoves(from, to, daKeoStatus);
     res.set({
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": 'attachment; filename="tien-do-van-tai.xlsx"',
       "Content-Length": buffer.length,
+      "X-Export-Row-Count": String(count),
     });
     res.end(buffer);
   }

@@ -14,12 +14,13 @@ export class ExportService {
     private readonly tripPlanService: TripPlanService,
   ) {}
 
-  async exportTripPlans(from?: string, to?: string): Promise<Buffer> {
+  async exportTripPlans(from?: string, to?: string): Promise<{ buffer: Buffer; count: number }> {
     const result = await this.tripPlanService.findAll(
       { dateFrom: from, dateTo: to },
       { page: 1, limit: 10000 },
     );
-    return buildKeHoachXe(result.data, from, to);
+    const buffer = await buildKeHoachXe(result.data, from, to);
+    return { buffer, count: result.data.length };
   }
 
   async exportVehicles(): Promise<Buffer> {
@@ -51,7 +52,7 @@ export class ExportService {
     from?: string,
     to?: string,
     daKeoStatus?: "hauled" | "pending",
-  ): Promise<Buffer> {
+  ): Promise<{ buffer: Buffer; count: number }> {
     const where: Prisma.YardMoveWhereInput = { isActive: true };
     if (from || to) {
       where.date = {};
@@ -68,6 +69,7 @@ export class ExportService {
       where,
       orderBy: { createdAt: "asc" },
     });
-    return buildLenhBai(records, from, to);
+    const buffer = await buildLenhBai(records, from, to);
+    return { buffer, count: records.length };
   }
 }

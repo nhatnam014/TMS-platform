@@ -625,6 +625,15 @@ export default function YardMovesPage() {
               label="Tải xuống tien-do-van-tai.xlsx"
               endpoint="/api/export/yard-moves"
               filename="tien-do-van-tai.xlsx"
+              emptyResultMessage={(() => {
+                const parts: string[] = [];
+                if (exportFromDate) parts.push(`từ ${formatDate(exportFromDate)}`);
+                if (exportToDate) parts.push(`đến ${formatDate(exportToDate)}`);
+                if (exportDaKeoStatus) parts.push(`trạng thái "${exportDaKeoStatus === "hauled" ? "Đã kéo" : "Tồn"}"`);
+                return parts.length > 0
+                  ? `Không có bản ghi nào phù hợp (${parts.join(", ")}).`
+                  : "Không có bản ghi nào phù hợp.";
+              })()}
               buildUrl={() => {
                 const params = new URLSearchParams();
                 if (exportFromDate) params.set("from", exportFromDate);
