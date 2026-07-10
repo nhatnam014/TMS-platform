@@ -8,6 +8,9 @@ import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
 import { Combobox, type ComboboxOption } from "@/components/Combobox";
 import { SelectInput } from "@/components/SelectInput";
+import { ImportExportModal } from "@/components/import-export/import-export-modal";
+import { UploadSection } from "@/components/import-export/upload-section";
+import { DownloadButton } from "@/components/import-export/download-button";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -1561,6 +1564,9 @@ export default function TripPlansPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTrip, setEditingTrip] = useState<TripPlanRow | null>(null);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [exportFromDate, setExportFromDate] = useState("");
+  const [exportToDate, setExportToDate] = useState("");
 
   const selection = useRowSelection(trips.map((t) => t.id));
 
@@ -1757,11 +1763,83 @@ export default function TripPlansPage() {
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Kế hoạch chuyến</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {!loading && <span style={{ fontSize: 13, color: "#64748b" }}>{total} chuyến</span>}
+          <button
+            onClick={() => setShowImportExport(true)}
+            style={{
+              padding: "8px 16px",
+              background: "#fff",
+              color: "#374151",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            Nhập / Xuất Excel
+          </button>
           <button onClick={() => setShowCreateModal(true)} style={btnPrimary}>
             + Tạo chuyến
           </button>
         </div>
       </div>
+
+      {showImportExport && (
+        <ImportExportModal
+          title="Nhập / Xuất Excel — Kế hoạch chuyến"
+          onClose={() => setShowImportExport(false)}
+        >
+          <UploadSection
+            title="Nhập kế hoạch chuyến"
+            endpoint="/api/import/trip-plans"
+            onImported={() => setFilters((f) => ({ ...f }))}
+            description="Tải lên sheet 'kế hoạch xe' — mỗi lần nhập sẽ tạo thêm bản ghi mới. Khách hàng, hãng xe, địa điểm chưa có sẽ được tự tạo."
+          />
+          <div style={{ background: "#fff", borderRadius: 10, padding: 24, border: "1px solid #e5e7eb" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất kế hoạch chuyến</h2>
+            <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+              Xuất danh sách chuyến ra file Excel với tiêu đề tiếng Việt. Lọc theo ngày (tùy chọn).
+            </p>
+            <DownloadButton
+              label="Tải xuống ke-hoach-xe.xlsx"
+              endpoint="/api/export/trip-plans"
+              filename="ke-hoach-xe.xlsx"
+              buildUrl={() => {
+                const params = new URLSearchParams();
+                if (exportFromDate) params.set("from", exportFromDate);
+                if (exportToDate) params.set("to", exportToDate);
+                const qs = params.toString();
+                return `/api/export/trip-plans${qs ? `?${qs}` : ""}`;
+              }}
+              extraInputs={
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                      Từ ngày
+                    </label>
+                    <input
+                      type="date"
+                      value={exportFromDate}
+                      onChange={(e) => setExportFromDate(e.target.value)}
+                      style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                      Đến ngày
+                    </label>
+                    <input
+                      type="date"
+                      value={exportToDate}
+                      onChange={(e) => setExportToDate(e.target.value)}
+                      style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+              }
+            />
+          </div>
+        </ImportExportModal>
+      )}
 
       {/* Filter bar */}
       <div

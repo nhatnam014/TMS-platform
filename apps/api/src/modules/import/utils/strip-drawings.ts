@@ -7,12 +7,20 @@ import JSZip from "jszip";
 // strip every drawing/media part (and the worksheet's reference to it) from the
 // zip before handing the buffer to ExcelJS — sidestepping that fragile code path
 // entirely regardless of which tool re-saved the file.
+//
+// Legacy cell comments (VML "notes") hit the same class of bug: a sheet with real
+// comments has a VmlDrawing relationship pointing at xl/drawings/vmlDrawingN.vml —
+// a file that lives under xl/drawings/ and therefore gets deleted above. ExcelJS's
+// reconcile() then dereferences that now-missing file via the still-present
+// relationship and throws "Cannot read properties of undefined (reading 'comments')".
+// Since import never reads comments either, we drop the comments parts and BOTH
+// the comments and vmlDrawing relationships/references, not just plain drawings.
 export async function stripDrawingsFromXlsx(buffer: Buffer): Promise<Buffer> {
   const zip = await JSZip.loadAsync(buffer);
 
   const toRemove: string[] = [];
   zip.forEach((relativePath) => {
-    if (/^xl\/(drawings|media)\//.test(relativePath)) {
+    if (/^xl\/(drawings|media)\//.test(relativePath) || /^xl\/comments\d+\.xml$/.test(relativePath)) {
       toRemove.push(relativePath);
     }
   });
@@ -25,7 +33,10 @@ export async function stripDrawingsFromXlsx(buffer: Buffer): Promise<Buffer> {
     const file = zip.file(relsPath);
     if (!file) continue;
     const xml = await file.async("string");
-    const stripped = xml.replace(/<Relationship[^>]*Type="[^"]*\/drawing"[^>]*\/>/g, "");
+    const stripped = xml.replace(
+      /<Relationship[^>]*Type="[^"]*\/(?:drawing|vmlDrawing|comments)"[^>]*\/>/g,
+      "",
+    );
     zip.file(relsPath, stripped);
   }
 
@@ -36,7 +47,9 @@ export async function stripDrawingsFromXlsx(buffer: Buffer): Promise<Buffer> {
     const file = zip.file(sheetPath);
     if (!file) continue;
     const xml = await file.async("string");
-    const stripped = xml.replace(/<drawing[^>]*\/>/g, "");
+    const stripped = xml
+      .replace(/<drawing[^>]*\/>/g, "")
+      .replace(/<legacyDrawing[^>]*\/>/g, "");
     zip.file(sheetPath, stripped);
   }
 

@@ -47,12 +47,21 @@ export class ExportService {
     return buildBaoDuongXe(records, selectedLoaiXe);
   }
 
-  async exportYardMoves(from?: string, to?: string): Promise<Buffer> {
+  async exportYardMoves(
+    from?: string,
+    to?: string,
+    daKeoStatus?: "hauled" | "pending",
+  ): Promise<Buffer> {
     const where: Prisma.YardMoveWhereInput = { isActive: true };
     if (from || to) {
       where.date = {};
       if (from) where.date.gte = new Date(from);
       if (to) where.date.lte = new Date(to);
+    }
+    if (daKeoStatus === "hauled") {
+      where.AND = [{ daKeo: { not: null } }, { NOT: { daKeo: "" } }];
+    } else if (daKeoStatus === "pending") {
+      where.OR = [{ daKeo: null }, { daKeo: "" }];
     }
 
     const records = await this.prisma.yardMove.findMany({

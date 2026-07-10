@@ -10,12 +10,11 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { RolesGuard } from "../audit/roles.guard";
 import { ImportService } from "./import.service";
 
 @ApiTags("Import")
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 @Controller("import")
 export class ImportController {
   constructor(private readonly importService: ImportService) {}
@@ -23,7 +22,7 @@ export class ImportController {
   @Post("vehicles")
   @ApiOperation({
     summary:
-      "Import vehicle records from quản lý xe sheet (ADMIN only). Without ?confirm=true returns a preview with conflict analysis.",
+      "Import vehicle records from quản lý xe sheet. Without ?confirm=true returns a preview with conflict analysis.",
   })
   @ApiQuery({
     name: "confirm",
@@ -39,7 +38,7 @@ export class ImportController {
   }
 
   @Post("trip-plans")
-  @ApiOperation({ summary: "Import trip plans from kế hoạch xe sheet (ADMIN only)" })
+  @ApiOperation({ summary: "Import trip plans from kế hoạch xe sheet" })
   @ApiConsumes("multipart/form-data")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
   importTripPlans(@UploadedFile() file: Express.Multer.File) {
@@ -48,7 +47,7 @@ export class ImportController {
   }
 
   @Post("vehicle-maintenance")
-  @ApiOperation({ summary: "Import vehicle maintenance records from multi-sheet Excel (ADMIN only)" })
+  @ApiOperation({ summary: "Import vehicle maintenance records from multi-sheet Excel" })
   @ApiConsumes("multipart/form-data")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
   importVehicleMaintenance(@UploadedFile() file: Express.Multer.File) {
@@ -59,7 +58,7 @@ export class ImportController {
   @Post("yard-moves")
   @ApiOperation({
     summary:
-      "Import yard moves from lệnh bãi sheet (ADMIN only). Without ?confirm=true returns a preview with create/update counts.",
+      "Import yard moves from tiến độ vận tải sheet. Without ?confirm=true returns a preview with create/update counts.",
   })
   @ApiQuery({
     name: "confirm",

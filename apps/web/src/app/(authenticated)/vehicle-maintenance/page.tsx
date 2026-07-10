@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
+import { ImportExportModal } from "@/components/import-export/import-export-modal";
+import { UploadSection } from "@/components/import-export/upload-section";
+import { LoaiXeExportPopup } from "@/components/import-export/loai-xe-export-popup";
 
 interface KmRound {
   id: string;
@@ -394,7 +397,50 @@ export default function VehicleMaintenancePage() {
 
   const [editTarget, setEditTarget] = useState<VehicleRecord | null>(null);
 
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [loaiXeList, setLoaiXeList] = useState<string[]>([]);
+  const [showLoaiXePopup, setShowLoaiXePopup] = useState(false);
+  const [exportDownloading, setExportDownloading] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showImportExport) return;
+    fetch("/api/vehicle-records/distinct-loai-xe")
+      .then((r) => r.json())
+      .then((data: string[]) => setLoaiXeList(data))
+      .catch(() => {});
+  }, [showImportExport]);
+
+  async function handleConfirmMaintenanceExport(selected: string[]) {
+    setExportDownloading(true);
+    setExportError(null);
+    try {
+      const params = selected.length > 0 ? `?units=${selected.join(",")}` : "";
+      const res = await fetch(`/api/export/vehicle-maintenance${params}`);
+      if (!res.ok) {
+        const msg = `Lỗi ${res.status}`;
+        setExportError(msg);
+        toast.error(msg);
+        return;
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "bao-duong-xe.xlsx";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Tải xuống thành công");
+      setShowLoaiXePopup(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+      setExportError(msg);
+      toast.error(msg);
+    } finally {
+      setExportDownloading(false);
+    }
+  }
 
   function handleSearchChange(val: string) {
     setSearch(val);
@@ -447,7 +493,72 @@ export default function VehicleMaintenancePage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Bảo dưỡng xe</h1>
+        <button
+          onClick={() => setShowImportExport(true)}
+          style={{
+            padding: "8px 16px",
+            background: "#fff",
+            color: "#374151",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            fontSize: 14,
+            cursor: "pointer",
+          }}
+        >
+          Nhập / Xuất Excel
+        </button>
       </div>
+
+      {showImportExport && (
+        <ImportExportModal
+          title="Nhập / Xuất Excel — Bảo dưỡng xe"
+          onClose={() => setShowImportExport(false)}
+        >
+          <UploadSection
+            title="Nhập bảo dưỡng xe"
+            endpoint="/api/import/vehicle-maintenance"
+            onImported={() => setRefresh((r) => r + 1)}
+            description="Tải lên file Excel nhiều sheet (mỗi sheet là một loại xe). Hàng có ID → cập nhật; hàng không có ID → tạo mới."
+          />
+          <div style={{ background: "#fff", borderRadius: 10, padding: 24, border: "1px solid #e5e7eb" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất bảo dưỡng xe</h2>
+            <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+              Xuất bảo dưỡng xe ra file Excel nhiều sheet. Mỗi sheet tương ứng với một loại xe từ quản lý xe.
+            </p>
+            {loaiXeList.length === 0 && (
+              <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>Chưa có loại xe nào trong hệ thống.</p>
+            )}
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button
+                onClick={() => setShowLoaiXePopup(true)}
+                disabled={loaiXeList.length === 0}
+                style={{
+                  padding: "8px 18px",
+                  background: "#059669",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  fontSize: 14,
+                  cursor: loaiXeList.length === 0 ? "not-allowed" : "pointer",
+                  opacity: loaiXeList.length === 0 ? 0.6 : 1,
+                  fontWeight: 500,
+                }}
+              >
+                Xuất Excel bảo dưỡng xe
+              </button>
+              {exportError && <span style={{ fontSize: 12, color: "#dc2626" }}>{exportError}</span>}
+            </div>
+            {showLoaiXePopup && (
+              <LoaiXeExportPopup
+                loaiXeList={loaiXeList}
+                onConfirm={handleConfirmMaintenanceExport}
+                onClose={() => setShowLoaiXePopup(false)}
+                downloading={exportDownloading}
+              />
+            )}
+          </div>
+        </ImportExportModal>
+      )}
 
       <div style={{ background: "#fff", borderRadius: 10, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", padding: "14px 16px", marginBottom: 14 }}>
         <input

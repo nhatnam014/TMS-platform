@@ -117,21 +117,33 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
     if (rowValues.every((v) => v === null || v === undefined || v === "")) return;
 
     const sttRaw = STT > 0 ? cellText(row, STT) : "";
-    const soMooc = SO_MOOC > 0 ? cellText(row, SO_MOOC) : "";
+    const soMoocRaw = SO_MOOC > 0 ? cellText(row, SO_MOOC) : "";
+    // Real mooc plates always contain a digit (e.g. "50RM03596"). Placeholder/status
+    // text some templates put in this column instead (e.g. "DỌN BÃI") never does —
+    // treat those as "no mooc on this row" rather than importing the text as a plate.
+    const soMooc = soMoocRaw && /\d/.test(soMoocRaw) ? soMoocRaw : "";
 
     const hanDangKiem = HAN_DK > 0 ? parseExcelDate(row.getCell(HAN_DK).value) : null;
     const hanBaoHiem = HAN_BH > 0 ? parseExcelDate(row.getCell(HAN_BH).value) : null;
     const hanCaVet = HAN_CV > 0 ? parseExcelDate(row.getCell(HAN_CV).value) : null;
-    const moocHanDangKiem = HAN_DK_MOOC > 0 ? parseExcelDate(row.getCell(HAN_DK_MOOC).value) : null;
-    const moocHanBaoHiem = HAN_BH_MOOC > 0 ? parseExcelDate(row.getCell(HAN_BH_MOOC).value) : null;
-    const moocHanCaVet = HAN_CV_MOOC > 0 ? parseExcelDate(row.getCell(HAN_CV_MOOC).value) : null;
+    const moocHanDangKiem = soMooc && HAN_DK_MOOC > 0 ? parseExcelDate(row.getCell(HAN_DK_MOOC).value) : null;
+    const moocHanBaoHiem = soMooc && HAN_BH_MOOC > 0 ? parseExcelDate(row.getCell(HAN_BH_MOOC).value) : null;
+    const moocHanCaVet = soMooc && HAN_CV_MOOC > 0 ? parseExcelDate(row.getCell(HAN_CV_MOOC).value) : null;
+
+    const tenTaiXe = HO_TEN > 0 ? cellText(row, HO_TEN) : "";
+    const sdt = DIEN_THOAI > 0 ? cellText(row, DIEN_THOAI) : "";
+    const loaiXe = LOAI_XE > 0 ? cellText(row, LOAI_XE) : "";
+    const bienSo = SO_XE > 0 ? cellText(row, SO_XE) : "";
+    const hasVehicleIdentity = !!(tenTaiXe || sdt || loaiXe || bienSo);
 
     const sttNum = sttRaw ? parseInt(sttRaw, 10) : NaN;
     // A mooc continuation row is either:
-    //   (a) empty STT with a mooc number, OR
-    //   (b) same STT as previous vehicle (merged cell in user's template)
+    //   (a) empty STT with a mooc number,
+    //   (b) same STT as previous vehicle (merged cell in user's template), or
+    //   (c) STT present (even incremented) but no vehicle-identifying fields at all —
+    //       some templates number these "orphan" mooc-only rows sequentially too.
     const isSameStt = !isNaN(sttNum) && sttNum === prevSttNum;
-    const isContinuation = (!sttRaw || isSameStt) && !!soMooc;
+    const isContinuation = (!sttRaw || isSameStt || !hasVehicleIdentity) && !!soMooc;
 
     if (isContinuation) {
       results.push({
@@ -155,10 +167,10 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
       type: "record",
       id: idVal,
       hasMoocColumn: SO_MOOC > 0,
-      tenTaiXe: HO_TEN > 0 ? cellText(row, HO_TEN) || undefined : undefined,
-      sdt: DIEN_THOAI > 0 ? cellText(row, DIEN_THOAI) || undefined : undefined,
-      loaiXe: LOAI_XE > 0 ? cellText(row, LOAI_XE) || undefined : undefined,
-      bienSo: SO_XE > 0 ? cellText(row, SO_XE) || undefined : undefined,
+      tenTaiXe: tenTaiXe || undefined,
+      sdt: sdt || undefined,
+      loaiXe: loaiXe || undefined,
+      bienSo: bienSo || undefined,
       hanDangKiem,
       hanBaoHiem,
       hanCaVet,

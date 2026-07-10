@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
 import type { BulkDeleteResult } from "@tms/shared";
 import { formatDate, toDateInput } from "@/lib/date-utils";
+import { ImportExportModal } from "@/components/import-export/import-export-modal";
+import { UploadSection } from "@/components/import-export/upload-section";
+import { DownloadButton } from "@/components/import-export/download-button";
 
 interface YardMoveRow {
   id: string;
@@ -475,6 +478,10 @@ export default function YardMovesPage() {
   const [editMove, setEditMove] = useState<YardMoveRow | null>(null);
   const [search, setSearch] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [exportFromDate, setExportFromDate] = useState("");
+  const [exportToDate, setExportToDate] = useState("");
+  const [exportDaKeoStatus, setExportDaKeoStatus] = useState<"" | "hauled" | "pending">("");
 
   const selection = useRowSelection(moves.map((m) => m.id));
 
@@ -566,6 +573,21 @@ export default function YardMovesPage() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <span style={{ fontSize: 13, color: "#64748b" }}>{total} lệnh</span>
           <button
+            onClick={() => setShowImportExport(true)}
+            style={{
+              padding: "7px 16px",
+              background: "#fff",
+              color: "#374151",
+              border: "1px solid #d1d5db",
+              borderRadius: 7,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Nhập / Xuất Excel
+          </button>
+          <button
             onClick={() => setShowCreate(true)}
             style={{
               padding: "7px 16px",
@@ -582,6 +604,97 @@ export default function YardMovesPage() {
           </button>
         </div>
       </div>
+
+      {showImportExport && (
+        <ImportExportModal
+          title="Nhập / Xuất Excel — Tiến độ vận tải"
+          onClose={() => setShowImportExport(false)}
+        >
+          <UploadSection
+            title="Nhập tiến độ vận tải"
+            endpoint="/api/import/yard-moves?confirm=true"
+            onImported={() => fetchMoves(page)}
+            description="Tải lên sheet 'tiến độ vận tải'. Hàng có ID → cập nhật; hàng không có ID → tạo mới."
+          />
+          <div style={{ background: "#fff", borderRadius: 10, padding: 24, border: "1px solid #e5e7eb" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất tiến độ vận tải</h2>
+            <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+              Xuất danh sách tiến độ vận tải ra file Excel. Lọc theo ngày và trạng thái đã kéo (tùy chọn).
+            </p>
+            <DownloadButton
+              label="Tải xuống tien-do-van-tai.xlsx"
+              endpoint="/api/export/yard-moves"
+              filename="tien-do-van-tai.xlsx"
+              buildUrl={() => {
+                const params = new URLSearchParams();
+                if (exportFromDate) params.set("from", exportFromDate);
+                if (exportToDate) params.set("to", exportToDate);
+                if (exportDaKeoStatus) params.set("daKeoStatus", exportDaKeoStatus);
+                const qs = params.toString();
+                return `/api/export/yard-moves${qs ? `?${qs}` : ""}`;
+              }}
+              extraInputs={
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                      Từ ngày
+                    </label>
+                    <input
+                      type="date"
+                      value={exportFromDate}
+                      onChange={(e) => setExportFromDate(e.target.value)}
+                      style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                      Đến ngày
+                    </label>
+                    <input
+                      type="date"
+                      value={exportToDate}
+                      onChange={(e) => setExportToDate(e.target.value)}
+                      style={{ padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13 }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                      Trạng thái
+                    </label>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {(
+                        [
+                          { value: "", label: "Tất cả" },
+                          { value: "hauled", label: "Đã kéo" },
+                          { value: "pending", label: "Tồn" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setExportDaKeoStatus(opt.value)}
+                          style={{
+                            padding: "6px 12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 6,
+                            fontSize: 13,
+                            cursor: "pointer",
+                            background: exportDaKeoStatus === opt.value ? "#3b82f6" : "#fff",
+                            color: exportDaKeoStatus === opt.value ? "#fff" : "#374151",
+                            fontWeight: exportDaKeoStatus === opt.value ? 600 : 400,
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+          </div>
+        </ImportExportModal>
+      )}
 
       <div
         style={{

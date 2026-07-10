@@ -5,6 +5,9 @@ import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/date-utils";
 import { BulkActionBar, ConfirmDialog, SelectionCheckbox, useRowSelection } from "@tms/ui";
 import type { BulkDeleteResult } from "@tms/shared";
+import { ImportExportModal } from "@/components/import-export/import-export-modal";
+import { UploadSection } from "@/components/import-export/upload-section";
+import { DownloadButton } from "@/components/import-export/download-button";
 
 interface MoocRow {
   id?: string;
@@ -719,6 +722,7 @@ export default function VehicleRecordsPage() {
 
   // Modal state
   const [showCreate, setShowCreate] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
   const [createForm, setCreateForm] = useState<RecordForm>(EMPTY_FORM);
   const [createError, setCreateError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<VehicleRecord | null>(null);
@@ -894,20 +898,36 @@ export default function VehicleRecordsPage() {
         }}
       >
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Quản lý xe</h1>
-        <button
-          onClick={openCreate}
-          style={{
-            padding: "8px 16px",
-            background: "#3b82f6",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            fontSize: 14,
-            cursor: "pointer",
-          }}
-        >
-          + Thêm record
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={() => setShowImportExport(true)}
+            style={{
+              padding: "8px 16px",
+              background: "#fff",
+              color: "#374151",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            Nhập / Xuất Excel
+          </button>
+          <button
+            onClick={openCreate}
+            style={{
+              padding: "8px 16px",
+              background: "#3b82f6",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            + Thêm record
+          </button>
+        </div>
       </div>
 
       {/* Search + Filter bar */}
@@ -1302,6 +1322,28 @@ export default function VehicleRecordsPage() {
       </div>
 
       {/* Modals */}
+      {showImportExport && (
+        <ImportExportModal title="Nhập / Xuất Excel — Quản lý xe" onClose={() => setShowImportExport(false)}>
+          <UploadSection
+            title="Nhập danh sách xe"
+            endpoint="/api/import/vehicles?confirm=true"
+            onImported={() => setRefresh((r) => r + 1)}
+            description="Tải lên sheet 'quản lý xe' — mỗi lần nhập sẽ tạo thêm bản ghi mới vào danh sách quản lý xe."
+          />
+          <div style={{ background: "#fff", borderRadius: 10, padding: 24, border: "1px solid #e5e7eb" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Xuất danh sách quản lý xe</h2>
+            <p style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+              Xuất danh sách xe, tài xế và rơ moóc kèm hạn đăng kiểm / bảo hiểm.
+            </p>
+            <DownloadButton
+              label="Tải xuống quan-ly-xe.xlsx"
+              endpoint="/api/export/vehicles"
+              filename="quan-ly-xe.xlsx"
+            />
+          </div>
+        </ImportExportModal>
+      )}
+
       {showCreate && (
         <Modal
           title="Thêm record quản lý xe"
