@@ -70,6 +70,14 @@ interface TripPlanRow {
   chiPhiTraiTuyenAmount: number | null;
   cauDuongName: string | null;
   cauDuongAmount: number | null;
+  // Amount-only revenue/cost fields
+  luongAmount: number | null;
+  cuocAmount: number | null;
+  doanhThuAmount: number | null;
+  phuThuAmount: number | null;
+  chiPhiAmount: number | null;
+  tienDauAmount: number | null;
+  neoXeAmount: number | null;
 }
 
 interface FilterState {
@@ -155,6 +163,17 @@ const COST_COLUMNS: Array<{
   { label: "CẦU ĐƯỜNG", amountKey: "cauDuongAmount", nameKey: "cauDuongName" },
 ];
 
+// Amount-only revenue/cost columns — no name/SHĐ, appended after CẦU ĐƯỜNG
+const EXTRA_COST_COLUMNS: Array<{ label: string; amountKey: keyof TripPlanRow }> = [
+  { label: "LƯƠNG", amountKey: "luongAmount" },
+  { label: "CƯỚC", amountKey: "cuocAmount" },
+  { label: "DOANH THU", amountKey: "doanhThuAmount" },
+  { label: "PHỤ THU", amountKey: "phuThuAmount" },
+  { label: "CHI PHÍ", amountKey: "chiPhiAmount" },
+  { label: "TIỀN DẦU", amountKey: "tienDauAmount" },
+  { label: "NEO XE", amountKey: "neoXeAmount" },
+];
+
 const FIXED_SLOT_DEFAULTS = [
   { key: "phiNang", defaultName: "PHÍ NÂNG", hasShd: true },
   { key: "phiHa", defaultName: "PHÍ HẠ", hasShd: true },
@@ -165,6 +184,18 @@ const FIXED_SLOT_DEFAULTS = [
   { key: "chiPhiTraiTuyen", defaultName: "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM", hasShd: false },
   { key: "cauDuong", defaultName: "CẦU ĐƯỜNG", hasShd: false },
 ] as const;
+
+// Amount-only revenue/cost fields — no name/SHĐ input, key + "Amount" = TripPlan field name
+const EXTRA_COST_DEFAULTS = [
+  { key: "luong", label: "LƯƠNG" },
+  { key: "cuoc", label: "CƯỚC" },
+  { key: "doanhThu", label: "DOANH THU" },
+  { key: "phuThu", label: "PHỤ THU" },
+  { key: "chiPhi", label: "CHI PHÍ" },
+  { key: "tienDau", label: "TIỀN DẦU" },
+  { key: "neoXe", label: "NEO XE" },
+] as const;
+const EXTRA_COST_BG = "#f1f5f9";
 
 function fmt(n: number | string | null | undefined): string {
   if (n === null || n === undefined || n === "") return "";
@@ -613,6 +644,39 @@ function slotsToPayload(slots: FixedSlotsState, isEdit = false) {
   };
 }
 
+// ─── Extra costs (amount-only) state helpers ─────────────────────────────────
+
+type ExtraCostsState = Record<string, string>;
+
+function emptyExtraCosts(): ExtraCostsState {
+  const result: ExtraCostsState = {};
+  for (const d of EXTRA_COST_DEFAULTS) result[d.key] = "";
+  return result;
+}
+
+function initExtraCostsFromTrip(trip: TripPlanRow): ExtraCostsState {
+  const result: ExtraCostsState = {};
+  for (const d of EXTRA_COST_DEFAULTS) {
+    const amountKey = `${d.key}Amount` as keyof TripPlanRow;
+    const val = trip[amountKey] as number | null;
+    result[d.key] = val != null ? String(val) : "";
+  }
+  return result;
+}
+
+function extraCostsToPayload(extraCosts: ExtraCostsState, isEdit = false) {
+  const empty = isEdit ? null : undefined;
+  const toNum = (s: string) => {
+    const n = Number(s);
+    return s && !isNaN(n) && n > 0 ? n : empty;
+  };
+  const result: Record<string, number | null | undefined> = {};
+  for (const d of EXTRA_COST_DEFAULTS) {
+    result[`${d.key}Amount`] = toNum(extraCosts[d.key] ?? "");
+  }
+  return result;
+}
+
 // ─── Other cost row ───────────────────────────────────────────────────────────
 
 interface OtherCostRow {
@@ -706,6 +770,40 @@ function CostSlotInput({
   );
 }
 
+// ─── Extra cost input (amount-only, no name/SHĐ) ─────────────────────────────
+
+function ExtraCostInput({
+  label,
+  value,
+  onChange,
+  bgColor,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  bgColor?: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: "8px 12px",
+        borderBottom: "1px solid #e2e8f0",
+        borderRight: "1px solid #e2e8f0",
+        background: bgColor,
+      }}
+    >
+      <span style={costLabelStyle}>{label}</span>
+      <input
+        type="text"
+        value={fmtInput(value)}
+        onChange={(e) => onChange(stripNonDigits(e.target.value))}
+        style={{ ...inputStyle, width: "100%", marginTop: 4 }}
+        placeholder="Số tiền"
+      />
+    </div>
+  );
+}
+
 // ─── Shared form body ─────────────────────────────────────────────────────────
 
 function TripFormBody({
@@ -745,6 +843,9 @@ function TripFormBody({
   // Fixed cost slots
   slots,
   setSlot,
+  // Amount-only extra costs
+  extraCosts,
+  setExtraCost,
   // Other costs
   otherCosts,
   setOtherCosts,
@@ -794,6 +895,8 @@ function TripFormBody({
   setStatus?: (v: TripStatus) => void;
   slots: FixedSlotsState;
   setSlot: (key: string, patch: Partial<FixedSlotState>) => void;
+  extraCosts: ExtraCostsState;
+  setExtraCost: (key: string, value: string) => void;
   otherCosts: OtherCostRow[];
   setOtherCosts: (rows: OtherCostRow[]) => void;
   customers: NamedOption[];
@@ -989,6 +1092,15 @@ function TripFormBody({
               costOptions={costTemplateOptions}
               hasShd={s.hasShd}
               bgColor={SLOT_COLORS[idx]}
+            />
+          ))}
+          {EXTRA_COST_DEFAULTS.map((d) => (
+            <ExtraCostInput
+              key={d.key}
+              label={d.label}
+              value={extraCosts[d.key] ?? ""}
+              onChange={(v) => setExtraCost(d.key, v)}
+              bgColor={EXTRA_COST_BG}
             />
           ))}
         </div>
@@ -1250,6 +1362,7 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [slots, setSlots] = useState<FixedSlotsState>(defaultSlots());
+  const [extraCosts, setExtraCosts] = useState<ExtraCostsState>(emptyExtraCosts());
   const [otherCosts, setOtherCosts] = useState<OtherCostRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1261,6 +1374,10 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
 
   function patchSlot(key: string, patch: Partial<FixedSlotState>) {
     setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
+  }
+
+  function patchExtraCost(key: string, value: string) {
+    setExtraCosts((s) => ({ ...s, [key]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -1291,6 +1408,7 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           description: description || undefined,
           notes: notes || undefined,
           ...slotsToPayload(slots),
+          ...extraCostsToPayload(extraCosts),
           otherCosts: otherCosts
             .filter((r) => r.amount)
             .map((r) => ({
@@ -1356,6 +1474,8 @@ function CreateTripModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         setNotes={setNotes}
         slots={slots}
         setSlot={patchSlot}
+        extraCosts={extraCosts}
+        setExtraCost={patchExtraCost}
         otherCosts={otherCosts}
         setOtherCosts={setOtherCosts}
         customers={refs.customers}
@@ -1411,6 +1531,9 @@ function EditTripModal({
   const [description, setDescription] = useState(trip.description ?? "");
   const [notes, setNotes] = useState(trip.notes ?? "");
   const [slots, setSlots] = useState<FixedSlotsState>(() => initSlotsFromTrip(trip));
+  const [extraCosts, setExtraCosts] = useState<ExtraCostsState>(() =>
+    initExtraCostsFromTrip(trip),
+  );
   const [otherCosts, setOtherCosts] = useState<OtherCostRow[]>(() =>
     (trip.costs ?? []).map((c) => ({
       key: c.id,
@@ -1425,6 +1548,10 @@ function EditTripModal({
 
   function patchSlot(key: string, patch: Partial<FixedSlotState>) {
     setSlots((s) => ({ ...s, [key]: { ...s[key], ...patch } }));
+  }
+
+  function patchExtraCost(key: string, value: string) {
+    setExtraCosts((s) => ({ ...s, [key]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -1456,6 +1583,7 @@ function EditTripModal({
           description: description || null,
           notes: notes || null,
           ...slotsToPayload(slots, true),
+          ...extraCostsToPayload(extraCosts, true),
           otherCosts: otherCosts
             .filter((r) => r.amount)
             .map((r) => ({
@@ -1523,6 +1651,8 @@ function EditTripModal({
         setStatus={setStatus}
         slots={slots}
         setSlot={patchSlot}
+        extraCosts={extraCosts}
+        setExtraCost={patchExtraCost}
         otherCosts={otherCosts}
         setOtherCosts={setOtherCosts}
         customers={refs.customers}
@@ -1991,6 +2121,11 @@ export default function TripPlansPage() {
                       {cc.shdLabel && <th style={{ ...thStyle, minWidth: 120 }}>{cc.shdLabel}</th>}
                     </Fragment>
                   ))}
+                  {EXTRA_COST_COLUMNS.map((ec) => (
+                    <th key={ec.label} style={{ ...thStyle, minWidth: 100 }}>
+                      {ec.label}
+                    </th>
+                  ))}
                   <th style={thStyle}>NGÀY GỬI CT</th>
                   <th style={{ ...thStyle, minWidth: 100 }}>CHI PHÍ PHÁT SINH</th>
                   <th style={thStyle}>NỘI DUNG</th>
@@ -2003,7 +2138,7 @@ export default function TripPlansPage() {
               <tbody>
                 {trips.length === 0 ? (
                   <tr>
-                    <td colSpan={41} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+                    <td colSpan={38} style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
                       Không có dữ liệu
                     </td>
                   </tr>
@@ -2048,6 +2183,11 @@ export default function TripPlansPage() {
                               <td style={tdStyle}>{(trip[cc.shdKey!] as string | null) ?? ""}</td>
                             )}
                           </Fragment>
+                        ))}
+                        {EXTRA_COST_COLUMNS.map((ec) => (
+                          <td key={ec.label} style={tdStyle}>
+                            {fmt(trip[ec.amountKey] as number | null)}
+                          </td>
                         ))}
                         <td style={tdStyle}>{formatDate(trip.documentSentDate)}</td>
                         <td style={tdStyle}>{totalOtherCosts > 0 ? fmt(totalOtherCosts) : ""}</td>

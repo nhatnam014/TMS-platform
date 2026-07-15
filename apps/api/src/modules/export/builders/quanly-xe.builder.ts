@@ -97,7 +97,7 @@ export async function buildQuanLyXe(records: any[]): Promise<Buffer> {
       formatDate(firstMooc?.hanDangKiem),
       formatDate(firstMooc?.hanBaoHiem),
       formatDate(firstMooc?.hanCaVet),
-      rec.ghiChu ?? "",
+      (rec.notes ?? []).map((n: any) => n.content).join("\n"),
       rec.id,
     ]);
     // Style the ID cell to indicate it's system-managed

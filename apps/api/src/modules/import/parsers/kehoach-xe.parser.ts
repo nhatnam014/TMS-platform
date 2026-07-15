@@ -39,6 +39,13 @@ export interface ParsedTripPlanRow {
   chiPhiKhacAmount?: number;
   chiPhiTraiTuyenAmount?: number;
   cauDuongAmount?: number;
+  luongAmount?: number;
+  cuocAmount?: number;
+  doanhThuAmount?: number;
+  phuThuAmount?: number;
+  chiPhiAmount?: number;
+  tienDauAmount?: number;
+  neoXeAmount?: number;
   costs: ParsedCostItem[];
 }
 
@@ -146,6 +153,13 @@ const COLUMN_CANDIDATES: Record<string, { occurrence: number; texts: string[] }>
   CHI_PHI_DUT_TEM: { occurrence: 0, texts: ["CHÍ PHÍ KHÁC/ PHÍ ĐỨT TEM", "CHI PHÍ KHÁC/ PHÍ ĐỨT TEM"] },
   CHI_PHI_TRAI_TUYEN: { occurrence: 0, texts: ["CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM"] },
   CAU_DUONG: { occurrence: 0, texts: ["CẦU ĐƯỜNG"] },
+  LUONG: { occurrence: 0, texts: ["LƯƠNG"] },
+  CUOC: { occurrence: 0, texts: ["CƯỚC"] },
+  DOANH_THU: { occurrence: 0, texts: ["DOANH THU"] },
+  PHU_THU: { occurrence: 0, texts: ["PHỤ THU"] },
+  CHI_PHI: { occurrence: 0, texts: ["CHI PHÍ"] },
+  TIEN_DAU: { occurrence: 0, texts: ["TIỀN DẦU"] },
+  NEO_XE: { occurrence: 0, texts: ["NEO XE"] },
   NGAY_GUI_CT: { occurrence: 0, texts: ["NGÀY GỬI CT"] },
   CHI_PHI_PHAT_SINH: { occurrence: 0, texts: ["CHI PHÍ PHÁT SINH KHÁC"] },
   NOI_DUNG: { occurrence: 0, texts: ["NỘI DUNG"] },
@@ -261,6 +275,13 @@ export function parseKeHoachXe(
       chiPhiKhacAmount: cellNum(row, COL.CHI_PHI_DUT_TEM),
       chiPhiTraiTuyenAmount: cellNum(row, COL.CHI_PHI_TRAI_TUYEN),
       cauDuongAmount: cellNum(row, COL.CAU_DUONG),
+      luongAmount: cellNum(row, COL.LUONG),
+      cuocAmount: cellNum(row, COL.CUOC),
+      doanhThuAmount: cellNum(row, COL.DOANH_THU),
+      phuThuAmount: cellNum(row, COL.PHU_THU),
+      chiPhiAmount: cellNum(row, COL.CHI_PHI),
+      tienDauAmount: cellNum(row, COL.TIEN_DAU),
+      neoXeAmount: cellNum(row, COL.NEO_XE),
       costs,
     });
   });

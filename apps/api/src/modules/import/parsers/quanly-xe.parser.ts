@@ -1,5 +1,6 @@
 import * as ExcelJS from "exceljs";
 import { parseExcelDate } from "../utils/excel-date";
+import { parseNoteLines } from "../utils/note-lines";
 
 export interface ParsedVehicleRecordRow {
   rowNum: number;
@@ -16,7 +17,7 @@ export interface ParsedVehicleRecordRow {
   hanDangKiem?: Date | null;
   hanBaoHiem?: Date | null;
   hanCaVet?: Date | null;
-  ghiChu?: string;
+  ghiChuLines?: string[];
   // VehicleRecordMooc fields (first mooc on same row, or continuation)
   soMooc?: string;
   moocHanDangKiem?: Date | null;
@@ -174,7 +175,7 @@ export function parseQuanLyXe(workbook: ExcelJS.Workbook): ParsedVehicleRecordRo
       hanDangKiem,
       hanBaoHiem,
       hanCaVet,
-      ghiChu: GHI_CHU > 0 ? cellText(row, GHI_CHU) || undefined : undefined,
+      ghiChuLines: GHI_CHU > 0 ? parseNoteLines(cellText(row, GHI_CHU)) : undefined,
       soMooc: soMooc || undefined,
       moocHanDangKiem,
       moocHanBaoHiem,

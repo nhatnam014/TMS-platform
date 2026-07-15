@@ -1,5 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDateString, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  IsArray,
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from "class-validator";
+import type { NoteItemDto } from "@tms/shared";
+
+class NoteDto implements NoteItemDto {
+  @ApiProperty({ example: "XONG K3" })
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
+}
 
 export class CreateYardMoveDto {
   @ApiProperty({ example: "2026-06-24" })
@@ -36,10 +52,12 @@ export class CreateYardMoveDto {
   @IsString()
   containerNumber?: string;
 
-  @ApiPropertyOptional({ example: "XONG K3" })
+  @ApiPropertyOptional({ type: [NoteDto] })
   @IsOptional()
-  @IsString()
-  notes?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NoteDto)
+  notes?: NoteDto[];
 
   @ApiPropertyOptional()
   @IsOptional()

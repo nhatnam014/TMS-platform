@@ -17,6 +17,12 @@ interface MoocRow {
   hanCaVet: string | null;
 }
 
+interface NoteRow {
+  id?: string;
+  content: string;
+  createdAt?: string;
+}
+
 interface VehicleRecord {
   id: string;
   tenTaiXe: string | null;
@@ -26,7 +32,7 @@ interface VehicleRecord {
   hanDangKiem: string | null;
   hanBaoHiem: string | null;
   hanCaVet: string | null;
-  ghiChu: string | null;
+  notes: NoteRow[];
   moocs: MoocRow[];
 }
 
@@ -37,6 +43,8 @@ const EMPTY_MOOC: Omit<MoocRow, "id"> = {
   hanCaVet: "",
 };
 
+const EMPTY_NOTE: NoteRow = { content: "" };
+
 const EMPTY_FORM = {
   tenTaiXe: "",
   sdt: "",
@@ -45,10 +53,14 @@ const EMPTY_FORM = {
   hanDangKiem: "",
   hanBaoHiem: "",
   hanCaVet: "",
-  ghiChu: "",
+  notes: [] as NoteRow[],
   moocs: [] as Omit<MoocRow, "id">[],
 };
 type RecordForm = typeof EMPTY_FORM;
+
+function joinNotes(notes: NoteRow[]): string {
+  return notes.map((n) => n.content).join("\n");
+}
 
 function isExpiring(d: string | null, days = 30) {
   if (!d) return false;
@@ -418,7 +430,7 @@ function RecordFormFields({
   form: RecordForm;
   setForm: (f: RecordForm) => void;
 }) {
-  function updateField(key: keyof Omit<RecordForm, "moocs">, val: string) {
+  function updateField(key: keyof Omit<RecordForm, "moocs" | "notes">, val: string) {
     setForm({ ...form, [key]: val });
   }
 
@@ -434,6 +446,20 @@ function RecordFormFields({
 
   function removeMooc(idx: number) {
     setForm({ ...form, moocs: form.moocs.filter((_, i) => i !== idx) });
+  }
+
+  function updateNote(idx: number, val: string) {
+    const notes = [...form.notes];
+    notes[idx] = { ...notes[idx], content: val };
+    setForm({ ...form, notes });
+  }
+
+  function addNote() {
+    setForm({ ...form, notes: [...form.notes, { ...EMPTY_NOTE }] });
+  }
+
+  function removeNote(idx: number) {
+    setForm({ ...form, notes: form.notes.filter((_, i) => i !== idx) });
   }
 
   return (
@@ -594,22 +620,61 @@ function RecordFormFields({
       </button>
 
       <SectionHeader>Ghi chú</SectionHeader>
-      <div style={{ marginBottom: 12 }}>
-        <textarea
-          value={form.ghiChu}
-          onChange={(e) => updateField("ghiChu", e.target.value)}
-          rows={2}
+      {form.notes.map((note, idx) => (
+        <div
+          key={idx}
           style={{
-            width: "100%",
-            padding: "7px 10px",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            fontSize: 13,
-            boxSizing: "border-box",
-            resize: "vertical",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 8,
           }}
-        />
-      </div>
+        >
+          <input
+            type="text"
+            value={note.content}
+            onChange={(e) => updateNote(idx, e.target.value)}
+            style={{
+              flex: 1,
+              padding: "7px 10px",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              fontSize: 13,
+              boxSizing: "border-box",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => removeNote(idx)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#ef4444",
+              fontSize: 18,
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addNote}
+        style={{
+          fontSize: 13,
+          padding: "6px 14px",
+          border: "1px dashed #6366f1",
+          borderRadius: 6,
+          background: "#f0f0ff",
+          color: "#6366f1",
+          cursor: "pointer",
+          marginBottom: 4,
+        }}
+      >
+        + Thêm ghi chú
+      </button>
     </>
   );
 }
@@ -624,7 +689,9 @@ function formToPayload(form: RecordForm, isEdit = false) {
     hanDangKiem: nullOrUndef(form.hanDangKiem),
     hanBaoHiem: nullOrUndef(form.hanBaoHiem),
     hanCaVet: nullOrUndef(form.hanCaVet),
-    ghiChu: nullOrUndef(form.ghiChu),
+    notes: form.notes
+      .filter((n) => n.content.trim())
+      .map((n) => ({ content: n.content.trim() })),
     moocs: form.moocs
       .filter((m) => m.soMooc.trim())
       .map((m) => ({
@@ -645,7 +712,7 @@ function recordToForm(r: VehicleRecord): RecordForm {
     hanDangKiem: r.hanDangKiem ? r.hanDangKiem.slice(0, 10) : "",
     hanBaoHiem: r.hanBaoHiem ? r.hanBaoHiem.slice(0, 10) : "",
     hanCaVet: r.hanCaVet ? r.hanCaVet.slice(0, 10) : "",
-    ghiChu: r.ghiChu ?? "",
+    notes: r.notes.map((n) => ({ id: n.id, content: n.content, createdAt: n.createdAt })),
     moocs: r.moocs.map((m) => ({
       soMooc: m.soMooc,
       hanDangKiem: m.hanDangKiem ? m.hanDangKiem.slice(0, 10) : "",
@@ -1135,10 +1202,11 @@ export default function VehicleRecordsPage() {
                         style={{
                           maxWidth: 180,
                           color: "#6b7280",
-                          fontStyle: rec.ghiChu ? "normal" : "italic",
+                          fontStyle: rec.notes.length ? "normal" : "italic",
+                          whiteSpace: "pre-line",
                         }}
                       >
-                        {rec.ghiChu ?? "—"}
+                        {rec.notes.length ? joinNotes(rec.notes) : "—"}
                       </TD>
                       <TD>
                         <button
@@ -1263,10 +1331,19 @@ export default function VehicleRecordsPage() {
                     {mIdx === 0 && (
                       <>
                         <TD
-                          style={{ maxWidth: 180, color: "#6b7280", verticalAlign: "top" }}
+                          style={{
+                            maxWidth: 180,
+                            color: "#6b7280",
+                            verticalAlign: "top",
+                            whiteSpace: "pre-line",
+                          }}
                           rowSpan={rowSpan > 1 ? rowSpan : undefined}
                         >
-                          {rec.ghiChu ?? <span style={{ fontStyle: "italic" }}>—</span>}
+                          {rec.notes.length ? (
+                            joinNotes(rec.notes)
+                          ) : (
+                            <span style={{ fontStyle: "italic" }}>—</span>
+                          )}
                         </TD>
                         <TD
                           style={{ whiteSpace: "nowrap", verticalAlign: "top" }}

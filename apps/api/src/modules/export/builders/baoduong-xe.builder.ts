@@ -115,7 +115,7 @@ function addSheet(wb: ExcelJS.Workbook, sheetName: string, records: any[], image
       rec.donViSuaChua ?? "",
       toStr(rec.kmHienTai),
       ...kmValues,
-      toStr(rec.ghiChuBaoDuong),
+      (rec.maintenanceNotes ?? []).map((n: any) => n.content).join("\n"),
       rec.id,
     ]);
 

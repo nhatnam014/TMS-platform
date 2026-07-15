@@ -25,7 +25,7 @@ export class ExportService {
 
   async exportVehicles(): Promise<Buffer> {
     const records = await this.prisma.vehicleRecord.findMany({
-      include: { moocs: true },
+      include: { moocs: true, notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
       orderBy: { createdAt: "asc" },
     });
     return buildQuanLyXe(records);
@@ -42,7 +42,10 @@ export class ExportService {
       where,
       orderBy: [{ loaiXe: "asc" }, { createdAt: "asc" }],
       take: 10000,
-      include: { kmRounds: { orderBy: { roundNumber: "asc" } } },
+      include: {
+        kmRounds: { orderBy: { roundNumber: "asc" } },
+        maintenanceNotes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      },
     });
 
     return buildBaoDuongXe(records, selectedLoaiXe);
@@ -68,6 +71,7 @@ export class ExportService {
     const records = await this.prisma.yardMove.findMany({
       where,
       orderBy: { createdAt: "asc" },
+      include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     });
     const buffer = await buildLenhBai(records, from, to);
     return { buffer, count: records.length };

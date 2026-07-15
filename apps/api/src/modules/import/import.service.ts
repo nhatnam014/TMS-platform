@@ -158,11 +158,13 @@ export class ImportService {
             hanDangKiem: row.hanDangKiem ?? null,
             hanBaoHiem: row.hanBaoHiem ?? null,
             hanCaVet: row.hanCaVet ?? null,
-            ghiChu: row.ghiChu ?? null,
           };
 
           const existing = row.id
-            ? await this.prisma.vehicleRecord.findUnique({ where: { id: row.id } })
+            ? await this.prisma.vehicleRecord.findUnique({
+                where: { id: row.id },
+                include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+              })
             : null;
 
           if (row.id && !existing) {
@@ -181,6 +183,33 @@ export class ImportService {
             currentRecordIdentifier = identifier;
 
             const scalarChanges = diffFields(existing, vehicleData);
+
+            if (row.ghiChuLines !== undefined) {
+              const oldNotesJoined = existing.notes.map((n) => n.content).join("\n");
+              const newNotesJoined = row.ghiChuLines.join("\n");
+              await this.prisma.$transaction([
+                this.prisma.vehicleRecordNote.deleteMany({
+                  where: { vehicleRecordId: currentRecordId },
+                }),
+                ...(row.ghiChuLines.length > 0
+                  ? [
+                      this.prisma.vehicleRecordNote.createMany({
+                        data: row.ghiChuLines.map((content) => ({
+                          vehicleRecordId: currentRecordId!,
+                          content,
+                        })),
+                      }),
+                    ]
+                  : []),
+              ]);
+              if (oldNotesJoined !== newNotesJoined) {
+                scalarChanges.push({
+                  field: "ghiChu",
+                  oldValue: oldNotesJoined,
+                  newValue: newNotesJoined,
+                });
+              }
+            }
             recordChanges(currentRecordId, row.rowNum, identifier, scalarChanges);
 
             if (row.soMooc) {
@@ -211,6 +240,9 @@ export class ImportService {
                         ],
                       },
                     }
+                  : {}),
+                ...(row.ghiChuLines && row.ghiChuLines.length > 0
+                  ? { notes: { create: row.ghiChuLines.map((content) => ({ content })) } }
                   : {}),
               },
             });
@@ -415,6 +447,13 @@ export class ImportService {
                 cauDuongAmount: row.cauDuongAmount,
                 cauDuongName: "CẦU ĐƯỜNG",
               }),
+              ...(row.luongAmount !== undefined && { luongAmount: row.luongAmount }),
+              ...(row.cuocAmount !== undefined && { cuocAmount: row.cuocAmount }),
+              ...(row.doanhThuAmount !== undefined && { doanhThuAmount: row.doanhThuAmount }),
+              ...(row.phuThuAmount !== undefined && { phuThuAmount: row.phuThuAmount }),
+              ...(row.chiPhiAmount !== undefined && { chiPhiAmount: row.chiPhiAmount }),
+              ...(row.tienDauAmount !== undefined && { tienDauAmount: row.tienDauAmount }),
+              ...(row.neoXeAmount !== undefined && { neoXeAmount: row.neoXeAmount }),
             };
 
             // listSortedAt is bumped on every import-touch (re-enters the "recent batch"
@@ -492,6 +531,13 @@ export class ImportService {
                   row.chiPhiTraiTuyenAmount !== undefined ? "CHI PHÍ TRÁI TUYẾN" : null,
                 cauDuongAmount: row.cauDuongAmount ?? null,
                 cauDuongName: row.cauDuongAmount !== undefined ? "CẦU ĐƯỜNG" : null,
+                luongAmount: row.luongAmount ?? null,
+                cuocAmount: row.cuocAmount ?? null,
+                doanhThuAmount: row.doanhThuAmount ?? null,
+                phuThuAmount: row.phuThuAmount ?? null,
+                chiPhiAmount: row.chiPhiAmount ?? null,
+                tienDauAmount: row.tienDauAmount ?? null,
+                neoXeAmount: row.neoXeAmount ?? null,
               },
             });
             tripPlanId = tripPlan.id;
@@ -565,7 +611,10 @@ export class ImportService {
         let identifier = row.bienSo ?? row.id ?? `row-${row.rowNum}`;
 
         const existing = row.id
-          ? await this.prisma.vehicleRecord.findUnique({ where: { id: row.id } })
+          ? await this.prisma.vehicleRecord.findUnique({
+              where: { id: row.id },
+              include: { maintenanceNotes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+            })
           : null;
         if (row.id && !existing) {
           warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — đã tạo mới`);
@@ -581,7 +630,6 @@ export class ImportService {
             ...(row.donViSuaChua !== undefined && { donViSuaChua: row.donViSuaChua ?? null }),
             ...(row.ngayLam !== undefined && { ngayLam: row.ngayLam ?? null }),
             ...(row.kmHienTai !== undefined && { kmHienTai: row.kmHienTai ?? null }),
-            ...(row.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: row.ghiChuBaoDuong ?? null }),
           };
           await this.prisma.vehicleRecord.update({
             where: { id: existing.id },
@@ -590,6 +638,28 @@ export class ImportService {
           vehicleRecordId = existing.id;
           identifier = existing.bienSo ?? existing.id;
           recordChanges = diffFields(existing, updateData);
+
+          if (row.ghiChuLines !== undefined) {
+            const oldNotesJoined = existing.maintenanceNotes.map((n) => n.content).join("\n");
+            const newNotesJoined = row.ghiChuLines.join("\n");
+            await this.prisma.$transaction([
+              this.prisma.vehicleMaintenanceNote.deleteMany({ where: { vehicleRecordId } }),
+              ...(row.ghiChuLines.length > 0
+                ? [
+                    this.prisma.vehicleMaintenanceNote.createMany({
+                      data: row.ghiChuLines.map((content) => ({ vehicleRecordId, content })),
+                    }),
+                  ]
+                : []),
+            ]);
+            if (oldNotesJoined !== newNotesJoined) {
+              recordChanges.push({
+                field: "ghiChuBaoDuong",
+                oldValue: oldNotesJoined,
+                newValue: newNotesJoined,
+              });
+            }
+          }
           updated++;
         } else {
           // Create new VehicleRecord (no `id` cell, or `id` cell didn't match any existing record)
@@ -602,7 +672,9 @@ export class ImportService {
               donViSuaChua: row.donViSuaChua ?? null,
               ngayLam: row.ngayLam ?? null,
               kmHienTai: row.kmHienTai ?? null,
-              ghiChuBaoDuong: row.ghiChuBaoDuong ?? null,
+              ...(row.ghiChuLines && row.ghiChuLines.length > 0
+                ? { maintenanceNotes: { create: row.ghiChuLines.map((content) => ({ content })) } }
+                : {}),
             },
           });
           vehicleRecordId = newRecord.id;
@@ -780,20 +852,42 @@ export class ImportService {
           mooc: row.mooc ?? null,
           booking: row.booking ?? null,
           containerNumber: row.containerNumber ?? null,
-          notes: row.notes ?? null,
           daKeo: row.daKeo ?? null,
         };
         const identifier = `${row.date!.toISOString().slice(0, 10)}${row.fullName ? ` - ${row.fullName}` : ""}`;
 
-        const before = row.id ? await this.prisma.yardMove.findUnique({ where: { id: row.id } }) : null;
+        const before = row.id
+          ? await this.prisma.yardMove.findUnique({
+              where: { id: row.id },
+              include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+            })
+          : null;
         if (row.id && !before) {
           warnings.push(`Hàng ${row.rowNum}: ID "${row.id}" không tồn tại — đã tạo mới`);
         }
 
         if (before) {
-          await this.prisma.yardMove.update({ where: { id: before.id }, data });
+          await this.prisma.$transaction([
+            this.prisma.yardMove.update({ where: { id: before.id }, data }),
+            this.prisma.yardMoveNote.deleteMany({ where: { yardMoveId: before.id } }),
+            ...((row.noteLines ?? []).length > 0
+              ? [
+                  this.prisma.yardMoveNote.createMany({
+                    data: (row.noteLines ?? []).map((content) => ({
+                      yardMoveId: before.id,
+                      content,
+                    })),
+                  }),
+                ]
+              : []),
+          ]);
 
           const changes = diffFields(before, data);
+          const oldNotesJoined = before.notes.map((n) => n.content).join("\n");
+          const newNotesJoined = (row.noteLines ?? []).join("\n");
+          if (oldNotesJoined !== newNotesJoined) {
+            changes.push({ field: "notes", oldValue: oldNotesJoined, newValue: newNotesJoined });
+          }
           if (changes.length > 0) {
             await this.auditService.log({
               action: "UPDATE",
@@ -807,7 +901,14 @@ export class ImportService {
           }
           updated++;
         } else {
-          const created = await this.prisma.yardMove.create({ data });
+          const created = await this.prisma.yardMove.create({
+            data: {
+              ...data,
+              ...((row.noteLines ?? []).length > 0
+                ? { notes: { create: (row.noteLines ?? []).map((content) => ({ content })) } }
+                : {}),
+            },
+          });
           createdRecords.push({ rowNum: row.rowNum, identifier, entityId: created.id });
           imported++;
         }

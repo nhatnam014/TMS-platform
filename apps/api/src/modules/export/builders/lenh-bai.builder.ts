@@ -113,7 +113,7 @@ export async function buildLenhBai(
       rec.mooc ?? "",
       rec.booking ?? "",
       rec.containerNumber ?? "",
-      rec.notes ?? "",
+      (rec.notes ?? []).map((n: any) => n.content).join("\n"),
       rec.daKeo ?? "",
       rec.id,
     ]);

@@ -200,6 +200,13 @@ export class TripPlanService {
           chiPhiTraiTuyenAmount: dto.chiPhiTraiTuyenAmount ?? null,
           cauDuongName: dto.cauDuongName ?? null,
           cauDuongAmount: dto.cauDuongAmount ?? null,
+          luongAmount: dto.luongAmount ?? null,
+          cuocAmount: dto.cuocAmount ?? null,
+          doanhThuAmount: dto.doanhThuAmount ?? null,
+          phuThuAmount: dto.phuThuAmount ?? null,
+          chiPhiAmount: dto.chiPhiAmount ?? null,
+          tienDauAmount: dto.tienDauAmount ?? null,
+          neoXeAmount: dto.neoXeAmount ?? null,
         },
         include: {
           customer: true,
@@ -317,6 +324,13 @@ export class TripPlanService {
           }),
           ...(dto.cauDuongName !== undefined && { cauDuongName: dto.cauDuongName }),
           ...(dto.cauDuongAmount !== undefined && { cauDuongAmount: dto.cauDuongAmount }),
+          ...(dto.luongAmount !== undefined && { luongAmount: dto.luongAmount }),
+          ...(dto.cuocAmount !== undefined && { cuocAmount: dto.cuocAmount }),
+          ...(dto.doanhThuAmount !== undefined && { doanhThuAmount: dto.doanhThuAmount }),
+          ...(dto.phuThuAmount !== undefined && { phuThuAmount: dto.phuThuAmount }),
+          ...(dto.chiPhiAmount !== undefined && { chiPhiAmount: dto.chiPhiAmount }),
+          ...(dto.tienDauAmount !== undefined && { tienDauAmount: dto.tienDauAmount }),
+          ...(dto.neoXeAmount !== undefined && { neoXeAmount: dto.neoXeAmount }),
         },
       });
 

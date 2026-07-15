@@ -73,6 +73,13 @@ const HEADERS = [
   "CHÍ PHÍ KHÁC/ PHÍ ĐỨT TEM",
   "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM",
   "CẦU ĐƯỜNG",
+  "LƯƠNG",
+  "CƯỚC",
+  "DOANH THU",
+  "PHỤ THU",
+  "CHI PHÍ",
+  "TIỀN DẦU",
+  "NEO XE",
   "NGÀY GỬI CT",
   "CHI PHÍ PHÁT SINH KHÁC",
   "NỘI DUNG",
@@ -81,7 +88,8 @@ const HEADERS = [
 ] as const;
 
 const COL_WIDTHS = [
-  6, 12, 14, 22, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20, 30, 14, 14,
+  6, 12, 14, 22, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20, 30, 14,
+  14, 14, 14, 14, 14, 14, 14, 14,
   24, 24, 24, 30,
 ];
 
@@ -147,6 +155,13 @@ export async function buildKeHoachXe(
       tp.chiPhiKhacAmount != null ? Number(tp.chiPhiKhacAmount) : "",
       tp.chiPhiTraiTuyenAmount != null ? Number(tp.chiPhiTraiTuyenAmount) : "",
       tp.cauDuongAmount != null ? Number(tp.cauDuongAmount) : "",
+      tp.luongAmount != null ? Number(tp.luongAmount) : "",
+      tp.cuocAmount != null ? Number(tp.cuocAmount) : "",
+      tp.doanhThuAmount != null ? Number(tp.doanhThuAmount) : "",
+      tp.phuThuAmount != null ? Number(tp.phuThuAmount) : "",
+      tp.chiPhiAmount != null ? Number(tp.chiPhiAmount) : "",
+      tp.tienDauAmount != null ? Number(tp.tienDauAmount) : "",
+      tp.neoXeAmount != null ? Number(tp.neoXeAmount) : "",
       formatDate(tp.documentSentDate),
       otherCostsTotal > 0 ? otherCostsTotal : "",
       tp.description ?? "",

@@ -126,6 +126,16 @@ export class CreateTripPlanDto implements ICreateTripPlanDto {
   @ApiPropertyOptional() @IsOptional() @IsString() cauDuongName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() cauDuongAmount?: number;
 
+  // ── Amount-only revenue/cost fields (no name/SHĐ companion) ─────
+
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() luongAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() cuocAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() doanhThuAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() phuThuAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() chiPhiAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() tienDauAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() neoXeAmount?: number;
+
   // ── Other costs (multiple rows) ────────────────────────────────
 
   @ApiPropertyOptional({ type: [OtherCostItemDto] })

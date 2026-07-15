@@ -1,5 +1,6 @@
 import * as ExcelJS from "exceljs";
 import { parseExcelDate } from "../utils/excel-date";
+import { parseNoteLines } from "../utils/note-lines";
 
 export interface ParsedKmRound {
   roundNumber: number;
@@ -17,7 +18,7 @@ export interface ParsedMaintenanceRow {
   donViSuaChua?: string;
   ngayLam?: Date;
   kmHienTai?: string;
-  ghiChuBaoDuong?: string;
+  ghiChuLines?: string[];
   kmRounds: ParsedKmRound[];
   /** All round numbers this file has a "KM CÒN ... LẦN n" column for (not just the ones with a value on this row) — used to tell "column not in this file" apart from "column present but cleared for this row". */
   knownRoundNumbers: number[];
@@ -157,7 +158,7 @@ export function parseBaoDuongXe(workbook: ExcelJS.Workbook): ParsedMaintenanceRo
         donViSuaChua: COL_DON_VI > 0 ? cellText(row, COL_DON_VI) || undefined : undefined,
         ngayLam: ngayLam ?? undefined,
         kmHienTai: COL_KM_HIEN_TAI > 0 ? cellText(row, COL_KM_HIEN_TAI) || undefined : undefined,
-        ghiChuBaoDuong: COL_GHI_CHU > 0 ? cellText(row, COL_GHI_CHU) || undefined : undefined,
+        ghiChuLines: COL_GHI_CHU > 0 ? parseNoteLines(cellText(row, COL_GHI_CHU)) : undefined,
         kmRounds,
         knownRoundNumbers,
       });

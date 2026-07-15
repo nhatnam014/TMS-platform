@@ -185,6 +185,14 @@ export interface CreateTripPlanDto {
   chiPhiTraiTuyenAmount?: number;
   cauDuongName?: string;
   cauDuongAmount?: number;
+  // Amount-only revenue/cost fields (no name/SHĐ companion)
+  luongAmount?: number;
+  cuocAmount?: number;
+  doanhThuAmount?: number;
+  phuThuAmount?: number;
+  chiPhiAmount?: number;
+  tienDauAmount?: number;
+  neoXeAmount?: number;
   // Multiple other-cost rows
   otherCosts?: OtherCostItem[];
 }
@@ -232,6 +240,13 @@ export interface UpdateTripPlanDto {
   chiPhiTraiTuyenAmount?: number;
   cauDuongName?: string;
   cauDuongAmount?: number;
+  luongAmount?: number;
+  cuocAmount?: number;
+  doanhThuAmount?: number;
+  phuThuAmount?: number;
+  chiPhiAmount?: number;
+  tienDauAmount?: number;
+  neoXeAmount?: number;
   otherCosts?: OtherCostItem[];
 }
 
@@ -335,6 +350,11 @@ export interface AuditLogFilters {
 }
 
 // ---------- YardMove DTOs ----------
+// ---------- Notes (shared shape across quản lý xe / bảo dưỡng xe / tiến độ vận tải) ----------
+export interface NoteItemDto {
+  content: string;
+}
+
 export interface CreateYardMoveDto {
   date: string;
   gps?: string;
@@ -343,7 +363,7 @@ export interface CreateYardMoveDto {
   mooc?: string;
   booking?: string;
   containerNumber?: string;
-  notes?: string;
+  notes?: NoteItemDto[];
   daKeo?: string;
 }
 
@@ -355,7 +375,7 @@ export interface UpdateYardMoveDto {
   mooc?: string;
   booking?: string;
   containerNumber?: string;
-  notes?: string;
+  notes?: NoteItemDto[];
   daKeo?: string;
   isActive?: boolean;
 }
@@ -418,11 +438,10 @@ export interface CreateVehicleRecordDto {
   hanDangKiem?: string;
   hanBaoHiem?: string;
   hanCaVet?: string;
-  ghiChu?: string;
   donViSuaChua?: string;
   ngayLam?: string;
   kmHienTai?: string;
-  ghiChuBaoDuong?: string;
+  notes?: NoteItemDto[];
   moocs?: VehicleRecordMoocDto[];
 }
 
@@ -434,10 +453,9 @@ export interface UpdateVehicleRecordDto {
   hanDangKiem?: string | null;
   hanBaoHiem?: string | null;
   hanCaVet?: string | null;
-  ghiChu?: string | null;
   donViSuaChua?: string | null;
   ngayLam?: string | null;
   kmHienTai?: string | null;
-  ghiChuBaoDuong?: string | null;
+  notes?: NoteItemDto[];
   moocs?: VehicleRecordMoocDto[];
 }

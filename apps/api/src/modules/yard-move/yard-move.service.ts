@@ -30,9 +30,12 @@ export class YardMoveService {
           mooc: dto.mooc,
           booking: dto.booking,
           containerNumber: dto.containerNumber,
-          notes: dto.notes,
+          notes: dto.notes?.length
+            ? { create: dto.notes.map((n) => ({ content: n.content })) }
+            : undefined,
           daKeo: dto.daKeo,
         },
+        include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
       });
 
       await this.auditService.log(
@@ -80,6 +83,7 @@ export class YardMoveService {
         skip,
         take: limit,
         orderBy: { createdAt: "desc" },
+        include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
       }),
       this.prisma.yardMove.count({ where }),
     ]);
@@ -88,7 +92,10 @@ export class YardMoveService {
   }
 
   async findOne(id: string) {
-    const move = await this.prisma.yardMove.findUnique({ where: { id } });
+    const move = await this.prisma.yardMove.findUnique({
+      where: { id },
+      include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+    });
     if (!move) throw new NotFoundException(`YardMove ${id} not found`);
     return move;
   }
@@ -97,6 +104,10 @@ export class YardMoveService {
     await this.findOne(id);
 
     return this.prisma.$transaction(async (tx) => {
+      if (dto.notes !== undefined) {
+        await tx.yardMoveNote.deleteMany({ where: { yardMoveId: id } });
+      }
+
       const updated = await tx.yardMove.update({
         where: { id },
         data: {
@@ -107,10 +118,14 @@ export class YardMoveService {
           ...(dto.mooc !== undefined ? { mooc: dto.mooc } : {}),
           ...(dto.booking !== undefined ? { booking: dto.booking } : {}),
           ...(dto.containerNumber !== undefined ? { containerNumber: dto.containerNumber } : {}),
-          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          ...(dto.notes !== undefined &&
+            dto.notes.length > 0 && {
+              notes: { create: dto.notes.map((n) => ({ content: n.content })) },
+            }),
           ...(dto.daKeo !== undefined ? { daKeo: dto.daKeo } : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         },
+        include: { notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
       });
 
       await this.auditService.log(

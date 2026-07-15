@@ -14,6 +14,12 @@ interface KmRound {
   kmCon: string;
 }
 
+interface MaintenanceNote {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
 interface VehicleRecord {
   id: string;
   bienSo: string | null;
@@ -23,8 +29,12 @@ interface VehicleRecord {
   donViSuaChua: string | null;
   ngayLam: string | null;
   kmHienTai: string | null;
-  ghiChuBaoDuong: string | null;
+  maintenanceNotes: MaintenanceNote[];
   kmRounds: KmRound[];
+}
+
+function joinNotes(notes: MaintenanceNote[]): string {
+  return notes.map((n) => n.content).join("\n");
 }
 
 // ─── Pagination ────────────────────────────────────────────────────────────
@@ -139,7 +149,21 @@ function EditModal({
   const [donViSuaChua, setDonViSuaChua] = useState(record.donViSuaChua ?? "");
   const [ngayLam, setNgayLam] = useState(record.ngayLam ? record.ngayLam.slice(0, 10) : "");
   const [kmHienTai, setKmHienTai] = useState(record.kmHienTai ?? "");
-  const [ghiChuBaoDuong, setGhiChuBaoDuong] = useState(record.ghiChuBaoDuong ?? "");
+  const [notes, setNotes] = useState<string[]>(
+    (record.maintenanceNotes ?? []).map((n) => n.content),
+  );
+
+  function updateNote(idx: number, val: string) {
+    setNotes((prev) => prev.map((n, i) => (i === idx ? val : n)));
+  }
+
+  function addNote() {
+    setNotes((prev) => [...prev, ""]);
+  }
+
+  function removeNote(idx: number) {
+    setNotes((prev) => prev.filter((_, i) => i !== idx));
+  }
   const [existingRounds, setExistingRounds] = useState<KmRound[]>(record.kmRounds ?? []);
   const [editedKmCon, setEditedKmCon] = useState<Record<string, string>>(
     Object.fromEntries((record.kmRounds ?? []).map((r) => [r.id, r.kmCon])),
@@ -193,7 +217,7 @@ function EditModal({
         donViSuaChua: donViSuaChua || null,
         ngayLam: ngayLam || null,
         kmHienTai: kmHienTai || null,
-        ghiChuBaoDuong: ghiChuBaoDuong || null,
+        notes: notes.filter((n) => n.trim()).map((n) => ({ content: n.trim() })),
       }),
     });
     if (!patchRes.ok) {
@@ -343,13 +367,31 @@ function EditModal({
           {/* Section C: Ghi chú */}
           <div style={{ background: "#f3f4f6", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#4b5563", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Ghi chú</div>
-            <textarea
-              value={ghiChuBaoDuong}
-              onChange={(e) => setGhiChuBaoDuong(e.target.value)}
-              rows={3}
-              placeholder="Ghi chú bảo dưỡng..."
-              style={{ width: "100%", padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
-            />
+            {notes.map((note, idx) => (
+              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => updateNote(idx, e.target.value)}
+                  placeholder="Ghi chú bảo dưỡng..."
+                  style={{ flex: 1, padding: "7px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeNote(idx)}
+                  style={{ background: "none", border: "none", color: "#ef4444", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addNote}
+              style={{ fontSize: 13, padding: "6px 14px", border: "1px dashed #16a34a", borderRadius: 6, background: "#dcfce7", color: "#16a34a", cursor: "pointer" }}
+            >
+              + Thêm ghi chú
+            </button>
           </div>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16, borderTop: "1px solid #e5e7eb", paddingTop: 14 }}>
@@ -627,7 +669,13 @@ export default function VehicleMaintenancePage() {
                         </TD>
                       );
                     })}
-                    <TD>{rec.ghiChuBaoDuong ?? <span style={{ color: "#94a3b8" }}>—</span>}</TD>
+                    <TD style={{ whiteSpace: "pre-line" }}>
+                      {rec.maintenanceNotes.length ? (
+                        joinNotes(rec.maintenanceNotes)
+                      ) : (
+                        <span style={{ color: "#94a3b8" }}>—</span>
+                      )}
+                    </TD>
                     <TD style={{ position: "sticky", right: 0, zIndex: 1, background: bg, boxShadow: "-2px 0 5px -2px rgba(0,0,0,0.14)", textAlign: "center" }}>
                       <ActionMenu onEdit={() => setEditTarget(rec)} />
                     </TD>

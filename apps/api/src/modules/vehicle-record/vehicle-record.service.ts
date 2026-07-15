@@ -75,7 +75,11 @@ export class VehicleRecordService {
     const [data, total] = await Promise.all([
       this.prisma.vehicleRecord.findMany({
         where,
-        include: { moocs: true, kmRounds: { orderBy: { roundNumber: "asc" } } },
+        include: {
+          moocs: true,
+          kmRounds: { orderBy: { roundNumber: "asc" } },
+          notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        },
         skip,
         take: limit,
         orderBy: { createdAt: "asc" },
@@ -105,11 +109,12 @@ export class VehicleRecordService {
           hanDangKiem: dto.hanDangKiem ? new Date(dto.hanDangKiem) : undefined,
           hanBaoHiem: dto.hanBaoHiem ? new Date(dto.hanBaoHiem) : undefined,
           hanCaVet: dto.hanCaVet ? new Date(dto.hanCaVet) : undefined,
-          ghiChu: dto.ghiChu,
           donViSuaChua: dto.donViSuaChua,
           ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : undefined,
           kmHienTai: dto.kmHienTai,
-          ghiChuBaoDuong: dto.ghiChuBaoDuong,
+          notes: dto.notes?.length
+            ? { create: dto.notes.map((n) => ({ content: n.content })) }
+            : undefined,
           moocs: dto.moocs?.length
             ? {
                 create: dto.moocs.map((m) => ({
@@ -121,7 +126,11 @@ export class VehicleRecordService {
               }
             : undefined,
         },
-        include: { moocs: true, kmRounds: { orderBy: { roundNumber: "asc" } } },
+        include: {
+          moocs: true,
+          kmRounds: { orderBy: { roundNumber: "asc" } },
+          notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        },
       });
 
       await this.auditService.log(
@@ -142,13 +151,16 @@ export class VehicleRecordService {
   async update(id: string, dto: UpdateVehicleRecordDto) {
     const existing = await this.prisma.vehicleRecord.findUnique({
       where: { id },
-      include: { moocs: true },
+      include: { moocs: true, notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     });
     if (!existing) throw new NotFoundException("Vehicle record not found");
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.moocs !== undefined) {
         await tx.vehicleRecordMooc.deleteMany({ where: { vehicleRecordId: id } });
+      }
+      if (dto.notes !== undefined) {
+        await tx.vehicleRecordNote.deleteMany({ where: { vehicleRecordId: id } });
       }
 
       const record = await tx.vehicleRecord.update({
@@ -167,11 +179,13 @@ export class VehicleRecordService {
           ...(dto.hanCaVet !== undefined && {
             hanCaVet: dto.hanCaVet ? new Date(dto.hanCaVet) : null,
           }),
-          ...(dto.ghiChu !== undefined && { ghiChu: dto.ghiChu }),
           ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
           ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
           ...(dto.kmHienTai !== undefined && { kmHienTai: dto.kmHienTai ?? null }),
-          ...(dto.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: dto.ghiChuBaoDuong ?? null }),
+          ...(dto.notes !== undefined &&
+            dto.notes.length > 0 && {
+              notes: { create: dto.notes.map((n) => ({ content: n.content })) },
+            }),
           ...(dto.moocs !== undefined &&
             dto.moocs.length > 0 && {
               moocs: {
@@ -184,7 +198,11 @@ export class VehicleRecordService {
               },
             }),
         },
-        include: { moocs: true, kmRounds: { orderBy: { roundNumber: "asc" } } },
+        include: {
+          moocs: true,
+          kmRounds: { orderBy: { roundNumber: "asc" } },
+          notes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        },
       });
 
       await this.auditService.log(

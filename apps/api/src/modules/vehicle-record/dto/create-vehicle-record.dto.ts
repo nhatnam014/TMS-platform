@@ -1,10 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsArray, IsDateString, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, ValidateNested } from "class-validator";
 import type {
   CreateVehicleRecordDto as ICreateVehicleRecordDto,
   VehicleRecordMoocDto,
+  NoteItemDto,
 } from "@tms/shared";
+
+class NoteDto implements NoteItemDto {
+  @ApiProperty({ example: "Cần thay lốp" })
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
+}
 
 class MoocDto implements VehicleRecordMoocDto {
   @ApiProperty({ example: "50RM01660" })
@@ -63,11 +71,6 @@ export class CreateVehicleRecordDto implements ICreateVehicleRecordDto {
   @IsDateString()
   hanCaVet?: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  ghiChu?: string;
-
   @ApiPropertyOptional({ example: "Gara ABC" })
   @IsOptional()
   @IsString()
@@ -83,10 +86,12 @@ export class CreateVehicleRecordDto implements ICreateVehicleRecordDto {
   @IsString()
   kmHienTai?: string;
 
-  @ApiPropertyOptional({ example: "Cần kiểm tra phanh" })
+  @ApiPropertyOptional({ type: [NoteDto] })
   @IsOptional()
-  @IsString()
-  ghiChuBaoDuong?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NoteDto)
+  notes?: NoteDto[];
 
   @ApiPropertyOptional({ type: [MoocDto] })
   @IsOptional()

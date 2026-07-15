@@ -48,7 +48,10 @@ export class VehicleMaintenanceService {
         skip,
         take: limit,
         orderBy: { createdAt: "asc" },
-        include: { kmRounds: { orderBy: { roundNumber: "asc" } } },
+        include: {
+          kmRounds: { orderBy: { roundNumber: "asc" } },
+          maintenanceNotes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        },
       }),
       this.prisma.vehicleRecord.count({ where }),
     ]);
@@ -77,30 +80,46 @@ export class VehicleMaintenanceService {
   async findOne(vehicleRecordId: string) {
     const record = await this.prisma.vehicleRecord.findUnique({
       where: { id: vehicleRecordId },
-      include: { kmRounds: { orderBy: { roundNumber: "asc" } } },
+      include: {
+        kmRounds: { orderBy: { roundNumber: "asc" } },
+        maintenanceNotes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      },
     });
     if (!record) throw new NotFoundException("Vehicle record not found");
     return {
       donViSuaChua: record.donViSuaChua,
       ngayLam: record.ngayLam,
       kmHienTai: record.kmHienTai,
-      ghiChuBaoDuong: record.ghiChuBaoDuong,
+      notes: record.maintenanceNotes,
       kmRounds: record.kmRounds,
     };
   }
 
   async updateMaintenanceFields(vehicleRecordId: string, dto: UpdateMaintenanceFieldsDto) {
-    const existing = await this.prisma.vehicleRecord.findUnique({ where: { id: vehicleRecordId } });
+    const existing = await this.prisma.vehicleRecord.findUnique({
+      where: { id: vehicleRecordId },
+      include: { maintenanceNotes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+    });
     if (!existing) throw new NotFoundException("Vehicle record not found");
 
-    const record = await this.prisma.vehicleRecord.update({
-      where: { id: vehicleRecordId },
-      data: {
-        ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
-        ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
-        ...(dto.kmHienTai !== undefined && { kmHienTai: dto.kmHienTai ?? null }),
-        ...(dto.ghiChuBaoDuong !== undefined && { ghiChuBaoDuong: dto.ghiChuBaoDuong ?? null }),
-      },
+    const record = await this.prisma.$transaction(async (tx) => {
+      if (dto.notes !== undefined) {
+        await tx.vehicleMaintenanceNote.deleteMany({ where: { vehicleRecordId } });
+      }
+
+      return tx.vehicleRecord.update({
+        where: { id: vehicleRecordId },
+        data: {
+          ...(dto.donViSuaChua !== undefined && { donViSuaChua: dto.donViSuaChua ?? null }),
+          ...(dto.ngayLam !== undefined && { ngayLam: dto.ngayLam ? new Date(dto.ngayLam) : null }),
+          ...(dto.kmHienTai !== undefined && { kmHienTai: dto.kmHienTai ?? null }),
+          ...(dto.notes !== undefined &&
+            dto.notes.length > 0 && {
+              maintenanceNotes: { create: dto.notes.map((n) => ({ content: n.content })) },
+            }),
+        },
+        include: { maintenanceNotes: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+      });
     });
 
     await this.auditService.log({
@@ -112,7 +131,7 @@ export class VehicleMaintenanceService {
       afterSnapshot: record as object,
     });
 
-    return record;
+    return { ...record, notes: record.maintenanceNotes };
   }
 
   async listKmRounds(vehicleRecordId: string) {

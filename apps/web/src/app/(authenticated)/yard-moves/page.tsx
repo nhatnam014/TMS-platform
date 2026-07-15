@@ -9,6 +9,12 @@ import { ImportExportModal } from "@/components/import-export/import-export-moda
 import { UploadSection } from "@/components/import-export/upload-section";
 import { DownloadButton } from "@/components/import-export/download-button";
 
+interface YardMoveNote {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
 interface YardMoveRow {
   id: string;
   date: string;
@@ -18,7 +24,7 @@ interface YardMoveRow {
   mooc: string | null;
   booking: string | null;
   containerNumber: string | null;
-  notes: string | null;
+  notes: YardMoveNote[];
   daKeo: string | null;
 }
 
@@ -30,8 +36,16 @@ interface YardMoveFormValues {
   mooc: string;
   booking: string;
   containerNumber: string;
-  notes: string;
+  notes: string[];
   daKeo: string;
+}
+
+function joinNotes(notes: YardMoveNote[]): string {
+  return notes.map((n) => n.content).join("\n");
+}
+
+function notesToPayload(notes: string[]) {
+  return notes.filter((n) => n.trim()).map((n) => ({ content: n.trim() }));
 }
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
@@ -168,7 +182,7 @@ const EMPTY_FORM: YardMoveFormValues = {
   mooc: "",
   booking: "",
   containerNumber: "",
-  notes: "",
+  notes: [],
   daKeo: "",
 };
 
@@ -179,8 +193,20 @@ function YardMoveFormFields({
   values: YardMoveFormValues;
   onChange: (next: YardMoveFormValues) => void;
 }) {
-  function setField(key: keyof YardMoveFormValues, value: string) {
+  function setField(key: keyof Omit<YardMoveFormValues, "notes">, value: string) {
     onChange({ ...values, [key]: value });
+  }
+
+  function updateNote(idx: number, val: string) {
+    onChange({ ...values, notes: values.notes.map((n, i) => (i === idx ? val : n)) });
+  }
+
+  function addNote() {
+    onChange({ ...values, notes: [...values.notes, ""] });
+  }
+
+  function removeNote(idx: number) {
+    onChange({ ...values, notes: values.notes.filter((_, i) => i !== idx) });
   }
 
   return (
@@ -255,12 +281,32 @@ function YardMoveFormFields({
 
       <div style={{ gridColumn: "1 / -1" }}>
         <YmField label="Ghi chú">
-          <textarea
-            value={values.notes}
-            onChange={(e) => setField("notes", e.target.value)}
-            rows={2}
-            style={{ ...ymInputStyle, resize: "vertical" }}
-          />
+          <div>
+            {values.notes.map((note, idx) => (
+              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => updateNote(idx, e.target.value)}
+                  style={{ ...ymInputStyle, flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeNote(idx)}
+                  style={{ background: "none", border: "none", color: "#ef4444", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addNote}
+              style={{ fontSize: 13, padding: "6px 14px", border: "1px dashed #6366f1", borderRadius: 6, background: "#f0f0ff", color: "#6366f1", cursor: "pointer" }}
+            >
+              + Thêm ghi chú
+            </button>
+          </div>
         </YmField>
       </div>
       <YmField label="Đã kéo">
@@ -309,7 +355,7 @@ function CreateYardMoveModal({
           mooc: values.mooc || undefined,
           booking: values.booking || undefined,
           containerNumber: values.containerNumber || undefined,
-          notes: values.notes || undefined,
+          notes: notesToPayload(values.notes),
           daKeo: values.daKeo || undefined,
         }),
       });
@@ -377,7 +423,7 @@ function EditYardMoveModal({
     mooc: move.mooc ?? "",
     booking: move.booking ?? "",
     containerNumber: move.containerNumber ?? "",
-    notes: move.notes ?? "",
+    notes: move.notes.map((n) => n.content),
     daKeo: move.daKeo ?? "",
   });
 
@@ -401,7 +447,7 @@ function EditYardMoveModal({
           mooc: values.mooc || undefined,
           booking: values.booking || undefined,
           containerNumber: values.containerNumber || undefined,
-          notes: values.notes || undefined,
+          notes: notesToPayload(values.notes),
           daKeo: values.daKeo || undefined,
         }),
       });
@@ -842,7 +888,9 @@ export default function YardMovesPage() {
                       {m.containerNumber || "—"}
                     </td>
                     <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.daKeo || "—"}</td>
-                    <td style={{ padding: "10px 14px", fontSize: 13 }}>{m.notes || "—"}</td>
+                    <td style={{ padding: "10px 14px", fontSize: 13, whiteSpace: "pre-line" }}>
+                      {m.notes.length ? joinNotes(m.notes) : "—"}
+                    </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button

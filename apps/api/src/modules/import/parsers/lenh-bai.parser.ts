@@ -1,5 +1,6 @@
 import * as ExcelJS from "exceljs";
 import { parseExcelDate } from "../utils/excel-date";
+import { parseNoteLines } from "../utils/note-lines";
 
 // For text input, parseExcelDate builds the date with the local-timezone Date(y, m, d)
 // constructor, which shifts the stored value by a day in some timezones once serialized to the
@@ -23,7 +24,7 @@ export interface ParsedYardMoveRow {
   mooc?: string;
   booking?: string;
   containerNumber?: string;
-  notes?: string;
+  noteLines?: string[];
   daKeo?: string;
 }
 
@@ -171,7 +172,7 @@ export function parseLenhBai(
       mooc: cellText(row, COL.MOOC) || undefined,
       booking: cellText(row, COL.BOOKING) || undefined,
       containerNumber: cellText(row, COL.CONTAINER) || undefined,
-      notes: cellText(row, COL.GHI_CHU) || undefined,
+      noteLines: parseNoteLines(cellText(row, COL.GHI_CHU)),
       daKeo: cellText(row, COL.DA_KEO) || undefined,
     });
   });
