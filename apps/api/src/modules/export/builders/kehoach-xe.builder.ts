@@ -1,6 +1,7 @@
 import * as ExcelJS from "exceljs";
 import * as fs from "fs";
 import * as path from "path";
+import { TRIP_STATUS_LABELS } from "@tms/shared";
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -53,6 +54,7 @@ const HEADERS = [
   "NGÀY",
   "SỐ XE",
   "KHÁCH HÀNG",
+  "TRẠNG THÁI",
   "LOẠI HÌNH",
   "ĐƠN VỊ",
   "SIZE CONT",
@@ -74,12 +76,19 @@ const HEADERS = [
   "CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM",
   "CẦU ĐƯỜNG",
   "LƯƠNG",
+  "SHĐ LƯƠNG",
   "CƯỚC",
+  "SHĐ CƯỚC",
   "DOANH THU",
+  "SHĐ DOANH THU",
   "PHỤ THU",
+  "SHĐ PHỤ THU",
   "CHI PHÍ",
+  "SHĐ CHI PHÍ",
   "TIỀN DẦU",
+  "SHĐ TIỀN DẦU",
   "NEO XE",
+  "SHĐ NEO XE",
   "NGÀY GỬI CT",
   "CHI PHÍ PHÁT SINH KHÁC",
   "NỘI DUNG",
@@ -88,9 +97,9 @@ const HEADERS = [
 ] as const;
 
 const COL_WIDTHS = [
-  6, 12, 14, 22, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20, 30, 14,
-  14, 14, 14, 14, 14, 14, 14, 14,
-  24, 24, 24, 30,
+  6, 12, 14, 22, 14, 12, 18, 10, 16, 16, 22, 22, 22, 12, 16, 12, 16, 14, 16, 12, 12, 16, 20, 30, 14,
+  14, 16, 14, 16, 14, 16, 14, 16, 14, 16, 14, 16, 14, 16,
+  14, 24, 24, 24, 30,
 ];
 
 export async function buildKeHoachXe(
@@ -135,6 +144,7 @@ export async function buildKeHoachXe(
       formatDate(tp.tripDate),
       tp.vehiclePlate ?? "",
       tp.customer?.name ?? "",
+      TRIP_STATUS_LABELS[tp.status as keyof typeof TRIP_STATUS_LABELS] ?? "",
       serviceTypeLabel,
       tp.carrier?.name ?? "",
       sizeCode ?? "",
@@ -156,12 +166,19 @@ export async function buildKeHoachXe(
       tp.chiPhiTraiTuyenAmount != null ? Number(tp.chiPhiTraiTuyenAmount) : "",
       tp.cauDuongAmount != null ? Number(tp.cauDuongAmount) : "",
       tp.luongAmount != null ? Number(tp.luongAmount) : "",
+      tp.shdLuong ?? "",
       tp.cuocAmount != null ? Number(tp.cuocAmount) : "",
+      tp.shdCuoc ?? "",
       tp.doanhThuAmount != null ? Number(tp.doanhThuAmount) : "",
+      tp.shdDoanhThu ?? "",
       tp.phuThuAmount != null ? Number(tp.phuThuAmount) : "",
+      tp.shdPhuThu ?? "",
       tp.chiPhiAmount != null ? Number(tp.chiPhiAmount) : "",
+      tp.shdChiPhi ?? "",
       tp.tienDauAmount != null ? Number(tp.tienDauAmount) : "",
+      tp.shdTienDau ?? "",
       tp.neoXeAmount != null ? Number(tp.neoXeAmount) : "",
+      tp.shdNeoXe ?? "",
       formatDate(tp.documentSentDate),
       otherCostsTotal > 0 ? otherCostsTotal : "",
       tp.description ?? "",

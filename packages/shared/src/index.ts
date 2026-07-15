@@ -185,14 +185,28 @@ export interface CreateTripPlanDto {
   chiPhiTraiTuyenAmount?: number;
   cauDuongName?: string;
   cauDuongAmount?: number;
-  // Amount-only revenue/cost fields (no name/SHĐ companion)
+  // Revenue/cost fields (name + amount + SHĐ)
+  luongName?: string;
   luongAmount?: number;
+  shdLuong?: string;
+  cuocName?: string;
   cuocAmount?: number;
+  shdCuoc?: string;
+  doanhThuName?: string;
   doanhThuAmount?: number;
+  shdDoanhThu?: string;
+  phuThuName?: string;
   phuThuAmount?: number;
+  shdPhuThu?: string;
+  chiPhiName?: string;
   chiPhiAmount?: number;
+  shdChiPhi?: string;
+  tienDauName?: string;
   tienDauAmount?: number;
+  shdTienDau?: string;
+  neoXeName?: string;
   neoXeAmount?: number;
+  shdNeoXe?: string;
   // Multiple other-cost rows
   otherCosts?: OtherCostItem[];
 }
@@ -240,13 +254,27 @@ export interface UpdateTripPlanDto {
   chiPhiTraiTuyenAmount?: number;
   cauDuongName?: string;
   cauDuongAmount?: number;
+  luongName?: string;
   luongAmount?: number;
+  shdLuong?: string;
+  cuocName?: string;
   cuocAmount?: number;
+  shdCuoc?: string;
+  doanhThuName?: string;
   doanhThuAmount?: number;
+  shdDoanhThu?: string;
+  phuThuName?: string;
   phuThuAmount?: number;
+  shdPhuThu?: string;
+  chiPhiName?: string;
   chiPhiAmount?: number;
+  shdChiPhi?: string;
+  tienDauName?: string;
   tienDauAmount?: number;
+  shdTienDau?: string;
+  neoXeName?: string;
   neoXeAmount?: number;
+  shdNeoXe?: string;
   otherCosts?: OtherCostItem[];
 }
 
@@ -316,6 +344,13 @@ export interface TripsTrendItem {
 
 // ---------- Enums (mirrored from Prisma for frontend use) ----------
 export type TripStatus = "PLANNED" | "DISPATCHED" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED";
+export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
+  PLANNED: "Kế hoạch",
+  DISPATCHED: "Đã điều xe",
+  IN_TRANSIT: "Đang vận chuyển",
+  COMPLETED: "Hoàn thành",
+  CANCELLED: "Hủy",
+};
 export type TripMode = "STANDARD" | "DROP_AND_HOOK";
 export type LocationType = "PORT" | "DEPOT" | "ICD" | "INDUSTRIAL_ZONE" | "WAREHOUSE" | "OTHER";
 export type AuditAction =

@@ -126,15 +126,35 @@ export class CreateTripPlanDto implements ICreateTripPlanDto {
   @ApiPropertyOptional() @IsOptional() @IsString() cauDuongName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() cauDuongAmount?: number;
 
-  // ── Amount-only revenue/cost fields (no name/SHĐ companion) ─────
+  // ── Revenue/cost fields (name + amount + SHĐ) ────────────────────
 
+  @ApiPropertyOptional() @IsOptional() @IsString() luongName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() luongAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdLuong?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() cuocName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() cuocAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdCuoc?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() doanhThuName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() doanhThuAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdDoanhThu?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() phuThuName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() phuThuAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdPhuThu?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() chiPhiName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() chiPhiAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdChiPhi?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() tienDauName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() tienDauAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdTienDau?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() neoXeName?: string;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @IsPositive() neoXeAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() shdNeoXe?: string;
 
   // ── Other costs (multiple rows) ────────────────────────────────
 

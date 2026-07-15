@@ -448,12 +448,20 @@ export class ImportService {
                 cauDuongName: "CẦU ĐƯỜNG",
               }),
               ...(row.luongAmount !== undefined && { luongAmount: row.luongAmount }),
+              ...(row.shdLuong !== undefined && { shdLuong: row.shdLuong }),
               ...(row.cuocAmount !== undefined && { cuocAmount: row.cuocAmount }),
+              ...(row.shdCuoc !== undefined && { shdCuoc: row.shdCuoc }),
               ...(row.doanhThuAmount !== undefined && { doanhThuAmount: row.doanhThuAmount }),
+              ...(row.shdDoanhThu !== undefined && { shdDoanhThu: row.shdDoanhThu }),
               ...(row.phuThuAmount !== undefined && { phuThuAmount: row.phuThuAmount }),
+              ...(row.shdPhuThu !== undefined && { shdPhuThu: row.shdPhuThu }),
               ...(row.chiPhiAmount !== undefined && { chiPhiAmount: row.chiPhiAmount }),
+              ...(row.shdChiPhi !== undefined && { shdChiPhi: row.shdChiPhi }),
               ...(row.tienDauAmount !== undefined && { tienDauAmount: row.tienDauAmount }),
+              ...(row.shdTienDau !== undefined && { shdTienDau: row.shdTienDau }),
               ...(row.neoXeAmount !== undefined && { neoXeAmount: row.neoXeAmount }),
+              ...(row.shdNeoXe !== undefined && { shdNeoXe: row.shdNeoXe }),
+              ...(row.status !== undefined && { status: row.status }),
             };
 
             // listSortedAt is bumped on every import-touch (re-enters the "recent batch"
@@ -532,12 +540,21 @@ export class ImportService {
                 cauDuongAmount: row.cauDuongAmount ?? null,
                 cauDuongName: row.cauDuongAmount !== undefined ? "CẦU ĐƯỜNG" : null,
                 luongAmount: row.luongAmount ?? null,
+                shdLuong: row.shdLuong ?? null,
                 cuocAmount: row.cuocAmount ?? null,
+                shdCuoc: row.shdCuoc ?? null,
                 doanhThuAmount: row.doanhThuAmount ?? null,
+                shdDoanhThu: row.shdDoanhThu ?? null,
                 phuThuAmount: row.phuThuAmount ?? null,
+                shdPhuThu: row.shdPhuThu ?? null,
                 chiPhiAmount: row.chiPhiAmount ?? null,
+                shdChiPhi: row.shdChiPhi ?? null,
                 tienDauAmount: row.tienDauAmount ?? null,
+                shdTienDau: row.shdTienDau ?? null,
                 neoXeAmount: row.neoXeAmount ?? null,
+                shdNeoXe: row.shdNeoXe ?? null,
+                // status intentionally omitted — new rows always start PLANNED (schema
+                // default), matching CreateTripPlanDto's rule that status isn't settable on create
               },
             });
             tripPlanId = tripPlan.id;

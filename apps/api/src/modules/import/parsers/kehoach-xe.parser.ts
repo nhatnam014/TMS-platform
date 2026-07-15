@@ -1,5 +1,6 @@
 import * as ExcelJS from "exceljs";
 import { parseExcelDate } from "../utils/excel-date";
+import { TRIP_STATUS_LABELS, type TripStatus } from "@tms/shared";
 
 export interface ParsedCostItem {
   costName: string;
@@ -27,6 +28,7 @@ export interface ParsedTripPlanRow {
   documentSentDate?: Date;
   description?: string;
   notes?: string;
+  status?: TripStatus;
   phiNangAmount?: number;
   shdNang?: string;
   phiHaAmount?: number;
@@ -40,12 +42,19 @@ export interface ParsedTripPlanRow {
   chiPhiTraiTuyenAmount?: number;
   cauDuongAmount?: number;
   luongAmount?: number;
+  shdLuong?: string;
   cuocAmount?: number;
+  shdCuoc?: string;
   doanhThuAmount?: number;
+  shdDoanhThu?: string;
   phuThuAmount?: number;
+  shdPhuThu?: string;
   chiPhiAmount?: number;
+  shdChiPhi?: string;
   tienDauAmount?: number;
+  shdTienDau?: string;
   neoXeAmount?: number;
+  shdNeoXe?: string;
   costs: ParsedCostItem[];
 }
 
@@ -93,6 +102,16 @@ function stripDiacritics(s: string): string {
     .trim();
 }
 
+// Reverse-lookup: Vietnamese status label (e.g. "Hoàn thành") → TripStatus enum value.
+// Tolerant of accent/case variation via stripDiacritics, same normalization used for headers.
+function reverseStatusLabel(text: string): TripStatus | undefined {
+  const normalized = stripDiacritics(text);
+  const match = (Object.keys(TRIP_STATUS_LABELS) as TripStatus[]).find(
+    (status) => stripDiacritics(TRIP_STATUS_LABELS[status]) === normalized,
+  );
+  return match;
+}
+
 // Maps a stripped header text to every column index it appears at (left to right) —
 // an array, not a single index, because this template reuses the bare header "SHĐ"
 // for two different columns (SHĐ for PHÍ VỆ SINH's invoice, and SHĐ for VÉ CỔNG's).
@@ -133,6 +152,7 @@ const COLUMN_CANDIDATES: Record<string, { occurrence: number; texts: string[] }>
   NGAY: { occurrence: 0, texts: ["NGÀY"] },
   SO_XE: { occurrence: 0, texts: ["SỐ XE"] },
   KHACH_HANG: { occurrence: 0, texts: ["KHÁCH HÀNG"] },
+  TRANG_THAI: { occurrence: 0, texts: ["TRẠNG THÁI"] },
   LOAI_HINH: { occurrence: 0, texts: ["LOẠI HÌNH"] },
   DON_VI: { occurrence: 0, texts: ["ĐƠN VỊ"] },
   SIZE_CONT: { occurrence: 0, texts: ["SIZE CONT"] },
@@ -154,12 +174,19 @@ const COLUMN_CANDIDATES: Record<string, { occurrence: number; texts: string[] }>
   CHI_PHI_TRAI_TUYEN: { occurrence: 0, texts: ["CHI PHÍ TRÁI TUYẾN/ CHỈ ĐỊNH/ BP CAM"] },
   CAU_DUONG: { occurrence: 0, texts: ["CẦU ĐƯỜNG"] },
   LUONG: { occurrence: 0, texts: ["LƯƠNG"] },
+  SHD_LUONG: { occurrence: 0, texts: ["SHĐ LƯƠNG"] },
   CUOC: { occurrence: 0, texts: ["CƯỚC"] },
+  SHD_CUOC: { occurrence: 0, texts: ["SHĐ CƯỚC"] },
   DOANH_THU: { occurrence: 0, texts: ["DOANH THU"] },
+  SHD_DOANH_THU: { occurrence: 0, texts: ["SHĐ DOANH THU"] },
   PHU_THU: { occurrence: 0, texts: ["PHỤ THU"] },
+  SHD_PHU_THU: { occurrence: 0, texts: ["SHĐ PHỤ THU"] },
   CHI_PHI: { occurrence: 0, texts: ["CHI PHÍ"] },
+  SHD_CHI_PHI: { occurrence: 0, texts: ["SHĐ CHI PHÍ"] },
   TIEN_DAU: { occurrence: 0, texts: ["TIỀN DẦU"] },
+  SHD_TIEN_DAU: { occurrence: 0, texts: ["SHĐ TIỀN DẦU"] },
   NEO_XE: { occurrence: 0, texts: ["NEO XE"] },
+  SHD_NEO_XE: { occurrence: 0, texts: ["SHĐ NEO XE"] },
   NGAY_GUI_CT: { occurrence: 0, texts: ["NGÀY GỬI CT"] },
   CHI_PHI_PHAT_SINH: { occurrence: 0, texts: ["CHI PHÍ PHÁT SINH KHÁC"] },
   NOI_DUNG: { occurrence: 0, texts: ["NỘI DUNG"] },
@@ -243,6 +270,12 @@ export function parseKeHoachXe(
 
     const tripNum = sttRaw ? parseInt(sttRaw, 10) : undefined;
 
+    const trangThaiRaw = cellText(row, COL.TRANG_THAI);
+    const status = trangThaiRaw ? reverseStatusLabel(trangThaiRaw) : undefined;
+    if (trangThaiRaw && !status) {
+      warnings.push(`Hàng ${rowNum}: không nhận dạng được trạng thái "${trangThaiRaw}"`);
+    }
+
     const idVal = cellText(row, COL.ID) || undefined;
     results.push({
       rowNum,
@@ -263,6 +296,7 @@ export function parseKeHoachXe(
       documentSentDate: cellDate(row, COL.NGAY_GUI_CT),
       description: cellText(row, COL.NOI_DUNG) || undefined,
       notes: cellText(row, COL.GHI_CHU) || undefined,
+      status,
       phiNangAmount: cellNum(row, COL.PHI_NANG),
       shdNang: cellText(row, COL.SHD_NANG) || undefined,
       phiHaAmount: cellNum(row, COL.PHI_HA),
@@ -276,12 +310,19 @@ export function parseKeHoachXe(
       chiPhiTraiTuyenAmount: cellNum(row, COL.CHI_PHI_TRAI_TUYEN),
       cauDuongAmount: cellNum(row, COL.CAU_DUONG),
       luongAmount: cellNum(row, COL.LUONG),
+      shdLuong: cellText(row, COL.SHD_LUONG) || undefined,
       cuocAmount: cellNum(row, COL.CUOC),
+      shdCuoc: cellText(row, COL.SHD_CUOC) || undefined,
       doanhThuAmount: cellNum(row, COL.DOANH_THU),
+      shdDoanhThu: cellText(row, COL.SHD_DOANH_THU) || undefined,
       phuThuAmount: cellNum(row, COL.PHU_THU),
+      shdPhuThu: cellText(row, COL.SHD_PHU_THU) || undefined,
       chiPhiAmount: cellNum(row, COL.CHI_PHI),
+      shdChiPhi: cellText(row, COL.SHD_CHI_PHI) || undefined,
       tienDauAmount: cellNum(row, COL.TIEN_DAU),
+      shdTienDau: cellText(row, COL.SHD_TIEN_DAU) || undefined,
       neoXeAmount: cellNum(row, COL.NEO_XE),
+      shdNeoXe: cellText(row, COL.SHD_NEO_XE) || undefined,
       costs,
     });
   });

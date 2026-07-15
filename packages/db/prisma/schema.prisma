@@ -191,14 +191,34 @@ model TripPlan {
   cauDuongName          String?   @map("cau_duong_name")
   cauDuongAmount        Decimal?  @db.Decimal(15, 2) @map("cau_duong_amount")
 
-  // Amount-only revenue/cost fields (no name/SHĐ companion — fixed label, never editable)
+  // Revenue/cost fields — name + amount + SHĐ, same shape as the SHĐ-bearing fixed slots above
+  luongName             String?   @map("luong_name")
   luongAmount           Decimal?  @db.Decimal(15, 2) @map("luong_amount")     // LƯƠNG
+  shdLuong              String?   @map("shd_luong")
+
+  cuocName              String?   @map("cuoc_name")
   cuocAmount            Decimal?  @db.Decimal(15, 2) @map("cuoc_amount")      // CƯỚC
+  shdCuoc               String?   @map("shd_cuoc")
+
+  doanhThuName          String?   @map("doanh_thu_name")
   doanhThuAmount        Decimal?  @db.Decimal(15, 2) @map("doanh_thu_amount") // DOANH THU
+  shdDoanhThu           String?   @map("shd_doanh_thu")
+
+  phuThuName            String?   @map("phu_thu_name")
   phuThuAmount          Decimal?  @db.Decimal(15, 2) @map("phu_thu_amount")   // PHỤ THU
+  shdPhuThu             String?   @map("shd_phu_thu")
+
+  chiPhiName            String?   @map("chi_phi_name")
   chiPhiAmount          Decimal?  @db.Decimal(15, 2) @map("chi_phi_amount")   // CHI PHÍ
+  shdChiPhi             String?   @map("shd_chi_phi")
+
+  tienDauName           String?   @map("tien_dau_name")
   tienDauAmount         Decimal?  @db.Decimal(15, 2) @map("tien_dau_amount")  // TIỀN DẦU
+  shdTienDau            String?   @map("shd_tien_dau")
+
+  neoXeName             String?   @map("neo_xe_name")
   neoXeAmount           Decimal?  @db.Decimal(15, 2) @map("neo_xe_amount")    // NEO XE
+  shdNeoXe              String?   @map("shd_neo_xe")
 
   // Document tracking
   documentSentDate DateTime?     @map("document_sent_date") @db.Date  // Ngày gửi CT

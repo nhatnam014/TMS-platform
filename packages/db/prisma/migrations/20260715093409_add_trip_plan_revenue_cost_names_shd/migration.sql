@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "trip_plans" ADD COLUMN     "chi_phi_name" TEXT,
+ADD COLUMN     "cuoc_name" TEXT,
+ADD COLUMN     "doanh_thu_name" TEXT,
+ADD COLUMN     "luong_name" TEXT,
+ADD COLUMN     "neo_xe_name" TEXT,
+ADD COLUMN     "phu_thu_name" TEXT,
+ADD COLUMN     "shd_chi_phi" TEXT,
+ADD COLUMN     "shd_cuoc" TEXT,
+ADD COLUMN     "shd_doanh_thu" TEXT,
+ADD COLUMN     "shd_luong" TEXT,
+ADD COLUMN     "shd_neo_xe" TEXT,
+ADD COLUMN     "shd_phu_thu" TEXT,
+ADD COLUMN     "shd_tien_dau" TEXT,
+ADD COLUMN     "tien_dau_name" TEXT;
