@@ -1,7 +1,19 @@
 import * as ExcelJS from "exceljs";
 import * as fs from "fs";
 import * as path from "path";
-import { TRIP_STATUS_LABELS } from "@tms/shared";
+import { TRIP_STATUS_LABELS, type TripStatus } from "@tms/shared";
+
+// Mirrors the badge colors used for the status <select> on the trip-plans web page
+// (apps/web .../trip-plans/page.tsx STATUS_COLORS) so the exported cell looks the same.
+const STATUS_COLORS: Record<TripStatus, string> = {
+  PLANNED: "FF6366F1",
+  DISPATCHED: "FFF59E0B",
+  IN_TRANSIT: "FF3B82F6",
+  COMPLETED: "FF10B981",
+  CANCELLED: "FFEF4444",
+};
+
+const STATUS_LIST_FORMULA = `"${Object.values(TRIP_STATUS_LABELS).join(",")}"`;
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "";
@@ -187,6 +199,23 @@ export async function buildKeHoachXe(
     ]);
     const idCell = dataRow.getCell(HEADERS.length);
     idCell.font = { color: { argb: "FF9CA3AF" }, size: 9 };
+
+    // Status column: dropdown list of the same options as the web app's status <select>,
+    // styled with the matching badge color.
+    const statusCell = dataRow.getCell(5);
+    statusCell.dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: [STATUS_LIST_FORMULA],
+      showErrorMessage: true,
+      errorStyle: "stop",
+      errorTitle: "Trạng thái không hợp lệ",
+      error: "Vui lòng chọn một giá trị trong danh sách.",
+    };
+    const statusColor = STATUS_COLORS[tp.status as TripStatus];
+    if (statusColor) {
+      statusCell.font = { color: { argb: statusColor }, bold: true };
+    }
   });
 
   // Borders on all rows
